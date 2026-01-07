@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+<settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <localRepository>D:\repository</localRepository>
+
+    <servers>
+        <server>
+            <id>chinaunicom-nexus-releases</id>
+            <username>dev</username>
+            <password>WCsfakej9olxFMGs</password>
+        </server>
+        <server>
+            <id>chinaunicom-nexus-snapshots</id>
+            <username>dev</username>
+            <password>WCsfakej9olxFMGs</password>
+        </server>
+        <server>
+            <id>chinaunicom-nexus-public</id>
+            <username>dev</username>
+            <password>WCsfakej9olxFMGs</password>
+        </server>
+    </servers>
+
+    <mirrors>
+
+        <mirror>
+            <id>chinaunicom-nexus-public</id>
+            <mirrorOf>chinaunicom-nexus-public</mirrorOf>
+            <name>maven-public</name>
+            <url>http://192.168.0.73:8081/repository/maven-public/</url>
+        </mirror>
+
+        <mirror>
+            <id>chinaunicom-nexus-snapshots</id>
+            <mirrorOf>chinaunicom-nexus-snapshots</mirrorOf>
+            <name>Nexus Snapshot Repository</name>
+            <url>http://192.168.0.73:8081/repository/maven-snapshots/</url>
+        </mirror>
+
+        <mirror>
+            <id>chinaunicom-nexus-releases</id>
+            <mirrorOf>chinaunicom-nexus-releases</mirrorOf>
+            <name>Nexus Release Repository</name>
+            <url>http://192.168.0.73:8081/repository/maven-releases/</url>
+        </mirror>
+
+
+    </mirrors>
+
+    <profiles>
+
+    </profiles>
+</settings>

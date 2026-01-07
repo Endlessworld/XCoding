@@ -1,0 +1,23 @@
+# 对话会话配置
+conversation:
+  save:
+    # 对话保存目录
+    dir: ./conversations
+    # 自动保存间隔(毫秒)
+    interval: 30000
+    # 是否自动保存
+    auto-save: true
+
+# Spring AI 配置
+spring:
+  ai:
+    openai:
+      api:
+        key: ${AI_OPENAPI_API_KEY}
+        base-url: ${AI_OPENAPI_BASE_URL}
+
+# 日志配置
+logging:
+  level:
+    com.xr21.ai.agent.session: DEBUG
+    com.xr21.ai.agent.entity: INFO
