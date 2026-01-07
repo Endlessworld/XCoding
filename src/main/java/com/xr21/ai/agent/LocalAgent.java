@@ -409,6 +409,112 @@ public class LocalAgent {
         return SinksUtil.sinksOutput(nodeOutputFlux);
     }
 
+    private Thread createInputThread(AtomicReference<String> userInputRef) {
+        Thread thread = new Thread(() -> {
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    Scanner scanner = new Scanner(System.in);
+                    String input = scanner.nextLine().trim();
+                    userInputRef.set(input);
+                }
+            } catch (Exception e) {
+                // 线程被中断或其他异常，检查是否需要重新启动
+                if (!Thread.currentThread().isInterrupted()) {
+                    // 非中断异常，短暂等待后重启线程
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        });
+        thread.setDaemon(true);
+        return thread;
+    }
+
+    /**
+     * 选择或创建会话
+     * @param scanner 扫描器
+     * @return 会话ID
+     */
+    @SneakyThrows
+    private String selectOrCreateSession(Scanner scanner) {
+        // 获取所有会话列表
+        var sessionInfoList = sessionManager.getSessionInfoList();
+        String sessionId;
+
+        if (sessionInfoList.isEmpty()) {
+            // 没有会话记录，直接创建新会话
+            sessionId = "local-agent-session-" + System.currentTimeMillis();
+            sessionManager.getOrCreateSession(sessionId);
+            System.out.println("\n[系统提示] 未找到历史会话，将创建新会话");
+        } else {
+            // 列出所有会话供用户选择
+            System.out.println("\n" + "=".repeat(70));
+            System.out.println("                            会话选择");
+            System.out.println("=".repeat(70));
+            System.out.println("  编号  | 会话ID                    | 消息数 | 创建时间          | 简要描述");
+            System.out.println("-".repeat(70));
+
+            // 显示所有会话（最多显示10个）
+            int displayCount = Math.min(sessionInfoList.size(), 10);
+            for (int i = 0; i < displayCount; i++) {
+                var info = sessionInfoList.get(i);
+                String briefDesc = info.getBriefDescription().length() > 20 ? info.getBriefDescription()
+                        .substring(0, 20) + "..." : info.getBriefDescription();
+                System.out.printf("  %-5d | %-24s | %-6d | %-16s | %s%n", (i + 1), info.getSessionId(), info.getMessageCount(), info.getCreatedAt(), briefDesc);
+            }
+
+            if (sessionInfoList.size() > 10) {
+                System.out.printf("  ... 以及 %d 个更早的会话%n", sessionInfoList.size() - 10);
+            }
+
+            System.out.println("-".repeat(70));
+            System.out.println("  0     | 创建新会话");
+            System.out.println("=".repeat(70));
+
+            // 获取用户选择
+            int selectedIndex = -1;
+            while (selectedIndex < 0 || selectedIndex > sessionInfoList.size()) {
+                System.out.print("\n请选择会话编号 (0-" + Math.min(sessionInfoList.size(), 10) + "): ");
+                try {
+                    String input = scanner.nextLine().trim();
+                    if (input.isEmpty()) {
+                        // 默认选择第一个（最新的）会话
+                        selectedIndex = 1;
+                        break;
+                    }
+                    selectedIndex = Integer.parseInt(input);
+                } catch (NumberFormatException e) {
+                    System.out.print("无效输入，请输入数字: ");
+                }
+            }
+
+            if (selectedIndex == 0 || selectedIndex > sessionInfoList.size()) {
+                // 创建新会话
+                sessionId = "local-agent-session-" + System.currentTimeMillis();
+                sessionManager.getOrCreateSession(sessionId);
+                System.out.println("\n[系统提示] 将创建新会话");
+            } else {
+                // 加载选中的会话
+                var selectedSession = sessionInfoList.get(selectedIndex - 1);
+                sessionId = selectedSession.getSessionId();
+                boolean loaded = sessionManager.loadSessionById(sessionId);
+                if (loaded) {
+                    System.out.printf("\n[系统提示] 已加载会话: %s (%d 条消息)%n", sessionId, selectedSession.getMessageCount());
+                } else {
+                    System.out.println("\n[系统提示] 会话加载失败，将创建新会话");
+                    sessionId = "local-agent-session-" + System.currentTimeMillis();
+                    sessionManager.getOrCreateSession(sessionId);
+                }
+            }
+        }
+
+        System.out.println("会话ID: " + sessionId);
+        return sessionId;
+    }
+
     @SneakyThrows
     private void startInteractiveSession(Agent agent) {
         String threadId = "local-agent-session-" + System.currentTimeMillis();
@@ -455,7 +561,8 @@ public class LocalAgent {
                 // 处理对话
                 System.out.println("\n助手: ");
                 assistantResponseBuilder.setLength(0); // 清空助手响应构建器
-                processWithGraphV2(agent, userInput, threadId, interruptionMetadata.get(), stateUpdate).doOnNext(output -> {
+                String finalSessionId = sessionId;
+                processWithGraphV2(agent, userInput, sessionId, interruptionMetadata.get(), stateUpdate).doOnNext(output -> {
                     if (output.data().getChunk() != null) {
                         String chunk = output.data().getChunk();
                         System.out.print(chunk);
@@ -478,7 +585,7 @@ public class LocalAgent {
                             newBuilder.addToolFeedback(approvedFeedback);
                             interruptionMetadata.set(newBuilder.build());
                             // 记录系统消息
-                            sessionManager.addSystemMessage(sessionId, feedbackMsg.trim());
+                            sessionManager.addSystemMessage(finalSessionId, feedbackMsg.trim());
                         }
                     }
 
@@ -491,7 +598,7 @@ public class LocalAgent {
 
                                     System.err.print(" 参数: " + toolCall.arguments() + "\n");
                                     // 记录工具调用
-                                    sessionManager.addToolCallMessage(sessionId, toolCall.name(), Json.to(toolCall.arguments(), Map.class), toolCall.id());
+                                    sessionManager.addToolCallMessage(finalSessionId, toolCall.name(), Json.to(toolCall.arguments(), Map.class), toolCall.id());
                                 } catch (Exception e) {
                                     System.err.print(" 参数: [参数打印失败]");
                                 }
@@ -506,14 +613,14 @@ public class LocalAgent {
                                 System.err.print(" ✅ 执行成功！\n");
                                 System.err.flush();
                                 // 记录工具响应
-                                sessionManager.addToolResponseMessage(sessionId, response.name(), responseStr, true);
+                                sessionManager.addToolResponseMessage(finalSessionId, response.name(), responseStr, true);
                             }
                         }
                     }
                 }).doOnComplete(() -> {
                     // 保存助手响应
                     if (assistantResponseBuilder.length() > 0) {
-                        sessionManager.addAssistantMessage(sessionId, assistantResponseBuilder.toString());
+                        sessionManager.addAssistantMessage(finalSessionId, assistantResponseBuilder.toString());
                     }
                     System.out.println("[本轮对话结束]");
                     System.out.println("[会话已自动保存]");
@@ -521,9 +628,9 @@ public class LocalAgent {
                     String errorMsg = "\n[发生错误]: " + error.getMessage();
                     System.err.println(errorMsg);
                     // 记录错误消息
-                    sessionManager.addErrorMessage(sessionId, error.getMessage());
+                    sessionManager.addErrorMessage(finalSessionId, error.getMessage());
                 }).blockLast();
-            } catch (Exception e) {
+            }catch (Exception e) {
                 String errorMsg = "\n[处理过程中发生未捕获的异常]: " + e.getMessage();
                 System.err.println(errorMsg);
                 // 记录错误消息

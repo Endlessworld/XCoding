@@ -342,6 +342,102 @@ public class ConversationSessionManager {
     }
 
     /**
+     * 获取会话文件简要信息列表
+     */
+    public List<SessionInfo> getSessionInfoList() {
+        List<SessionInfo> sessionInfoList = new ArrayList<>();
+        try {
+            List<Path> sessionFiles = Files.walk(savePath)
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".json"))
+                    .sorted((a, b) -> {
+                        // 按修改时间倒序排序
+                        try {
+                            long timeA = Files.getLastModifiedTime(a).toMillis();
+                            long timeB = Files.getLastModifiedTime(b).toMillis();
+                            return Long.compare(timeB, timeA);
+                        } catch (IOException e) {
+                            return 0;
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+            for (Path filePath : sessionFiles) {
+                try {
+                    ConversationSession session = objectMapper.readValue(filePath.toFile(), ConversationSession.class);
+                    SessionInfo info = new SessionInfo();
+                    info.setSessionId(session.getSessionId());
+                    info.setFilePath(filePath.toString());
+                    info.setMessageCount(session.getMessageCount());
+                    info.setCreatedAt(session.getCreatedAt() != null ? 
+                        session.getCreatedAt().format(TIME_FORMATTER) : "未知");
+                    info.setLastUpdated(session.getLastUpdated() != null ? 
+                        session.getLastUpdated().format(TIME_FORMATTER) : "未知");
+                    
+                    // 提取会话简要描述（第一条用户消息）
+                    if (session.getMessages() != null && !session.getMessages().isEmpty()) {
+                        String firstUserMessage = session.getMessages().stream()
+                                .filter(m -> m.getType() == ConversationMessage.MessageType.USER)
+                                .findFirst()
+                                .map(ConversationMessage::getContent)
+                                .orElse("无用户消息");
+                        
+                        // 截取前50个字符
+                        info.setBriefDescription(firstUserMessage.length() > 50 ? 
+                            firstUserMessage.substring(0, 50) + "..." : firstUserMessage);
+                    } else {
+                        info.setBriefDescription("空会话");
+                    }
+                    
+                    sessionInfoList.add(info);
+                } catch (IOException e) {
+                    log.warn("读取会话文件信息失败: {}", filePath);
+                }
+            }
+        } catch (IOException e) {
+            log.error("扫描会话目录失败: {}", e.getMessage());
+        }
+        return sessionInfoList;
+    }
+
+    /**
+     * 根据会话ID加载会话
+     */
+    public boolean loadSessionById(String sessionId) {
+        try {
+            // 查找对应的会话文件
+            List<Path> matchingFiles = Files.walk(savePath)
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(".json"))
+                    .filter(path -> path.getFileName().toString().startsWith(sessionId + "_"))
+                    .collect(Collectors.toList());
+
+            if (matchingFiles.isEmpty()) {
+                log.warn("未找到会话文件: {}", sessionId);
+                return false;
+            }
+
+            // 加载第一个匹配的文件
+            Path filePath = matchingFiles.get(0);
+            ConversationSession session = objectMapper.readValue(filePath.toFile(), ConversationSession.class);
+            
+            if (session.getSessionId() != null && session.getMessages() != null) {
+                sessionMessages.put(session.getSessionId(), session.getMessages());
+                int maxRound = session.getMessages().stream()
+                        .mapToInt(ConversationMessage::getRound)
+                        .max()
+                        .orElse(0);
+                sessionRounds.put(session.getSessionId(), maxRound);
+                log.info("加载会话: {} ({} 条消息)", session.getSessionId(), session.getMessages().size());
+                return true;
+            }
+        } catch (IOException e) {
+            log.error("加载会话失败: {}", e.getMessage());
+        }
+        return false;
+    }
+
+    /**
      * 从文件加载会话
      */
     public boolean loadSessionFromFile(String filePath) {
