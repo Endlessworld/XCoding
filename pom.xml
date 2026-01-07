@@ -20,22 +20,22 @@
         <hutool.version>5.8.33</hutool.version>
     </properties>
     <dependencies>
-        <!-- Spring AI -->
+        <!-- Spring AI OpenAI -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
+        <!-- Spring Shell -->
         <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-retry</artifactId>
-            <scope>compile</scope>
+            <groupId>org.springframework.shell</groupId>
+            <artifactId>spring-shell-starter</artifactId>
+            <version>3.3.2</version>
         </dependency>
         <!-- Alibaba AI Graph -->
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-graph-core</artifactId>
             <version>${spring-ai-alibaba.version}</version>
-
         </dependency>
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>

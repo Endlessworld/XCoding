@@ -7,6 +7,7 @@ import com.xr21.ai.agent.entity.ConversationMessage;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,7 +33,7 @@ import java.util.stream.Collectors;
  * 使用JSON格式存储，区分不同消息类型
  */
 @Slf4j
-
+@Component
 public class ConversationSessionManager {
 
     private static final DateTimeFormatter FILE_NAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");

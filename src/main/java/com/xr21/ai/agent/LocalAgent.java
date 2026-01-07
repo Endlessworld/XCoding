@@ -18,7 +18,6 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryIntercept
 import com.alibaba.cloud.ai.graph.agent.tools.ShellTool;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
-import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
@@ -40,6 +39,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.lang.NonNull;
+import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
@@ -50,21 +50,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * 本地智能体
  */
 @Slf4j
+@Component
 public class LocalAgent {
 
     protected static final List<ChatModel> fallbackModels = new ArrayList<>();
     protected static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents";
-    protected ChatModel chatModel;
+    public ChatModel chatModel;
     protected ConversationSessionManager sessionManager;
-
-    public static void main(String[] args) {
-        LocalAgent agent = new LocalAgent();
-        // 使用默认模型
-        agent.chatModel = AiModels.MINIMAX_M2_1.createChatModel();
-        Agent supervisorAgent = agent.buildSupervisorAgent();
-        // 启动交互式会话
-        agent.startInteractiveSession(supervisorAgent);
-    }
 
     private static ArrayList<ToolCallback> getTools() {
         List<ToolCallback> mcpTools = getMcpTools();
@@ -387,7 +379,7 @@ public class LocalAgent {
                 """;
     }
 
-    private Flux<ServerSentEvent<AgentOutput<Object>>> processWithGraphV2(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
+    public Flux<ServerSentEvent<AgentOutput<Object>>> processWithGraphV2(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
         var builder = RunnableConfig.builder().threadId(threadId);
         if (feedbackMetadata != null) {
             builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, feedbackMetadata);
