@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.shell.command.CommandContext;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
@@ -37,29 +38,24 @@ public class InteractiveCommands {
     private String currentSessionId;
 
     @ShellMethod(key = "chat", value = "开始聊天")
-    public String chat(@ShellOption(defaultValue = "") String message) {
+    public void chat(@ShellOption(defaultValue = "") String message, CommandContext ctx) {
         if (currentSessionId == null) {
             currentSessionId = "local-agent-session-" + System.currentTimeMillis();
             sessionManager.getOrCreateSession(currentSessionId);
-            return "已创建新会话: " + currentSessionId;
+            ctx.getTerminal().writer().print("已创建新会话: " + currentSessionId);
         }
-
         if (message.isEmpty()) {
-            return "请输入消息内容，例如: chat 你好";
+            ctx.getTerminal().writer().print("请输入消息内容，例如: chat 你好: ");
         }
-
         try {
             // 记录用户消息
             sessionManager.addUserMessage(currentSessionId, message);
-
             // 处理对话
-            StringBuilder responseBuilder = new StringBuilder();
-            processWithGraph(message, responseBuilder);
-            
-            return responseBuilder.toString();
+            processWithGraph(message, ctx);
+
         } catch (Exception e) {
             log.error("处理聊天消息时发生错误", e);
-            return "处理消息时发生错误: " + e.getMessage();
+            ctx.getTerminal().writer().print("处理消息时发生错误" + e.getMessage());
         }
     }
 
@@ -190,7 +186,7 @@ public class InteractiveCommands {
     }
 
     @ShellMethod(key = "feedback", value = "发送反馈")
-    public String sendFeedback(@ShellOption String message) {
+    public String sendFeedback(@ShellOption String message,CommandContext ctx) {
         if (message.isEmpty()) {
             return "请提供反馈内容，例如: feedback 这里输入您的反馈";
         }
@@ -202,7 +198,7 @@ public class InteractiveCommands {
 
         try {
             StringBuilder responseBuilder = new StringBuilder();
-            processWithGraph("用户反馈: " + message, responseBuilder);
+            processWithGraph("用户反馈: " + message, ctx);
             sessionManager.addUserMessage(currentSessionId, "用户反馈: " + message);
             return "反馈已发送";
         } catch (Exception e) {
@@ -211,14 +207,14 @@ public class InteractiveCommands {
         }
     }
 
-    private void processWithGraph(String input, StringBuilder responseBuilder) {
+    private void processWithGraph(String input, CommandContext ctx) {
         Flux<ServerSentEvent<AgentOutput<Object>>> outputFlux = localAgent.processWithGraphV2(
             supervisorAgent, input, currentSessionId, interruptionMetadata.get(), stateUpdate);
         
         outputFlux.doOnNext(output -> {
             AgentOutput<Object> agentOutput = output.data();
             if (agentOutput.getChunk() != null) {
-                responseBuilder.append(agentOutput.getChunk());
+                ctx.getTerminal().writer().print(agentOutput.getChunk());
             }
 
             // 处理工具反馈
@@ -226,8 +222,7 @@ public class InteractiveCommands {
                 for (InterruptionMetadata.ToolFeedback toolFeedback : agentOutput.getToolFeedbacks()) {
                     String feedbackMsg = String.format("\n[系统提示] %s: %s", 
                         toolFeedback.getName(), toolFeedback.getDescription());
-                    responseBuilder.append(feedbackMsg);
-                    
+                    ctx.getTerminal().writer().print(feedbackMsg);
                     InterruptionMetadata.Builder newBuilder = InterruptionMetadata.builder()
                             .nodeId(agentOutput.getNode())
                             .state(new OverAllState(agentOutput.getData()));
@@ -246,8 +241,9 @@ public class InteractiveCommands {
             if (agentOutput.getMessage() instanceof AssistantMessage message) {
                 if (!CollectionUtils.isEmpty(message.getToolCalls())) {
                     for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
-                        responseBuilder.append(String.format("\n[工具调用]: %s 参数: %s", 
-                            toolCall.name(), toolCall.arguments()));
+                        ctx.getTerminal()
+                                .writer()
+                                .print(String.format("\n[工具调用]: %s 参数: %s", toolCall.name(), toolCall.arguments()));
                         try {
                             sessionManager.addToolCallMessage(currentSessionId, toolCall.name(), 
                                 McpJsonMapper.getDefault().readValue(toolCall.arguments(), Map.class), toolCall.id());
@@ -263,7 +259,7 @@ public class InteractiveCommands {
                 if (!CollectionUtils.isEmpty(message.getResponses())) {
                     for (var response : message.getResponses()) {
                         String responseStr = response.responseData() != null ? response.responseData() : "执行成功";
-                        responseBuilder.append(" ✅ 执行成功！");
+                        ctx.getTerminal().writer().print(" ✅ 执行成功！");
                         sessionManager.addToolResponseMessage(currentSessionId, response.name(), responseStr, true);
                     }
                 }
