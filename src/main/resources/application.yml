@@ -14,13 +14,13 @@ spring:
       enabled: true
     terminal-width: 120
     terminal-height: 30
-    prompt: ">"
+    prompt: "AI-Agent>"
     output:
       ansi:
-        enabled: detect
+        enabled: always
     input:
       ansi:
-        enabled: detect
+        enabled: always
   ai:
     chat:
       client:
@@ -45,10 +45,21 @@ jline:
   terminal:
     exec=true
 
-
 logging:
   level:
     root: warn
   charset:
     console: UTF-8
     file: UTF-8
+
+# Terminal UI配置
+terminal-ui:
+  enabled: true
+  color-support: true
+  progress-bar:
+    width: 30
+    character: "█"
+  spinner:
+    enabled: true
+    characters: ["|", "/", "-", "\\"]
+    interval: 100
