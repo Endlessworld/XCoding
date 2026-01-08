@@ -79,6 +79,12 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <jvmArguments>
+                        -Dfile.encoding=UTF-8
+                        -Dconsole.encoding=UTF-8
+                        -Duser.timezone=Asia/Shanghai
+                        -XX:+UseZGC
+                    </jvmArguments>
                 </configuration>
             </plugin>
             <!-- Maven编译插件UTF-8编码配置 -->
@@ -124,6 +130,12 @@
                                 <requires64Bit>true</requires64Bit>
                                 <minVersion>21.0.0</minVersion>
                                 <requiresJdk>false</requiresJdk>
+                                <opts>
+                                    <opt>-Dfile.encoding=UTF-8</opt>
+                                    <opt>-Dconsole.encoding=UTF-8</opt>
+                                    <opt>-Duser.timezone=Asia/Shanghai</opt>
+                                    <opt>-XX:+UseZGC</opt>
+                                </opts>
                             </jre>
                             <versionInfo>
                                 <fileVersion>1.0.0.0</fileVersion>
