@@ -29,6 +29,7 @@ import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import com.googlecode.lanterna.terminal.MouseCaptureMode;
 import com.googlecode.lanterna.terminal.swing.AWTTerminalFontConfiguration;
 import com.googlecode.lanterna.terminal.swing.SwingTerminalFrame;
+import com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguration;
 import com.xr21.ai.agent.LocalAgent;
 import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.session.ConversationSessionManager;
@@ -53,24 +54,12 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Slf4j
 public class AITerminalUI {
-    /* ========== 现代风格颜色渐变工具 ========== */
-    private static final TextColor[] GRADIENT_COLORS = new TextColor[]{
-        TextColor.ANSI.CYAN_BRIGHT,     // 明亮青色
-        TextColor.ANSI.BLUE_BRIGHT,     // 明亮蓝色
-        TextColor.ANSI.MAGENTA_BRIGHT,  // 明亮洋红色
-        TextColor.ANSI.WHITE_BRIGHT     // 明亮白色
-    };
-    
+
     // 透明度背景色
     private static final TextColor TRANSPARENT_BG = new TextColor.RGB(25, 25, 35);  // 深蓝灰色半透明背景
     private static final TextColor ACCENT_COLOR = new TextColor.RGB(100, 200, 255); // 强调色
     
-    // 渐变边框字符集
-    private static final String[] BORDER_CHARS = {
-        "═", "║", "╔", "╗", "╚", "╝",  // 双线边框
-        "─", "│", "┌", "┐", "└", "┘",   // 单线边框
-        "█", "▓", "▒", "░", "▄", "▀"    // 填充字符
-    };
+
     private final ConversationSessionManager sessionManager;
     private final LocalAgent localAgent;
     private final AtomicBoolean running = new AtomicBoolean(true);
@@ -125,11 +114,25 @@ public class AITerminalUI {
         try {
             // 1. 指定 14 号粗体等宽字体，更现代化
             DefaultTerminalFactory factory = new DefaultTerminalFactory();
+            factory.setTerminalEmulatorDeviceConfiguration(
+                    new TerminalEmulatorDeviceConfiguration());
+//            factory.setForceAWTOverSwing(true);
             factory.setMouseCaptureMode(MouseCaptureMode.CLICK);
             factory.setInitialTerminalSize(new TerminalSize(120, 45));
-            factory.setTerminalEmulatorFontConfiguration(AWTTerminalFontConfiguration.newInstance(
-                new Font("Consolas", Font.BOLD, 14) // 使用Consolas字体，14号粗体
-            ));
+            // 尝试使用支持emoji的等宽字体，如果不可用则回退到系统默认
+            // 注意：Lanterna要求字体必须是等宽字体，某些字体的bold变体可能不被识别为等宽字体
+            Font[] preferredFonts = {
+                    new Font("Fira Code", Font.PLAIN, 14),        // 开源等宽字体，部分支持emoji
+                    new Font("JetBrains Mono", Font.PLAIN, 14),   // JetBrains等宽字体
+                    new Font("Consolas", Font.PLAIN, 14),         // Windows经典等宽字体
+                    new Font("Monospaced", Font.PLAIN, 14)        // 系统默认等宽字体
+            };
+
+            // 直接使用第一个等宽字体，Lanterna TUI 环境下 emoji 会显示为方块
+            // 这是终端渲染的限制，不是字体问题
+            Font selectedFont = preferredFonts[3]; // 使用 Consolas
+
+            factory.setTerminalEmulatorFontConfiguration(AWTTerminalFontConfiguration.newInstance(selectedFont));
             factory.setTerminalEmulatorTitle("🤖 AI AGENTS - 智能助手 v2.0.0");
             Screen screen = factory.createScreen();
             screen.startScreen();
@@ -152,34 +155,6 @@ public class AITerminalUI {
         }
     }
 
-    /** 自动滚动到底部的辅助方法 */
-    private void scrollToBottom(ScrollBar verticalScrollBar, Panel contentPanel) {
-        if (verticalScrollBar != null && contentPanel != null) {
-            // 计算实际的内容高度
-            int contentHeight = 0;
-            var components = contentPanel.getChildren();
-            for (Component child : components) {
-                if (child != null) {
-                    TerminalSize size = child.getSize();
-                    if (size != null) {
-                        contentHeight += size.getRows();
-                    } else {
-                        // 如果无法获取大小，使用默认高度
-                        contentHeight += 2;
-                    }
-                }
-            }
-
-            int viewHeight = 20; // 可视区域高度
-            int maxScroll = Math.max(0, contentHeight - viewHeight);
-
-            verticalScrollBar.setScrollMaximum(maxScroll);
-            verticalScrollBar.setScrollPosition(maxScroll);
-
-            // 强制刷新滚动条状态
-            verticalScrollBar.invalidate();
-        }
-    }
 
     /** 计算文本在指定宽度下需要的行数 */
     private int calculateTextLines(String text, int width) {
@@ -212,7 +187,14 @@ public class AITerminalUI {
             }
         }
 
-        return lines;
+        return lines *4;
+    }
+
+    /** 根据文本内容动态计算并设置TextBox的推荐尺寸 */
+    private TerminalSize calculateTextBoxSize(String text, int width) {
+        int lines = calculateTextLines(text, width);
+        int height = Math.max(2,lines + 1); // +1 确保有足够空间显示
+        return new TerminalSize(width, (int) text.lines().count());
     }
 
     /* ========================= 主菜单 ========================= */
@@ -301,14 +283,27 @@ public class AITerminalUI {
         Panel contentPanel = new Panel(new LinearLayout(Direction.VERTICAL));
         contentPanel.setTheme(chatTheme);
 
-        // 创建带滚动条的面板 - 使用相对宽度
+        // 创建垂直滚动条 - 美化样式
         ScrollBar verticalScrollBar = new ScrollBar(Direction.VERTICAL);
+        verticalScrollBar.setTheme(chatTheme);
+        
+        // 创建水平滚动条 - 用于响应文本框的左右滚动
+        ScrollBar horizontalScrollBar = new ScrollBar(Direction.HORIZONTAL);
+        horizontalScrollBar.setTheme(chatTheme);
+        
+        // 创建滚动面板容器
         Panel scrollPanel = new Panel(new BorderLayout());
         scrollPanel.setPreferredSize(new TerminalSize(75, 20)); // 调整宽度为75以适应85%的布局
         scrollPanel.setTheme(chatTheme);
         
+        // 创建内部内容面板（包含响应文本框和水平滚动条）
+        Panel contentScrollPanel = new Panel(new BorderLayout());
+        contentScrollPanel.setTheme(chatTheme);
+        contentScrollPanel.addComponent(contentPanel, BorderLayout.Location.CENTER);
+        contentScrollPanel.addComponent(horizontalScrollBar, BorderLayout.Location.BOTTOM);
+        
         // 设置滚动条和内容面板
-        scrollPanel.addComponent(contentPanel, BorderLayout.Location.CENTER);
+        scrollPanel.addComponent(contentScrollPanel, BorderLayout.Location.CENTER);
         scrollPanel.addComponent(verticalScrollBar, BorderLayout.Location.RIGHT);
 
         // 创建滚动容器，将滚动条与内容面板关联
@@ -592,13 +587,16 @@ public class AITerminalUI {
 
                 // 获取或创建当前响应的TextBox
                 TextBox responseTextBox = currentResponseTextBox.get();
+                // 动态计算宽度：基于当前窗口大小
+                int dynamicWidth = Math.max(50, textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10);
+                
                 if (responseTextBox == null) {
                     responseTextBox = new TextBox(responseBuilder.toString(), TextBox.Style.MULTI_LINE);
                     responseTextBox.setTheme(theme);
                     responseTextBox.setReadOnly(true);
-                    // 动态计算宽度：基于当前窗口大小
-                    int dynamicWidth = Math.max(50, textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10);
-                    responseTextBox.setPreferredSize(new TerminalSize(dynamicWidth, 3));
+                    // 使用辅助方法根据实际行数设置尺寸
+                    TerminalSize size = calculateTextBoxSize(responseBuilder.toString(), dynamicWidth);
+                    responseTextBox.setPreferredSize(size);
                     responseTextBox.setVerticalFocusSwitching(false); // 禁用垂直焦点切换，专注于滚动
                     currentResponseTextBox.set(responseTextBox);
                     // 添加到所有响应TextBox列表
@@ -610,27 +608,18 @@ public class AITerminalUI {
                 } else {
                     // 更新现有TextBox的内容
                     responseTextBox.setText(responseBuilder.toString());
-                    // 根据文本内容动态调整高度，确保足够的显示空间
-                    String text = responseBuilder.toString();
-                    // 动态计算宽度：基于当前窗口大小
-                    int dynamicWidth = Math.max(50, textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10);
-                    int lines = calculateTextLines(text, dynamicWidth);
-                    int preferredHeight = Math.max(3, Math.min(lines + 1, 20)); // 限制最大高度为20行，+1确保有足够空间
-                    responseTextBox.setPreferredSize(new TerminalSize(dynamicWidth, preferredHeight));
-
+                    // 使用辅助方法根据实际行数动态设置高度
+                    TerminalSize size = calculateTextBoxSize(responseBuilder.toString(), dynamicWidth);
+                    responseTextBox.setPreferredSize(size);
                     // 自动滚动到底部
                     TextBox.TextBoxRenderer renderer = responseTextBox.getRenderer();
                     if (renderer instanceof TextBox.DefaultTextBoxRenderer defaultRenderer) {
                         // 计算文本总行数
                         int totalLines = responseTextBox.getLineCount();
-                        int visibleLines = preferredHeight;
-
-                        // 如果文本行数超过可见行数，滚动到底部
-                        if (totalLines > visibleLines) {
-                            TerminalPosition viewTopLeft = defaultRenderer.getViewTopLeft();
-                            int newScrollPosition = Math.max(0, totalLines - visibleLines + 1); // +1确保显示最后一行
-                            defaultRenderer.setViewTopLeft(viewTopLeft.withRow(newScrollPosition));
-                        }
+                        int visibleLines = size.getRows();
+                        TerminalPosition viewTopLeft = defaultRenderer.getViewTopLeft();
+                        int newScrollPosition = Math.max(0, totalLines - visibleLines + 1); // +1确保显示最后一行
+                        defaultRenderer.setViewTopLeft(viewTopLeft.withRow(newScrollPosition));
                     }
                 }
 
