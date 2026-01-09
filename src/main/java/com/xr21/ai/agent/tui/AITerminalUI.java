@@ -133,7 +133,7 @@ public class AITerminalUI {
             Font selectedFont = preferredFonts[3]; // 使用 Consolas
 
             factory.setTerminalEmulatorFontConfiguration(AWTTerminalFontConfiguration.newInstance(selectedFont));
-            factory.setTerminalEmulatorTitle("🤖 AI AGENTS - 智能助手 v2.0.0");
+            factory.setTerminalEmulatorTitle("AI AGENTS - 智能助手 v2.0.0");
             Screen screen = factory.createScreen();
             screen.startScreen();
 
@@ -192,9 +192,9 @@ public class AITerminalUI {
 
     /** 根据文本内容动态计算并设置TextBox的推荐尺寸 */
     private TerminalSize calculateTextBoxSize(String text, int width) {
-        int lines = calculateTextLines(text, width);
-        int height = Math.max(2,lines + 1); // +1 确保有足够空间显示
-        return new TerminalSize(width, (int) text.lines().count());
+        int calculatedLines = calculateTextLines(text, width);
+        int height = Math.max(3, calculatedLines);
+        return new TerminalSize(width, height);
     }
 
     /* ========================= 主菜单 ========================= */
@@ -208,7 +208,7 @@ public class AITerminalUI {
         mainPanel.setLayoutManager(new LinearLayout(Direction.VERTICAL).setSpacing(1));
         mainPanel.setTheme(modernTheme);
 
-        Label titleLabel = new Label("\n=== 🤖 AI AGENTS ===\n");
+        Label titleLabel = new Label("\n=== AI AGENTS ===\n");
         titleLabel.addStyle(SGR.BOLD);
         titleLabel.addStyle(SGR.UNDERLINE);
         titleLabel.setTheme(modernTheme);
@@ -268,7 +268,7 @@ public class AITerminalUI {
         chatPanel.setPreferredSize(new TerminalSize(85, 100)); // 85%宽度，100%高度
         chatPanel.setTheme(chatTheme);
 
-        Label header = new Label("\n=== 💬 聊天记录 ===\n");
+        Label header = new Label("\n=== 聊天记录 ===\n");
         header.addStyle(SGR.BOLD);
         header.addStyle(SGR.UNDERLINE);
         header.setTheme(chatTheme);
@@ -326,13 +326,13 @@ public class AITerminalUI {
             var messages = sessionManager.loadSessionHistory(sessionId);
             for (var msg : messages) {
                 String prefix = switch (msg.getType()) {
-                    case USER -> "👤 你: ";
-                    case ASSISTANT -> "🤖 AI: ";
-                    case SYSTEM -> "⚙️ [系统]: ";
-                    case TOOL_CALL -> "🔧 [工具调用]: ";
-                    case TOOL_RESPONSE -> "✅ [工具响应]: ";
-                    case ERROR -> "❌ [错误]: ";
-                    case FEEDBACK -> "💡 [反馈]: ";
+                    case USER -> "你: ";
+                    case ASSISTANT -> "AI: ";
+                    case SYSTEM -> "[系统]: ";
+                    case TOOL_CALL -> "[工具调用]: ";
+                    case TOOL_RESPONSE -> "[工具响应]: ";
+                    case ERROR -> "[错误]: ";
+                    case FEEDBACK -> "[反馈]: ";
                 };
                 
                 // 为AI响应创建TextBox，其他消息类型使用Label
@@ -373,14 +373,14 @@ public class AITerminalUI {
 
         // 添加快捷键说明面板
         Panel shortcutPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Label shortcutLabel = new Label("⌨️ 快捷键: Ctrl+Enter 发送 | Esc 返回");
+        Label shortcutLabel = new Label("快捷键: Ctrl+Enter 发送 | Esc 返回");
         shortcutLabel.addStyle(SGR.BOLD);
         shortcutLabel.setTheme(modernTheme);
         shortcutLabel.setForegroundColor(new TextColor.RGB(255, 200, 100));
         shortcutPanel.addComponent(shortcutLabel);
 
         chatPanel.addComponent(wrapWithChatBorder(scrollContainer));
-        Label inputLabel = new Label("📝 输入消息:");
+        Label inputLabel = new Label("输入消息:");
         inputLabel.setTheme(chatTheme);
         inputLabel.addStyle(SGR.BOLD);
         chatPanel.addComponent(inputLabel);
@@ -418,15 +418,10 @@ public class AITerminalUI {
                 int responseBoxWidth = chatWidth - 15;
                 for (TextBox responseBox : allResponseTextBoxes) {
                     if (responseBox != null) {
-                        // 重新计算高度
+                        // 根据实际行数动态计算高度
                         String text = responseBox.getText();
-                        if (text != null && !text.isEmpty()) {
-                            int lines = calculateTextLines(text, responseBoxWidth);
-                            int preferredHeight = Math.max(3, Math.min(lines, 15)); // 限制最大高度为15行
-                            responseBox.setPreferredSize(new TerminalSize(responseBoxWidth, preferredHeight));
-                        } else {
-                            responseBox.setPreferredSize(new TerminalSize(responseBoxWidth, 3));
-                        }
+                        newSize = calculateTextBoxSize(text, responseBoxWidth);
+                        responseBox.setPreferredSize(newSize);
                     }
                 }
 
@@ -580,11 +575,9 @@ public class AITerminalUI {
         outputFlux.doOnNext(output -> {
             AgentOutput<Object> agentOutput = output.data();
             // 处理流式文本输出
-            System.err.println(agentOutput.getChunk());
-            if (agentOutput.getChunk() != null) {
+            if (agentOutput != null && agentOutput.getChunk() != null) {
                 System.err.println(agentOutput.getChunk());
                 responseBuilder.append(agentOutput.getChunk());
-
                 // 获取或创建当前响应的TextBox
                 TextBox responseTextBox = currentResponseTextBox.get();
                 // 动态计算宽度：基于当前窗口大小
@@ -618,8 +611,8 @@ public class AITerminalUI {
                         int totalLines = responseTextBox.getLineCount();
                         int visibleLines = size.getRows();
                         TerminalPosition viewTopLeft = defaultRenderer.getViewTopLeft();
-                        int newScrollPosition = Math.max(0, totalLines - visibleLines + 1); // +1确保显示最后一行
-                        defaultRenderer.setViewTopLeft(viewTopLeft.withRow(newScrollPosition));
+
+                        defaultRenderer.setViewTopLeft(viewTopLeft.withRow(totalLines));
                     }
                 }
 
@@ -790,7 +783,7 @@ public class AITerminalUI {
         statusPanel.setTheme(modernTheme);
 
         // 标题
-        Label title = new Label("=== 📊 会话状态 ===");
+        Label title = new Label("=== 会话状态 ===");
         title.addStyle(SGR.BOLD);
         title.addStyle(SGR.UNDERLINE);
         title.setTheme(modernTheme);
@@ -851,7 +844,7 @@ public class AITerminalUI {
 
                 if (sessionInfo != null) {
                     // 会话ID
-                    Label idTitle = new Label("🆔 会话ID:");
+                    Label idTitle = new Label("会话ID:");
                     idTitle.setTheme(modernTheme);
                     idTitle.addStyle(SGR.BOLD);
                     statusPanel.addComponent(idTitle);
@@ -863,7 +856,7 @@ public class AITerminalUI {
                     statusPanel.addComponent(new Label(""));
 
                     // 创建时间
-                    Label timeTitle = new Label("🕒 创建时间:");
+                    Label timeTitle = new Label("创建时间:");
                     timeTitle.setTheme(modernTheme);
                     timeTitle.addStyle(SGR.BOLD);
                     statusPanel.addComponent(timeTitle);
@@ -897,22 +890,22 @@ public class AITerminalUI {
                         }
                     }
 
-                    Label userLabel = new Label("👤 用户: " + userCount);
+                    Label userLabel = new Label("用户: " + userCount);
                     userLabel.setTheme(modernTheme);
                     userLabel.setForegroundColor(new TextColor.RGB(150, 255, 150));
                     statusPanel.addComponent(userLabel);
 
-                    Label aiLabel = new Label("🤖 AI: " + assistantCount);
+                    Label aiLabel = new Label("AI: " + assistantCount);
                     aiLabel.setTheme(modernTheme);
                     aiLabel.setForegroundColor(new TextColor.RGB(150, 220, 255));
                     statusPanel.addComponent(aiLabel);
 
-                    Label systemLabel = new Label("⚙️ 系统: " + systemCount);
+                    Label systemLabel = new Label("系统: " + systemCount);
                     systemLabel.setTheme(modernTheme);
                     systemLabel.setForegroundColor(new TextColor.RGB(255, 200, 100));
                     statusPanel.addComponent(systemLabel);
 
-                    Label toolLabel = new Label("🔧 工具: " + toolCount);
+                    Label toolLabel = new Label("工具: " + toolCount);
                     toolLabel.setTheme(modernTheme);
                     toolLabel.setForegroundColor(new TextColor.RGB(255, 150, 200));
                     statusPanel.addComponent(toolLabel);
@@ -920,7 +913,7 @@ public class AITerminalUI {
                     statusPanel.addComponent(new Label(""));
 
                     // 简要描述
-                    Label descTitle = new Label("📄 简要描述:");
+                    Label descTitle = new Label("简要描述:");
                     descTitle.setTheme(modernTheme);
                     descTitle.addStyle(SGR.BOLD);
                     statusPanel.addComponent(descTitle);
@@ -935,14 +928,14 @@ public class AITerminalUI {
                             statusPanel.addComponent(descLabel);
                         }
                     } else {
-                        Label noDescLabel = new Label("📝 暂无描述");
+                        Label noDescLabel = new Label("暂无描述");
                         noDescLabel.setTheme(modernTheme);
                         noDescLabel.setForegroundColor(new TextColor.RGB(150, 150, 150));
                         statusPanel.addComponent(noDescLabel);
                     }
                 } else {
                     // 新会话还没有任何消息
-                    Label newIdTitle = new Label("🆔 会话ID:");
+                    Label newIdTitle = new Label("会话ID:");
                     newIdTitle.setTheme(modernTheme);
                     newIdTitle.addStyle(SGR.BOLD);
                     statusPanel.addComponent(newIdTitle);
@@ -952,17 +945,17 @@ public class AITerminalUI {
                     statusPanel.addComponent(idLabel);
 
                     statusPanel.addComponent(new Label(""));
-                    Label statusLabel = new Label("🆕 状态: 新会话");
+                    Label statusLabel = new Label("状态: 新会话");
                     statusLabel.setTheme(modernTheme);
                     statusLabel.setForegroundColor(new TextColor.RGB(150, 255, 150));
                     statusPanel.addComponent(statusLabel);
-                    Label msgCountLabel = new Label("📝 消息数: 0");
+                    Label msgCountLabel = new Label("消息数: 0");
                     msgCountLabel.setTheme(modernTheme);
                     msgCountLabel.setForegroundColor(new TextColor.RGB(200, 200, 200));
                     statusPanel.addComponent(msgCountLabel);
                 }
             } catch (Exception e) {
-                Label errorTitle = new Label("❌ 状态更新失败:");
+                Label errorTitle = new Label("状态更新失败:");
                 errorTitle.setTheme(modernTheme);
                 errorTitle.addStyle(SGR.BOLD);
                 statusPanel.addComponent(errorTitle);
@@ -972,7 +965,7 @@ public class AITerminalUI {
                 statusPanel.addComponent(errorLabel);
             }
         } else {
-            Label noSessionLabel = new Label("🚫 无会话信息");
+            Label noSessionLabel = new Label("无会话信息");
             noSessionLabel.setTheme(modernTheme);
             noSessionLabel.setForegroundColor(new TextColor.RGB(150, 150, 150));
             statusPanel.addComponent(noSessionLabel);
@@ -982,22 +975,22 @@ public class AITerminalUI {
     /* ========================= 帮助 ========================= */
     private void showHelp(WindowBasedTextGUI textGUI, Window returnTo) {
         String help = """
-                \n=== 🤖 AI 助手帮助 ===
+                \n=== AI 助手帮助 ===
                 
                 功能：
-                1. 💬 开始聊天 - 与 AI 对话
-                2. 📁 会话管理 - 创建/切换会话
-                3. ❓ 查看帮助 - 显示本信息
+                1. 开始聊天 - 与 AI 对话
+                2. 会话管理 - 创建/切换会话
+                3. 查看帮助 - 显示本信息
                 
                 快捷键：
-                ⭕ Tab   切换控件
-                ⬆️⬇️ 方向键 导航
-                ❌ Q     返回上级
-                🚪 ESC   关闭对话框
+                Tab   切换控件
+                方向键 导航
+                Q     返回上级
+                ESC   关闭对话框
                 
                 版本：v2.0.0 - 现代化UI升级
                 """;
-        MessageDialog.showMessageDialog(textGUI, "📚 帮助", help, MessageDialogButton.OK);
+        MessageDialog.showMessageDialog(textGUI, "帮助", help, MessageDialogButton.OK);
     }
 
     /** 设置自定义窗口图标，替换默认JDK图标 */
