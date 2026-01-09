@@ -18,6 +18,7 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryIntercept
 import com.alibaba.cloud.ai.graph.agent.tools.ShellTool;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
+import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
@@ -55,8 +56,15 @@ public class LocalAgent {
 
     protected static final List<ChatModel> fallbackModels = new ArrayList<>();
     protected static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents";
-    public ChatModel chatModel;
+    public ChatModel chatModel = AiModels.MINIMAX_M2_1.createChatModel();
     protected ConversationSessionManager sessionManager;
+
+    public static void main(String[] args) {
+        LocalAgent localAgent = new LocalAgent();
+        localAgent.chatModel = AiModels.MINIMAX_M2_1.createChatModel();
+        var agent = localAgent.buildSupervisorAgent();
+        localAgent.startInteractiveSession(agent);
+    }
 
     private static ArrayList<ToolCallback> getTools() {
         List<ToolCallback> mcpTools = getMcpTools();
@@ -328,7 +336,7 @@ public class LocalAgent {
                 .name("fallback_agent")
                 .model(chatModel)
                 .saver(new MemorySaver())
-                .description("后备智能体，负责处理其他Agent无法处理的输入")
+                .description("后备智能体，负责处理其他Agent无法处理的输入或简单的问候")
                 .instruction("你是AI小助手可以帮助用户解答问题")
                 .outputKey("fallback_agent")
                 .build();

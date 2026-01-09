@@ -54,7 +54,7 @@ public class ConversationSessionManager {
 
     private final boolean autoSave = true;
 
-    private Path savePath;
+    private Path savePath ;
 
     public ConversationSessionManager() {
         this.objectMapper = new ObjectMapper();
@@ -64,6 +64,7 @@ public class ConversationSessionManager {
         this.sessionMessages = new ConcurrentHashMap<>();
         this.sessionRounds = new ConcurrentHashMap<>();
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        init();
     }
 
     /**
@@ -406,6 +407,9 @@ public class ConversationSessionManager {
      */
     public boolean loadSessionById(String sessionId) {
         try {
+            if (savePath == null) {
+                return false;
+            }
             // 查找对应的会话文件
             List<Path> matchingFiles = Files.walk(savePath)
                     .filter(Files::isRegularFile)

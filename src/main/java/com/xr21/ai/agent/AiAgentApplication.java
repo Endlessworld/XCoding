@@ -1,16 +1,12 @@
 package com.xr21.ai.agent;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import com.xr21.ai.agent.session.ConversationSessionManager;
+import com.xr21.ai.agent.tui.AITerminalUI;
 
-/**
- * Spring Boot应用程序入口
- */
-@SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
 public class AiAgentApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(AiAgentApplication.class, args);
+        var aiTerminalUI = new AITerminalUI(new ConversationSessionManager(), new LocalAgent());
+        aiTerminalUI.start();
     }
 }
