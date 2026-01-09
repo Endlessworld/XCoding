@@ -10,24 +10,15 @@ import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.graphics.SimpleTheme;
 import com.googlecode.lanterna.graphics.Theme;
 import com.googlecode.lanterna.gui2.*;
-import com.googlecode.lanterna.gui2.BorderLayout;
-import com.googlecode.lanterna.gui2.Button;
-import com.googlecode.lanterna.gui2.Component;
-import com.googlecode.lanterna.gui2.Label;
-import com.googlecode.lanterna.gui2.Panel;
-import com.googlecode.lanterna.gui2.Window;
 import com.googlecode.lanterna.gui2.dialogs.MessageDialog;
 import com.googlecode.lanterna.gui2.dialogs.MessageDialogButton;
 import com.googlecode.lanterna.gui2.table.Table;
 import com.googlecode.lanterna.input.KeyStroke;
 import com.googlecode.lanterna.input.KeyType;
-import com.googlecode.lanterna.input.MouseAction;
-import com.googlecode.lanterna.input.MouseActionType;
 import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import com.googlecode.lanterna.terminal.MouseCaptureMode;
-import com.googlecode.lanterna.terminal.swing.AWTTerminalFontConfiguration;
 import com.googlecode.lanterna.terminal.swing.SwingTerminalFrame;
 import com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguration;
 import com.xr21.ai.agent.LocalAgent;
@@ -41,7 +32,6 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
-import java.awt.*;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +48,7 @@ public class AITerminalUI {
     // 透明度背景色
     private static final TextColor TRANSPARENT_BG = new TextColor.RGB(25, 25, 35);  // 深蓝灰色半透明背景
     private static final TextColor ACCENT_COLOR = new TextColor.RGB(100, 200, 255); // 强调色
-    
+
 
     private final ConversationSessionManager sessionManager;
     private final LocalAgent localAgent;
@@ -76,7 +66,7 @@ public class AITerminalUI {
             new TextColor.RGB(70, 130, 180), // selectedBackground - 钢蓝色选中背景
             TRANSPARENT_BG                  // guiBackground - 半透明GUI背景
     );
-    
+
     // 创建聊天专用主题 - 更柔和的颜色
     Theme chatTheme = SimpleTheme.makeTheme(
             true,  // activeIsBold: 活动组件使用粗体
@@ -88,7 +78,7 @@ public class AITerminalUI {
             new TextColor.RGB(60, 120, 160), // selectedBackground - 深蓝色选中背景
             new TextColor.RGB(20, 25, 35)   // guiBackground - 深色GUI背景
     );
-    
+
     // 保留原有theme变量以兼容旧代码
     Theme theme = modernTheme;
     private Agent supervisorAgent;
@@ -104,7 +94,7 @@ public class AITerminalUI {
     private static Component wrapWithGradientBorder(Component component) {
         return component; // 暂时不使用边框，避免编译错误
     }
-    
+
     /** 给聊天组件包一层特殊的渐变边框 */
     private static Component wrapWithChatBorder(Component component) {
         return component; // 暂时不使用边框，避免编译错误
@@ -114,29 +104,15 @@ public class AITerminalUI {
         try {
             // 1. 指定 14 号粗体等宽字体，更现代化
             DefaultTerminalFactory factory = new DefaultTerminalFactory();
-            factory.setTerminalEmulatorDeviceConfiguration(
-                    new TerminalEmulatorDeviceConfiguration());
-//            factory.setForceAWTOverSwing(true);
-            factory.setMouseCaptureMode(MouseCaptureMode.CLICK);
             factory.setInitialTerminalSize(new TerminalSize(120, 45));
-            // 尝试使用支持emoji的等宽字体，如果不可用则回退到系统默认
-            // 注意：Lanterna要求字体必须是等宽字体，某些字体的bold变体可能不被识别为等宽字体
-            Font[] preferredFonts = {
-                    new Font("Fira Code", Font.PLAIN, 14),        // 开源等宽字体，部分支持emoji
-                    new Font("JetBrains Mono", Font.PLAIN, 14),   // JetBrains等宽字体
-                    new Font("Consolas", Font.PLAIN, 14),         // Windows经典等宽字体
-                    new Font("Monospaced", Font.PLAIN, 14)        // 系统默认等宽字体
-            };
-
-            // 直接使用第一个等宽字体，Lanterna TUI 环境下 emoji 会显示为方块
-            // 这是终端渲染的限制，不是字体问题
-            Font selectedFont = preferredFonts[3]; // 使用 Consolas
-
-            factory.setTerminalEmulatorFontConfiguration(AWTTerminalFontConfiguration.newInstance(selectedFont));
+            factory.setMouseCaptureMode(MouseCaptureMode.CLICK);
+//            factory.setForceTextTerminal(true);
+            factory.setTerminalEmulatorDeviceConfiguration(new TerminalEmulatorDeviceConfiguration());
+            factory.setForceAWTOverSwing(true);
             factory.setTerminalEmulatorTitle("AI AGENTS - 智能助手 v2.0.0");
+            // 直接创建屏幕（纯终端模式）
             Screen screen = factory.createScreen();
             screen.startScreen();
-
             // 设置自定义图标，替换默认JDK图标
             setCustomIcon(screen);
 
@@ -156,7 +132,7 @@ public class AITerminalUI {
     }
 
 
-    /** 计算文本在指定宽度下需要的行数 */
+    /** 计算文本在指定宽度下需要的行数（简化版） */
     private int calculateTextLines(String text, int width) {
         if (text == null || text.isEmpty()) {
             return 1;
@@ -187,14 +163,14 @@ public class AITerminalUI {
             }
         }
 
-        return lines *4;
+        return lines;
     }
 
     /** 根据文本内容动态计算并设置TextBox的推荐尺寸 */
     private TerminalSize calculateTextBoxSize(String text, int width) {
         int calculatedLines = calculateTextLines(text, width);
         int height = Math.max(3, calculatedLines);
-        return new TerminalSize(width, height);
+        return new TerminalSize(width, height * 2);
     }
 
     /* ========================= 主菜单 ========================= */
@@ -279,38 +255,28 @@ public class AITerminalUI {
         Panel scrollableMsgArea = new Panel(new LinearLayout(Direction.VERTICAL));
         scrollableMsgArea.setTheme(chatTheme);
 
-        // 创建内容容器
-        Panel contentPanel = new Panel(new LinearLayout(Direction.VERTICAL));
+        // 创建内容容器 - 使用 GridLayout 以支持滚动
+        Panel contentPanel = new Panel(new com.googlecode.lanterna.gui2.GridLayout(1)); // 单列网格布局
         contentPanel.setTheme(chatTheme);
 
-        // 创建垂直滚动条 - 美化样式
+        // 创建垂直滚动条 - 美化样式，隐藏滚动条以获得更简洁的界面
         ScrollBar verticalScrollBar = new ScrollBar(Direction.VERTICAL);
         verticalScrollBar.setTheme(chatTheme);
-        
-        // 创建水平滚动条 - 用于响应文本框的左右滚动
-        ScrollBar horizontalScrollBar = new ScrollBar(Direction.HORIZONTAL);
-        horizontalScrollBar.setTheme(chatTheme);
-        
+        verticalScrollBar.setVisible(false); // 隐藏滚动条
+
         // 创建滚动面板容器
         Panel scrollPanel = new Panel(new BorderLayout());
-        scrollPanel.setPreferredSize(new TerminalSize(75, 20)); // 调整宽度为75以适应85%的布局
         scrollPanel.setTheme(chatTheme);
-        
-        // 创建内部内容面板（包含响应文本框和水平滚动条）
-        Panel contentScrollPanel = new Panel(new BorderLayout());
-        contentScrollPanel.setTheme(chatTheme);
-        contentScrollPanel.addComponent(contentPanel, BorderLayout.Location.CENTER);
-        contentScrollPanel.addComponent(horizontalScrollBar, BorderLayout.Location.BOTTOM);
-        
-        // 设置滚动条和内容面板
-        scrollPanel.addComponent(contentScrollPanel, BorderLayout.Location.CENTER);
+
+        // 将内容面板添加到滚动面板
+        scrollPanel.addComponent(contentPanel, BorderLayout.Location.CENTER);
         scrollPanel.addComponent(verticalScrollBar, BorderLayout.Location.RIGHT);
 
-        // 创建滚动容器，将滚动条与内容面板关联
+        // 创建滚动容器
         Panel scrollContainer = new Panel(new BorderLayout());
         scrollContainer.addComponent(scrollPanel, BorderLayout.Location.CENTER);
 
-        // 用于保存当前AI响应的TextBox，支持流式更新和自动换行
+        // 用于保存当前AI响应的TextBox，支持流式更新
         AtomicReference<TextBox> currentResponseTextBox = new AtomicReference<>();
         // 用于保存所有响应TextBox的列表，方便窗口大小调整时更新
         java.util.List<TextBox> allResponseTextBoxes = new java.util.ArrayList<>();
@@ -369,6 +335,7 @@ public class AITerminalUI {
         };
         input.setPreferredSize(new TerminalSize(70, 5)); // 调整输入框宽度为70
         input.setTheme(chatTheme);
+        input.setVerticalFocusSwitching(false); // 禁用垂直焦点切换
         // TextBox不支持addStyle，通过主题设置样式
 
         // 添加快捷键说明面板
@@ -479,37 +446,9 @@ public class AITerminalUI {
             }
         });
 
-        // 添加鼠标滚动支持
-        window.addWindowListener(new WindowListenerAdapter() {
-            @Override
-            public void onUnhandledInput(Window basePane, KeyStroke key, AtomicBoolean handled) {
-                // 处理鼠标滚轮事件
-                if (key.getKeyType() == KeyType.MouseEvent) {
-                    try {
-                        MouseAction mouseAction = (MouseAction) key;
-                        // 检查鼠标滚轮方向
-                        if (mouseAction.getActionType() == MouseActionType.SCROLL_DOWN) {
-                            // 向下滚动
-                            if (verticalScrollBar != null) {
-                                int currentPos = verticalScrollBar.getScrollPosition();
-                                int maxPos = verticalScrollBar.getScrollMaximum();
-                                verticalScrollBar.setScrollPosition(Math.min(currentPos + 3, maxPos));
-                                handled.set(true);
-                            }
-                        } else if (mouseAction.getActionType() == MouseActionType.SCROLL_UP) {
-                            // 向上滚动
-                            if (verticalScrollBar != null) {
-                                int currentPos = verticalScrollBar.getScrollPosition();
-                                verticalScrollBar.setScrollPosition(Math.max(currentPos - 3, 0));
-                                handled.set(true);
-                            }
-                        }
-                    } catch (Exception e) {
-                        // 如果鼠标事件处理失败，忽略错误
-                    }
-                }
-            }
-        });
+        // 注意：Lanterna 的 Panel 不直接支持 scrollDown/scrollUp 方法
+        // 鼠标滚轮事件通过 ScrollBar 隐式处理
+        // 如需自定义滚动行为，可使用键盘方向键或 PageUp/PageDown
         textGUI.addWindowAndWait(window);
     }
 
@@ -609,10 +548,9 @@ public class AITerminalUI {
                     if (renderer instanceof TextBox.DefaultTextBoxRenderer defaultRenderer) {
                         // 计算文本总行数
                         int totalLines = responseTextBox.getLineCount();
-                        int visibleLines = size.getRows();
                         TerminalPosition viewTopLeft = defaultRenderer.getViewTopLeft();
-
                         defaultRenderer.setViewTopLeft(viewTopLeft.withRow(totalLines));
+                        defaultRenderer.setHideScrollBars(true);
                     }
                 }
 
