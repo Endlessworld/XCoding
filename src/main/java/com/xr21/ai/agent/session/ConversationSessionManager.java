@@ -48,7 +48,7 @@ public class ConversationSessionManager {
 
     private final ScheduledExecutorService scheduler;
 
-    private final String saveDirectory = "./conversations";
+    private final String saveDirectory;
 
     private final long saveInterval = 30000;
 
@@ -57,6 +57,10 @@ public class ConversationSessionManager {
     private Path savePath ;
 
     public ConversationSessionManager() {
+        // 获取用户目录并设置保存路径为 .agi_working/conversations
+        String userHome = System.getProperty("user.home");
+        this.saveDirectory = userHome + File.separator + ".agi_working" + File.separator + "conversations";
+        
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
