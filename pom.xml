@@ -14,7 +14,8 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-ai.version>2.0.0.20251117-SNAPSHOT</spring-ai.version>
+<!--        <spring-ai.version>2.0.0.20251117-SNAPSHOT</spring-ai.version>-->
+        <spring-ai.version>1.1.0</spring-ai.version>
         <spring-ai-alibaba.version>1.1.0.0</spring-ai-alibaba.version>
         <hutool.version>5.8.33</hutool.version>
         <spring.version>6.2.0</spring.version>
@@ -37,8 +38,9 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai</artifactId>
             <version>${spring-ai.version}</version>
+<!--            <version>2.0.0-M1</version>-->
         </dependency>
-        
+
         <!-- Reactor Core -->
         <dependency>
             <groupId>io.projectreactor</groupId>

@@ -90,12 +90,16 @@ public class AITerminalUI {
         this.supervisorAgent = localAgent.buildSupervisorAgent();
     }
 
-    /** 给任意组件包一层渐变边框，方便复用 */
+    /**
+     * 给任意组件包一层渐变边框，方便复用
+     */
     private static Component wrapWithGradientBorder(Component component) {
         return component; // 暂时不使用边框，避免编译错误
     }
 
-    /** 给聊天组件包一层特殊的渐变边框 */
+    /**
+     * 给聊天组件包一层特殊的渐变边框
+     */
     private static Component wrapWithChatBorder(Component component) {
         return component; // 暂时不使用边框，避免编译错误
     }
@@ -132,7 +136,9 @@ public class AITerminalUI {
     }
 
 
-    /** 计算文本在指定宽度下需要的行数（简化版） */
+    /**
+     * 计算文本在指定宽度下需要的行数（简化版）
+     */
     private int calculateTextLines(String text, int width) {
         if (text == null || text.isEmpty()) {
             return 1;
@@ -166,7 +172,9 @@ public class AITerminalUI {
         return lines;
     }
 
-    /** 根据文本内容动态计算并设置TextBox的推荐尺寸 */
+    /**
+     * 根据文本内容动态计算并设置TextBox的推荐尺寸
+     */
     private TerminalSize calculateTextBoxSize(String text, int width) {
         int calculatedLines = calculateTextLines(text, width);
         int height = Math.max(3, calculatedLines);
@@ -211,7 +219,7 @@ public class AITerminalUI {
         sessionBtn.setTheme(modernTheme);
         helpBtn.setTheme(modernTheme);
         exitBtn.setTheme(modernTheme);
-        
+
         // Button类不支持addStyle，通过主题设置样式
 
         btnPanel.addComponent(chatBtn);
@@ -280,6 +288,10 @@ public class AITerminalUI {
         AtomicReference<TextBox> currentResponseTextBox = new AtomicReference<>();
         // 用于保存所有响应TextBox的列表，方便窗口大小调整时更新
         java.util.List<TextBox> allResponseTextBoxes = new java.util.ArrayList<>();
+        // 用于显示loading状态的Label
+        AtomicReference<Label> loadingLabel = new AtomicReference<>();
+        // 用于跟踪是否正在等待AI响应
+        AtomicBoolean isWaitingForResponse = new AtomicBoolean(false);
 
         // 右侧会话状态面板 (15%宽度)
         Panel statusPanel = createSessionStatusPanel(sessionId);
@@ -300,7 +312,7 @@ public class AITerminalUI {
                     case ERROR -> "[错误]: ";
                     case FEEDBACK -> "[反馈]: ";
                 };
-                
+
                 // 为AI响应创建TextBox，其他消息类型使用Label
                 if (msg.getType() == com.xr21.ai.agent.entity.ConversationMessage.MessageType.ASSISTANT) {
                     contentPanel.addComponent(new Label(prefix));
@@ -321,13 +333,32 @@ public class AITerminalUI {
             }
         }
 
-        // 创建自定义 TextBox，不处理 Ctrl+Enter，让它传递到窗口级别
+        // 创建自定义 TextBox，支持粘贴，处理 Ctrl+Enter 和 Ctrl+V
         TextBox input = new TextBox("", TextBox.Style.MULTI_LINE) {
             @Override
             public Result handleKeyStroke(KeyStroke keyStroke) {
-                // 如果是 Ctrl+Enter，不处理，让它传递到父级
+                // 如果是 Ctrl+Enter，不处理，让它传递到父级发送消息
                 if (keyStroke.getKeyType() == KeyType.Enter && keyStroke.isCtrlDown()) {
                     return Result.UNHANDLED;
+                }
+                // 如果是 Ctrl+V，尝试获取系统剪贴板内容并粘贴
+                if (keyStroke.getCharacter() != null && keyStroke.getCharacter() == 'v' && keyStroke.isCtrlDown()) {
+                    try {
+                        java.awt.datatransfer.Clipboard clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+                        if (clipboard.isDataFlavorAvailable(java.awt.datatransfer.DataFlavor.stringFlavor)) {
+                            String pasteText = (String) clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor);
+                            if (pasteText != null) {
+                                // 在当前文本末尾插入粘贴的文本
+                                String currentText = getText();
+                                String newText = currentText + pasteText;
+                                setText(newText);
+                                setCaretPosition((int) newText.lines().count(), newText.lines().skip(newText.lines().count() - 1).findAny().orElse("").length());
+                            }
+                        }
+                        return Result.HANDLED;
+                    } catch (Exception e) {
+                        log.warn("粘贴失败", e);
+                    }
                 }
                 // 其他按键正常处理
                 return super.handleKeyStroke(keyStroke);
@@ -413,21 +444,74 @@ public class AITerminalUI {
                 // 处理 Ctrl+Enter 发送消息
                 if (key.getKeyType() == KeyType.Enter && key.isCtrlDown()) {
                     String txt = input.getText().trim();
-                    if (!txt.isEmpty()) {
-                        contentPanel.addComponent(new Label("你: " + txt));
+                    if (!txt.isEmpty() && !isWaitingForResponse.get()) {
+                        // 1. 立即渲染用户消息到界面上
+                        Label userLabel = new Label("你: " + txt);
+                        userLabel.setTheme(chatTheme);
+                        contentPanel.addComponent(userLabel);
+
+                        // 2. 立即刷新界面显示用户消息
+                        textGUI.getGUIThread().invokeLater(() -> {
+                            contentPanel.invalidate();
+                            try {
+                                if (textGUI.getScreen() != null) {
+                                    textGUI.getScreen().refresh();
+                                }
+                            } catch (IOException e) {
+                                log.error("用户消息渲染刷新失败", e);
+                            }
+                        });
+
+                        // 清空输入框
                         input.setText("");
+
+                        // 禁用输入框防止重复发送
+                        input.setEnabled(false);
+
+                        // 3. 显示loading状态
+                        Label loading = new Label("🤖 AI正在思考...");
+                        loading.setTheme(chatTheme);
+                        loading.setForegroundColor(new TextColor.RGB(255, 200, 100));
+                        contentPanel.addComponent(loading);
+                        loadingLabel.set(loading);
+
+                        // 刷新界面显示loading
+                        textGUI.getGUIThread().invokeLater(() -> {
+                            contentPanel.invalidate();
+                            try {
+                                if (textGUI.getScreen() != null) {
+                                    textGUI.getScreen().refresh();
+                                }
+                            } catch (IOException e) {
+                                log.error("loading渲染刷新失败", e);
+                            }
+                        });
 
                         // 使用localAgent处理消息
                         if (sessionId != null) {
                             currentSessionId = sessionId;
                             sessionManager.addUserMessage(sessionId, txt);
+                            isWaitingForResponse.set(true);
 
                             // 处理对话
                             try {
-                                updateUIWithGraph(txt, contentPanel, sessionManager, currentResponseTextBox, textGUI, statusPanel, allResponseTextBoxes);
+                                updateUIWithGraph(txt, contentPanel, sessionManager, currentResponseTextBox,
+                                        textGUI, statusPanel, allResponseTextBoxes, loadingLabel, isWaitingForResponse, input);
                             } catch (Exception e) {
+                                // 隐藏loading
+                                hideLoading(textGUI, contentPanel, loadingLabel, isWaitingForResponse, input);
                                 contentPanel.addComponent(new Label("[错误]: " + e.getMessage()));
                                 sessionManager.addErrorMessage(sessionId, e.getMessage());
+                                textGUI.getGUIThread().invokeLater(() -> {
+                                    contentPanel.invalidate();
+                                    try {
+                                        if (textGUI.getScreen() != null) {
+                                            textGUI.getScreen().refresh();
+                                        }
+                                    } catch (IOException ex) {
+                                        log.error("错误消息刷新失败", ex);
+                                    }
+                                });
                             }
                         }
                     }
@@ -462,15 +546,15 @@ public class AITerminalUI {
 
         Table<String> table = new Table<>("会话ID", "创建时间", "消息数", "简要描述");
         table.setTheme(theme);
-        
+
         // 从sessionManager获取真实的会话数据
         var sessionInfoList = sessionManager.getSessionInfoList();
         for (var info : sessionInfoList) {
             table.getTableModel().addRow(
-                info.getSessionId(),
-                info.getCreatedAt(),
-                String.valueOf(info.getMessageCount()),
-                info.getBriefDescription()
+                    info.getSessionId(),
+                    info.getCreatedAt(),
+                    String.valueOf(info.getMessageCount()),
+                    info.getBriefDescription()
             );
         }
 
@@ -504,7 +588,11 @@ public class AITerminalUI {
         textGUI.addWindowAndWait(window);
     }
 
-    private void updateUIWithGraph(String input, Panel contentPanel, ConversationSessionManager sessionManager, AtomicReference<TextBox> currentResponseTextBox, WindowBasedTextGUI textGUI, Panel statusPanel, java.util.List<TextBox> allResponseTextBoxes) {
+    private void updateUIWithGraph(String input, Panel contentPanel, ConversationSessionManager sessionManager,
+                                   AtomicReference<TextBox> currentResponseTextBox, WindowBasedTextGUI textGUI,
+                                   Panel statusPanel, java.util.List<TextBox> allResponseTextBoxes,
+                                   AtomicReference<Label> loadingLabel, AtomicBoolean isWaitingForResponse,
+                                   TextBox inputBox) {
         StringBuilder responseBuilder = new StringBuilder();
 
         Flux<ServerSentEvent<AgentOutput<Object>>> outputFlux = localAgent.processWithGraphV2(
@@ -516,12 +604,28 @@ public class AITerminalUI {
             // 处理流式文本输出
             if (agentOutput != null && agentOutput.getChunk() != null) {
                 System.err.println(agentOutput.getChunk());
-                responseBuilder.append(agentOutput.getChunk());
+
+                // 检查是否有内容需要处理，避免空响应
+                String chunk = agentOutput.getChunk();
+                if (chunk == null || chunk.isEmpty()) {
+                    return;
+                }
+
+                // 首次收到有效响应时，隐藏loading状态
+                // 使用compareAndSet确保只在第一次时隐藏
+                if (isWaitingForResponse.compareAndSet(true, false)) {
+                    // 确保在GUI线程中隐藏loading，避免竞态条件
+                    textGUI.getGUIThread().invokeLater(() -> {
+                        hideLoading(textGUI, contentPanel, loadingLabel, isWaitingForResponse, inputBox);
+                    });
+                }
+
+                responseBuilder.append(chunk);
                 // 获取或创建当前响应的TextBox
                 TextBox responseTextBox = currentResponseTextBox.get();
                 // 动态计算宽度：基于当前窗口大小
                 int dynamicWidth = Math.max(50, textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10);
-                
+
                 if (responseTextBox == null) {
                     responseTextBox = new TextBox(responseBuilder.toString(), TextBox.Style.MULTI_LINE);
                     responseTextBox.setTheme(theme);
@@ -535,7 +639,9 @@ public class AITerminalUI {
                     allResponseTextBoxes.add(responseTextBox);
 
                     // 添加AI前缀标签
-                    contentPanel.addComponent(new Label("AI: "));
+                    Label aiLabel = new Label("AI: ");
+                    aiLabel.setTheme(chatTheme);
+                    contentPanel.addComponent(aiLabel);
                     contentPanel.addComponent(responseTextBox);
                 } else {
                     // 更新现有TextBox的内容
@@ -667,6 +773,9 @@ public class AITerminalUI {
                 sessionManager.addAssistantMessage(currentSessionId, fullResponse);
             }
 
+            // 隐藏loading并重新启用输入框
+            hideLoading(textGUI, contentPanel, loadingLabel, isWaitingForResponse, inputBox);
+
             // 更新会话状态面板
             updateSessionStatusPanel(statusPanel, currentSessionId, sessionManager);
 
@@ -691,6 +800,10 @@ public class AITerminalUI {
             }
         }).doOnError(error -> {
             log.error("流处理出错", error);
+
+            // 隐藏loading并重新启用输入框
+            hideLoading(textGUI, contentPanel, loadingLabel, isWaitingForResponse, inputBox);
+
             try {
                 if (textGUI != null) {
                     textGUI.getGUIThread().invokeLater(() -> {
@@ -713,6 +826,48 @@ public class AITerminalUI {
                 log.error("错误UI更新失败", e);
             }
         }).subscribe();
+    }
+
+    /**
+     * 隐藏loading状态并重新启用输入框，同时聚焦到输入框
+     */
+    private void hideLoading(WindowBasedTextGUI textGUI, Panel contentPanel,
+                             AtomicReference<Label> loadingLabel, AtomicBoolean isWaitingForResponse,
+                             TextBox inputBox) {
+        Label loading = loadingLabel.get();
+        if (loading != null) {
+            try {
+                contentPanel.removeComponent(loading);
+            } catch (Exception e) {
+                log.warn("移除loading标签失败", e);
+            }
+            loadingLabel.set(null);
+        }
+
+        // 重新启用输入框
+        isWaitingForResponse.set(false);
+        if (inputBox != null) {
+            inputBox.setEnabled(true);
+            inputBox.setVerticalFocusSwitching(true);
+            // 聚焦到输入框，方便用户继续输入
+            textGUI.getGUIThread().invokeLater(() -> {
+                inputBox.takeFocus();
+            });
+        }
+
+        // 刷新界面
+        if (textGUI != null) {
+            textGUI.getGUIThread().invokeLater(() -> {
+                contentPanel.invalidate();
+                try {
+                    if (textGUI.getScreen() != null) {
+                        textGUI.getScreen().refresh();
+                    }
+                } catch (IOException e) {
+                    log.error("loading隐藏后刷新失败", e);
+                }
+            });
+        }
     }
 
     /* ========================= 创建会话状态面板 ========================= */
@@ -931,7 +1086,9 @@ public class AITerminalUI {
         MessageDialog.showMessageDialog(textGUI, "帮助", help, MessageDialogButton.OK);
     }
 
-    /** 设置自定义窗口图标，替换默认JDK图标 */
+    /**
+     * 设置自定义窗口图标，替换默认JDK图标
+     */
     private void setCustomIcon(Screen screen) {
         try {
             // 获取底层的AWT窗口
@@ -957,9 +1114,9 @@ public class AITerminalUI {
                         g2d.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
 
                         // 绘制渐变背景
-                        java.awt.GradientPaint gradient = new java.awt.GradientPaint(0, 0, 
-                            new java.awt.Color(100, 200, 255), 8, 8, 
-                            new java.awt.Color(150, 100, 255));
+                        java.awt.GradientPaint gradient = new java.awt.GradientPaint(0, 0,
+                                new java.awt.Color(100, 200, 255), 8, 8,
+                                new java.awt.Color(150, 100, 255));
                         g2d.setPaint(gradient);
                         g2d.fillRoundRect(1, 1, 14, 14, 3, 3);
 
@@ -971,7 +1128,7 @@ public class AITerminalUI {
                         g2d.setColor(new java.awt.Color(150, 220, 255)); // 明亮青色
                         g2d.fillOval(5, 6, 2, 2);
                         g2d.fillOval(9, 6, 2, 2);
-                        
+
                         // 绘制眼睛高光
                         g2d.setColor(java.awt.Color.WHITE);
                         g2d.fillOval(5, 6, 1, 1);
