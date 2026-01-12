@@ -5,11 +5,10 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
 import com.alibaba.cloud.ai.graph.agent.Agent;
+import com.alibaba.cloud.ai.graph.agent.AgentTool;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.file.LocalFilesystemBackend;
 import com.alibaba.cloud.ai.graph.agent.extension.interceptor.LargeResultEvictionInterceptor;
-import com.alibaba.cloud.ai.graph.agent.flow.agent.FlowAgent;
-import com.alibaba.cloud.ai.graph.agent.flow.agent.SupervisorAgent;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
@@ -167,6 +166,7 @@ public class LocalAgent {
 
     /**
      * 处理特殊命令
+     *
      * @param command 用户输入的命令
      * @param history 对话历史
      * @return 如果是特殊命令返回true，否则返回false
@@ -291,7 +291,7 @@ public class LocalAgent {
         return true;
     }
 
-    public FlowAgent buildSupervisorAgent() {
+    public Agent buildSupervisorAgent() {
         var tools = getTools();
         List<Interceptor> interceptors = getInterceptors();
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
@@ -340,13 +340,14 @@ public class LocalAgent {
                 .instruction("你是AI小助手可以帮助用户解答问题")
                 .outputKey("fallback_agent")
                 .build();
-        return SupervisorAgent.builder()
+
+        return ReactAgent.builder()
                 .name("content_supervisor")
-                .description("你是一个调度智能体，可以调用子智能体完成用户任务")
+                .description("你是一个超级智能体，可以调用子智能体完成用户任务")
                 .systemPrompt(getSystemPrompt())
                 .saver(new MemorySaver())
                 .model(chatModel)
-                .subAgents(List.of(writerAgent, checkAgent, fallbackAgent))
+                .tools(List.of(AgentTool.create(writerAgent), AgentTool.create(checkAgent), AgentTool.create(fallbackAgent)))
                 .build();
     }
 
@@ -435,6 +436,7 @@ public class LocalAgent {
 
     /**
      * 选择或创建会话
+     *
      * @param scanner 扫描器
      * @return 会话ID
      */
@@ -630,7 +632,7 @@ public class LocalAgent {
                     // 记录错误消息
                     sessionManager.addErrorMessage(finalSessionId, error.getMessage());
                 }).blockLast();
-            }catch (Exception e) {
+            } catch (Exception e) {
                 String errorMsg = "\n[处理过程中发生未捕获的异常]: " + e.getMessage();
                 System.err.println(errorMsg);
                 // 记录错误消息
