@@ -54,7 +54,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class LocalAgent {
 
     protected static final List<ChatModel> fallbackModels = new ArrayList<>();
-    protected static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents";
+    public static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents";
     public ChatModel chatModel = AiModels.MINIMAX_M2_1.createChatModel();
     protected ConversationSessionManager sessionManager;
 

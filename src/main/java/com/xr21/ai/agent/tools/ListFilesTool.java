@@ -8,6 +8,7 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,9 +20,11 @@ import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+
 public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest, ToolContext, Map<String, String>> {
 
-    public static final String GITIGNORE_FILE = "D:\\local-github\\chinaunicom-standard-ai-agents\\.gitignore";
+    public static final String GITIGNORE_FILE = WORKSPACE_ROOT + File.pathSeparator + ".gitignore";
     public static final String DESCRIPTION = "Lists all files in the filesystem, filtering by directory and .gitignore rules.\n\nUsage:\n- The path parameter must be an absolute path, not a relative path\n- The list_files tool will return a list of all files in the specified directory.\n- Files and directories listed in .gitignore will be excluded.\n- This is very useful for exploring the file system and finding the right file to read or edit.\n- You should almost ALWAYS use this tool before using the Read or Edit tools.\n";
 
     public static ToolCallback createListFilesToolCallback(String desc) {
@@ -123,7 +126,7 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
     @AllArgsConstructor
     @NoArgsConstructor
     public static class ListFilesRequest {
-        @JsonProperty(required = true, value = "目录路径")
+        @JsonProperty(required = true, value = "目录路径.  only path:" + WORKSPACE_ROOT)
         private String directoryPath;
 
         @JsonProperty(value = "maxDepth")

@@ -32,7 +32,7 @@
             <artifactId>spring-context</artifactId>
             <version>${spring.version}</version>
         </dependency>
-        
+
         <!-- Spring AI OpenAI -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -158,9 +158,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-Dfile.encoding=UTF-8 -Dconsole.encoding=UTF-8</argLine>
+                    <argLine>-Dfile.encoding=UTF-8 -Dconsole.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8</argLine>
                     <systemPropertyVariables>
                         <file.encoding>UTF-8</file.encoding>
+                        <console.encoding>UTF-8</console.encoding>
+                        <sun.stdout.encoding>UTF-8</sun.stdout.encoding>
+                        <sun.stderr.encoding>UTF-8</sun.stderr.encoding>
                         <user.timezone>Asia/Shanghai</user.timezone>
                     </systemPropertyVariables>
                 </configuration>
@@ -189,7 +192,10 @@
                                 <opts>
                                     <opt>-Dfile.encoding=UTF-8</opt>
                                     <opt>-Dconsole.encoding=UTF-8</opt>
+                                    <opt>-Dsun.stdout.encoding=UTF-8</opt>
+                                    <opt>-Dsun.stderr.encoding=UTF-8</opt>
                                     <opt>-Duser.timezone=Asia/Shanghai</opt>
+                                    <opt>-Djava.awt.headless=false</opt>
                                     <opt>-XX:+UseZGC</opt>
                                 </opts>
                             </jre>

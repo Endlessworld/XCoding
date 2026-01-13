@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+
 public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest, ToolContext, Map<String, String>> {
     public static final String DESCRIPTION = """
             Writes to a new file in the filesystem.
@@ -62,7 +64,7 @@ public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest,
                 required = true,
                 value = "file_path"
         )
-        @JsonPropertyDescription("The absolute path of the file to create")
+        @JsonPropertyDescription("The absolute path of the file to create. only parent path:" + WORKSPACE_ROOT)
         public String filePath;
         @JsonProperty(
                 required = true

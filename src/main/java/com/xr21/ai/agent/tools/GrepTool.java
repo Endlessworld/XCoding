@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+
 public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, Map<String, String>> {
     public static final String DESCRIPTION = "Search for a pattern in files.\n\nUsage:\n- The pattern parameter is the text to search for (literal string, not regex)\n- The path parameter filters which directory to search in\n- The glob parameter accepts a glob pattern to filter which files to search\n\nExamples:\n- Search all files: `grep(pattern=\"TODO\")`\n- The search is case-sensitive by default.\n";
 
@@ -30,7 +32,7 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
 
     public Map<String, String> apply(GrepRequest request, ToolContext toolContext) {
         try {
-            Path searchPath = request.path != null ? Paths.get(request.path) : Paths.get(System.getProperty("user.dir"));
+            Path searchPath = request.path != null ? Paths.get(request.path) : Paths.get(WORKSPACE_ROOT);
             List<String> results = new ArrayList();
             PathMatcher globMatcher = request.glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + request.glob) : null;

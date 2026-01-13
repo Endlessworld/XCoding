@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+
 public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, Map<String, String>> {
     public static final String DESCRIPTION = "Find files matching a glob pattern.\n\nUsage:\n- Supports standard glob patterns: `*` (any characters), `**` (any directories), `?` (single character)\n- Returns a list of absolute file paths that match the pattern\n\nExamples:\n- `**/*.java` - Find all Java files\n- `*.txt` - Find all text files in root\n- `/src/**/*.xml` - Find all XML files under /src\n";
 
@@ -26,7 +28,7 @@ public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, M
     public Map<String, String> apply(@ToolParam(description = "The glob pattern to match files") GlobPattern globPattern, ToolContext toolContext) {
         try {
             String pattern = globPattern.getPattern();
-            Path basePathObj = Paths.get(System.getProperty("user.dir"));
+            Path basePathObj = Paths.get(WORKSPACE_ROOT);
             PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
             List<String> matchedFiles = new ArrayList();
             Files.walk(basePathObj).filter((x$0) -> Files.isRegularFile(x$0)).filter((path) -> {
