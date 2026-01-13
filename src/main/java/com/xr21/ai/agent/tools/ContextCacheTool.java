@@ -9,49 +9,191 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.util.StringUtils;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.BiFunction;
 
 @Slf4j
 public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest, ToolContext, Map<String, Object>> {
 
-    public static final Map<String, String> argumentsRef = new HashMap<>();
+    /**
+     * 使用ConcurrentHashMap保证线程安全
+     */
+    public static final ConcurrentHashMap<String, String> argumentsRef = new ConcurrentHashMap<>();
+    public static final ConcurrentHashMap<String, String> responsesRef = new ConcurrentHashMap<>();
+    /**
+     * 最大缓存容量，防止内存溢出
+     */
+    private static final int MAX_CACHE_SIZE = 10000;
+    /**
+     * 缓存过期时间（毫秒），默认1小时
+     */
+    private static final long CACHE_EXPIRE_TIME = 60 * 60 * 1000L;
+    /**
+     * 使用双端队列记录访问顺序，支持LRU淘汰
+     */
+    private static final ConcurrentLinkedDeque<String> accessOrder = new ConcurrentLinkedDeque<>();
+    
+    /**
+     * 记录每个条目的创建时间，用于过期清理
+     */
+    private static final ConcurrentHashMap<String, Long> creationTime = new ConcurrentHashMap<>();
 
-    public static final Map<String, String> responsesRef = new HashMap<>();
     public static final String DESCRIPTION = "指针数据读取器，上下文编辑器会将你超长的工具调用参数或工具调用执行结果转换成指针,指针地址格式：$ref+工具调用id，你可以在需要的时候 重新根据指针地址 重新获取具体内容";
 
+    /**
+     * 工厂方法创建ToolCallback
+     */
     public static ToolCallback contextCacheTool(String description) {
         return FunctionToolCallback.builder("contextCacheTool", new ContextCacheTool())
                 .description(StringUtils.hasText(description) ? description : DESCRIPTION)
                 .inputType(RefRequest.class)
                 .build();
-
     }
 
+    /**
+     * 添加参数引用（线程安全）
+     */
     public static void addArgumentsRef(String refId, String content) {
+        if (!StringUtils.hasText(refId) || content == null) {
+            log.warn("尝试添加无效的引用: refId={}, content={}", refId, content);
+            return;
+        }
+        
+        // 检查缓存容量
+        if (argumentsRef.size() >= MAX_CACHE_SIZE) {
+            evictOldEntries(argumentsRef, responsesRef, accessOrder, creationTime);
+        }
+        
         argumentsRef.put(refId, content);
-        log.info("add argumentsRef {} > {}", refId, content);
+        creationTime.put(refId, System.currentTimeMillis());
+        accessOrder.addLast(refId);
+        
+        log.debug("添加参数引用 {}，当前缓存大小: {}", refId, argumentsRef.size());
     }
 
+    /**
+     * 添加响应引用（线程安全）
+     */
     public static void addResponsesRef(String refId, String content) {
+        if (!StringUtils.hasText(refId) || content == null) {
+            log.warn("尝试添加无效的引用: refId={}, content={}", refId, content);
+            return;
+        }
+        
+        // 检查缓存容量
+        if (responsesRef.size() >= MAX_CACHE_SIZE) {
+            evictOldEntries(argumentsRef, responsesRef, accessOrder, creationTime);
+        }
+        
         responsesRef.put(refId, content);
-        log.info("add responsesRef {} > {}", refId, content);
+        creationTime.put(refId, System.currentTimeMillis());
+        accessOrder.addLast(refId);
+        
+        log.debug("添加响应引用 {}，当前缓存大小: {}", refId, responsesRef.size());
     }
 
+    /**
+     * 清理过期或最旧的条目（LRU策略）
+     */
+    private static void evictOldEntries(ConcurrentHashMap<String, String> argsRef, 
+                                       ConcurrentHashMap<String, String> respRef,
+                                       ConcurrentLinkedDeque<String> order,
+                                       ConcurrentHashMap<String, Long> timeMap) {
+        int targetSize = (int) (MAX_CACHE_SIZE * 0.8); // 保留80%容量
+        
+        while (argsRef.size() + respRef.size() >= MAX_CACHE_SIZE && !order.isEmpty()) {
+            String oldestRef = order.pollFirst();
+            if (oldestRef != null) {
+                // 从所有缓存中移除
+                argsRef.remove(oldestRef);
+                respRef.remove(oldestRef);
+                timeMap.remove(oldestRef);
+                log.debug("清理过期缓存: {}", oldestRef);
+            }
+        }
+        
+        // 清理过期条目（超过过期时间）
+        long currentTime = System.currentTimeMillis();
+        Iterator<Map.Entry<String, Long>> iterator = timeMap.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, Long> entry = iterator.next();
+            if (currentTime - entry.getValue() > CACHE_EXPIRE_TIME) {
+                String refId = entry.getKey();
+                argsRef.remove(refId);
+                respRef.remove(refId);
+                order.remove(refId);
+                iterator.remove();
+                log.debug("清理超时缓存: {}", refId);
+            }
+        }
+    }
+
+    /**
+     * 手动清理指定引用
+     */
+    public static void removeRef(String refId) {
+        if (!StringUtils.hasText(refId)) {
+            return;
+        }
+        
+        argumentsRef.remove(refId);
+        responsesRef.remove(refId);
+        creationTime.remove(refId);
+        accessOrder.remove(refId);
+        log.info("手动清理引用: {}", refId);
+    }
+
+    /**
+     * 清空所有缓存
+     */
+    public static void clearAll() {
+        argumentsRef.clear();
+        responsesRef.clear();
+        creationTime.clear();
+        accessOrder.clear();
+        log.info("已清空所有上下文缓存");
+    }
+
+    /**
+     * 获取缓存统计信息
+     */
+    public static Map<String, Object> getStatistics() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("argumentsRefSize", argumentsRef.size());
+        stats.put("responsesRefSize", responsesRef.size());
+        stats.put("totalSize", argumentsRef.size() + responsesRef.size());
+        stats.put("maxCacheSize", MAX_CACHE_SIZE);
+        stats.put("cacheExpireTimeMs", CACHE_EXPIRE_TIME);
+        return stats;
+    }
 
     @Override
     public Map<String, Object> apply(RefRequest request, ToolContext toolContext) {
-        System.out.println("RefTool tool called : " + request.refs);
-        log.info("ContextCacheTool call  {}", request);
-        if (request.refs == null || request.refs.isEmpty()) {
+        // 输入验证
+        if (request == null || request.getRefs() == null || request.getRefs().isEmpty()) {
+            log.warn("ContextCacheTool接收到空的请求");
             return Map.of("error", "错误：未提供有效的指针地址");
         }
 
+        log.debug("ContextCacheTool收到请求: {}", request.getRefs());
+        
         Map<String, Object> result = new HashMap<>();
-        for (String ref : request.refs) {
-            // 首先尝试从参数引用中获取
+        Set<String> processedRefs = new HashSet<>();
+
+        for (String ref : request.getRefs()) {
+            // 跳过重复的ref
+            if (!processedRefs.add(ref)) {
+                continue;
+            }
+            
+            if (!StringUtils.hasText(ref)) {
+                result.put("invalid_ref", "错误：无效的指针地址");
+                continue;
+            }
+
+            // 尝试从参数引用中获取
             String content = argumentsRef.get(ref);
             if (content == null) {
                 // 如果参数引用中不存在，则从响应引用中获取
@@ -60,8 +202,14 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
 
             if (content != null) {
                 result.put(ref, content);
+                // 更新访问时间
+                creationTime.put(ref, System.currentTimeMillis());
+                // 移动到队列尾部（LRU策略）
+                accessOrder.remove(ref);
+                accessOrder.addLast(ref);
             } else {
                 result.put(ref, "错误：未找到对应的引用内容");
+                log.debug("未找到引用: {}", ref);
             }
         }
 
@@ -69,7 +217,7 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
     }
 
     /**
-     * Request object for ticket booking containing name and date.
+     * 请求对象
      */
     @Data
     @AllArgsConstructor

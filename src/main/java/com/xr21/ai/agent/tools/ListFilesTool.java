@@ -99,7 +99,7 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
 
     @Override
     public Map<String, String> apply(ListFilesRequest request, ToolContext toolContext) {
-        Path basePath = Paths.get(request.getDirectoryPath()).toAbsolutePath();
+        Path basePath = Paths.get(request.getDirectory()).toAbsolutePath();
         if (!Files.exists(basePath) || !Files.isDirectory(basePath)) {
             return Map.of("Error", "Directory not found: " + basePath);
         }
@@ -127,9 +127,9 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
     @AllArgsConstructor
     @NoArgsConstructor
     public static class ListFilesRequest {
-        @JsonProperty(required = true, value = "path")
-        @JsonPropertyDescription("目录路径. only parent path:" + WORKSPACE_ROOT)
-        private String directoryPath;
+        @JsonProperty(required = true, value = "directory")
+        @JsonPropertyDescription("目录路径. only parent directory:" + WORKSPACE_ROOT)
+        private String directory;
 
         @JsonProperty(value = "maxDepth")
         private Integer maxDepth = 3; // 默认遍历3层目录

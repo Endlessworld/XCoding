@@ -4,10 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.xr21.ai.agent.entity.ConversationMessage;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,7 +30,6 @@ import java.util.stream.Collectors;
  * 使用JSON格式存储，区分不同消息类型
  */
 @Slf4j
-@Component
 public class ConversationSessionManager {
 
     private static final DateTimeFormatter FILE_NAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
@@ -60,7 +56,7 @@ public class ConversationSessionManager {
         // 获取用户目录并设置保存路径为 .agi_working/conversations
         String userHome = System.getProperty("user.home");
         this.saveDirectory = userHome + File.separator + ".agi_working" + File.separator + "conversations";
-        
+
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -68,13 +64,25 @@ public class ConversationSessionManager {
         this.sessionMessages = new ConcurrentHashMap<>();
         this.sessionRounds = new ConcurrentHashMap<>();
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
+
+        // 初始化并注册关闭钩子
         init();
+        registerShutdownHook();
+    }
+
+    /**
+     * 注册JVM关闭钩子，确保程序退出时保存会话数据
+     */
+    private void registerShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.info("JVM正在关闭，正在保存所有会话数据...");
+            shutdown();
+        }));
     }
 
     /**
      * 初始化方法
      */
-    @PostConstruct
     public void init() {
         try {
             savePath = Paths.get(saveDirectory);
@@ -93,12 +101,23 @@ public class ConversationSessionManager {
     }
 
     /**
-     * 销毁方法
+     * 关闭方法，释放资源并保存所有会话数据
+     * 应在程序退出前显式调用
      */
-    @PreDestroy
-    public void destroy() {
+    public void shutdown() {
         saveAllSessions();
-        scheduler.shutdown();
+        if (!scheduler.isShutdown()) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(10, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+        log.info("对话会话管理器已关闭");
     }
 
     /**
@@ -249,7 +268,7 @@ public class ConversationSessionManager {
                     // 更新会话轮次
                     int maxRound = messages.stream().mapToInt(ConversationMessage::getRound).max().orElse(0);
                     sessionRounds.put(sessionId, maxRound);
-                    log.info("从文件加载会话 {}: {} 条消息", sessionId, messages.size());
+//                    log.info("从文件加载会话 {}: {} 条消息", sessionId, messages.size());
                 }
             }
         } catch (IOException e) {
