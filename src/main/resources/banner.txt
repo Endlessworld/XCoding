@@ -1,5 +1,0 @@
-
- 🤖 AI AGENTS 🤖
-
-    Version: 1.0.0
-    Powered by Endless

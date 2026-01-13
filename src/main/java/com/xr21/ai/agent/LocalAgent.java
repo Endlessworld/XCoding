@@ -142,7 +142,7 @@ public class LocalAgent {
                 .backoffFactor(1.5)  // 退避因子1.5倍
                 .maxDelay(5000)     // 最大延迟10秒
                 .onFailure(ToolRetryInterceptor.OnFailureBehavior.RETURN_MESSAGE)
-                .errorFormatter(e -> "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage())
+                .errorFormatter(e -> Json.toJson(Map.of("error", "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage())))
                 .jitter(true)        // 启用抖动)
                 .build());
         return interceptors;

@@ -23,17 +23,18 @@ import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
 
 public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest, ToolContext, Map<String, String>> {
     public static final String DESCRIPTION = """
-            Writes to a new file in the filesystem.
-            
+            写入文件系统中的新文件。
             Usage:
-                - The file_path parameter must be an absolute path, not a relative path
-                - The content parameter must be a string
-                - The write_file tool will create a new file.
-                - When writing to a file, the content will completely replace the existing content.""";
+                - file_path参数必须是绝对路径，而非相对路径
+                - 内容参数必须是字符串
+                - write_file工具会创建一个新文件。
+                - 写入文件时，内容将完全替代现有内容。
+                - 一次不得超过8000字符，否则将添失败吗，剩余的部分使用edit_file工具继续添加
+            """;
 
     public static ToolCallback createWriteFileToolCallback(String description) {
         return FunctionToolCallback.builder("write_file", new WriteFileTool())
-                .description(description)
+                .description(DESCRIPTION)
                 .inputType(WriteFileRequest.class)
                 .build();
     }

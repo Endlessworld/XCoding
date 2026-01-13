@@ -7,16 +7,8 @@ import com.googlecode.lanterna.SGR;
 import com.googlecode.lanterna.TerminalPosition;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextColor;
-import com.googlecode.lanterna.graphics.SimpleTheme;
 import com.googlecode.lanterna.graphics.Theme;
 import com.googlecode.lanterna.gui2.*;
-import com.googlecode.lanterna.gui2.BorderLayout;
-import com.googlecode.lanterna.gui2.Button;
-import com.googlecode.lanterna.gui2.Component;
-import com.googlecode.lanterna.gui2.GridLayout;
-import com.googlecode.lanterna.gui2.Label;
-import com.googlecode.lanterna.gui2.Panel;
-import com.googlecode.lanterna.gui2.Window;
 import com.googlecode.lanterna.gui2.dialogs.MessageDialog;
 import com.googlecode.lanterna.gui2.dialogs.MessageDialogButton;
 import com.googlecode.lanterna.gui2.table.Table;
@@ -26,7 +18,10 @@ import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import com.googlecode.lanterna.terminal.MouseCaptureMode;
-import com.googlecode.lanterna.terminal.swing.*;
+import com.googlecode.lanterna.terminal.swing.SwingTerminalFontConfiguration;
+import com.googlecode.lanterna.terminal.swing.TerminalEmulatorColorConfiguration;
+import com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguration;
+import com.googlecode.lanterna.terminal.swing.TerminalEmulatorPalette;
 import com.xr21.ai.agent.LocalAgent;
 import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.session.ConversationSessionManager;
@@ -38,170 +33,57 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
-import java.awt.*;
-import java.awt.font.FontRenderContext;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguration.CursorStyle.VERTICAL_BAR;
 
+
 /**
  * 基于 Lanterna 的 TUI 界面
  * 特性：透明背景、渐变边框、14号粗体字体、现代化UI设计
+ * 优化：使用tui工具类（FontUtils, IconGenerator, ScrollHelper, TextMeasureUtils, UIComponentFactory, UIThemeConfig）
  */
 @Slf4j
 public class AITerminalUI {
 
-    // ==================== 优化后的配色方案 ====================
-
-    // 🎨 聊天窗口背景色 - 温暖的深色，护眼舒适
-    private static final TextColor CHAT_BG = new TextColor.RGB(30, 32, 40);           // 聊天区域主背景 - 深灰蓝
-    private static final TextColor CHAT_EDITABLE_BG = new TextColor.RGB(40, 44, 52);   // 聊天输入区域 - 稍浅的灰蓝
-    private static final TextColor CHAT_SELECTED_BG = new TextColor.RGB(60, 100, 140); // 聊天选中状态 - 柔和蓝
-
-    // 🎨 会话状态背景色 - 稳重的深色调，区分明显
-    private static final TextColor STATUS_BG = new TextColor.RGB(25, 28, 35);          // 会话状态主背景 - 深色灰
-    private static final TextColor STATUS_EDITABLE_BG = new TextColor.RGB(35, 40, 48);  // 会话状态编辑区域 - 中等灰
-    private static final TextColor STATUS_SELECTED_BG = new TextColor.RGB(80, 85, 95);  // 会话状态选中 - 柔和灰
-
-    // 🎨 公共配色 - 强调色和通用背景
-    private static final TextColor ACCENT_COLOR = new TextColor.RGB(70, 180, 240);     // 强调色 - 柔和青蓝
-    private static final TextColor GUI_BACKGROUND = new TextColor.RGB(22, 24, 30);     // GUI主背景 - 更深的色调
-
+    // 使用UIThemeConfig中的颜色常量，移除重复定义
     // 保留原有常量用于兼容
-    private static final TextColor TRANSPARENT_BG = STATUS_BG;
-    // 用于跟踪滚动位置，支持自动滚动
-    private static AtomicInteger scrollPosition = new AtomicInteger(0);
-    private static AtomicBoolean autoScrollEnabled = new AtomicBoolean(true); // 默认启用自动滚动
-    private static ScrollBar verticalScrollBar = new ScrollBar(Direction.VERTICAL);
+    private static final TextColor TRANSPARENT_BG = UIThemeConfig.TRANSPARENT_BG;
+    // 使用ScrollHelper管理滚动状态，移除重复的静态变量
+    // 滚动条由ScrollHelper管理
 
-    // 用于保存当前消息区域的行数，用于计算滚动条范围
-    private static AtomicInteger messageAreaLines = new AtomicInteger(0);
-
+    // 使用tui工具类
+    private final ScrollHelper scrollHelper = new ScrollHelper();
+    private final UIComponentFactory componentFactory = new UIComponentFactory();
 
     private final ConversationSessionManager sessionManager;
     private final LocalAgent localAgent;
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final AtomicReference<InterruptionMetadata> interruptionMetadata = new AtomicReference<>();
     private final Map<String, Object> stateUpdate = new HashMap<>();
-    // 2. 创建会话状态主题 - 稳重的深色调，层次分明
-    Theme modernTheme = SimpleTheme.makeTheme(
-            true,                                // activeIsBold: 活动组件使用粗体
-            TextColor.ANSI.WHITE_BRIGHT,         // baseForeground - 明亮白色文字
-            STATUS_BG,                           // baseBackground - 会话状态主背景
-            ACCENT_COLOR,                        // editableForeground - 强调色文字
-            STATUS_EDITABLE_BG,                  // editableBackground - 编辑区域背景
-            TextColor.ANSI.WHITE_BRIGHT,         // selectedForeground - 选中项白色文字
-            STATUS_SELECTED_BG,                  // selectedBackground - 选中状态背景
-            GUI_BACKGROUND                       // guiBackground - GUI主背景
-    );
 
-    // 3. 创建聊天窗口主题 - 温暖护眼的深色，舒适阅读
-    Theme chatTheme = SimpleTheme.makeTheme(
-            true,                                // activeIsBold: 活动组件使用粗体
-            TextColor.ANSI.WHITE_BRIGHT,         // baseForeground - 明亮白色文字
-            CHAT_BG,                             // baseBackground - 聊天区域主背景
-            new TextColor.RGB(140, 210, 255),    // editableForeground - 柔和青蓝色文字
-            CHAT_EDITABLE_BG,                    // editableBackground - 输入区域背景
-            TextColor.ANSI.WHITE_BRIGHT,         // selectedForeground - 选中项白色文字
-            CHAT_SELECTED_BG,                    // selectedBackground - 选中状态背景
-            CHAT_BG                              // guiBackground - 聊天区域背景
-    );
+    // 主题使用UIThemeConfig中的配置
+    private final Theme chatTheme = UIThemeConfig.createChatTheme();
+    private final Theme modernTheme = UIThemeConfig.createModernTheme();
 
-    // 保留原有theme变量以兼容旧代码
-    Theme theme = modernTheme;
     private Agent supervisorAgent;
     private String currentSessionId;
+
+    {
+        Label noSessionLabel = componentFactory.createModernLabel("无会话信息");
+        noSessionLabel.setForegroundColor(new TextColor.RGB(150, 150, 150));
+//        statusPanel.addComponent(noSessionLabel);
+    }
+
 
     public AITerminalUI(ConversationSessionManager sessionManager, LocalAgent localAgent) {
         this.sessionManager = sessionManager;
         this.localAgent = localAgent;
         this.supervisorAgent = localAgent.buildSupervisorAgent();
-    }
-
-    // 优化后的字体配置 - 支持多种现代等宽字体
-    private static SwingTerminalFontConfiguration createOptimizedFontConfiguration() {
-        String selectedFont = findAvailableFont();
-        int fontSize = 16; // 14号字体，适合中文显示
-        var planFont = new Font(selectedFont, Font.PLAIN, fontSize);
-        var italicFont = new Font(selectedFont, Font.ITALIC, fontSize);
-        var boldFont = new Font(selectedFont, Font.BOLD, fontSize);
-        return SwingTerminalFontConfiguration.newInstance(planFont, italicFont, boldFont);
-    }
-
-    /**
-     * 查找系统中可用的等宽字体
-     * @return 可用的等宽字体名称，如果没有找到则返回系统默认等宽字体
-     */
-    private static String findAvailableFont() {
-        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-
-        // 收集所有可用的字体名称
-        Set<String> availableFonts = new HashSet<>();
-        for (Font font : ge.getAllFonts()) {
-            availableFonts.add(font.getFamily());
-            availableFonts.add(font.getFontName());
-        }
-
-        // 收集所有可用的等宽字体
-        Set<String> monospacedFonts = new HashSet<>();
-        for (String fontName : availableFonts) {
-            if (isMonospacedFont(fontName)) {
-                monospacedFonts.add(fontName);
-            }
-        }
-
-        log.debug("系统中发现的等宽字体: {}", monospacedFonts);
-
-        // 如果没有找到预定义字体，返回系统默认等宽字体
-        String defaultMonospaced = "Monospaced";
-        if (monospacedFonts.contains(defaultMonospaced)) {
-            log.info("使用系统默认等宽字体: {}", defaultMonospaced);
-            return defaultMonospaced;
-        }
-
-        // 如果 Monospaced 不可用，从发现的等宽字体中选择一个
-        if (!monospacedFonts.isEmpty()) {
-            String firstMonospaced = monospacedFonts.iterator().next();
-            log.info("使用发现的等宽字体: {}", firstMonospaced);
-            return firstMonospaced;
-        }
-
-        log.warn("未找到任何等宽字体，使用通用字体名称");
-        return defaultMonospaced;
-    }
-
-    /**
-     * 检查指定名称的字体是否为等宽字体
-     * @param fontName 字体名称
-     * @return 如果是等宽字体返回 true，否则返回 false
-     */
-    private static boolean isMonospacedFont(String fontName) {
-        try {
-            // 创建字体的 12pt 纯样式版本
-            Font font = new Font(fontName, Font.PLAIN, 12);
-            if (font == null || font.getFamily().equals("Dialog")) {
-                return false;
-            }
-
-            // 测试字符：'i' (窄字符) 和 'W' (宽字符)
-            FontRenderContext frc = new FontRenderContext(null, true, true);
-            double widthI = font.getStringBounds("i", frc).getWidth();
-            double widthW = font.getStringBounds("W", frc).getWidth();
-
-            // 如果两个字符宽度相同或非常接近（考虑浮点误差），则为等宽字体
-            double tolerance = 0.1;
-            return Math.abs(widthI - widthW) < tolerance;
-        } catch (Exception e) {
-            log.trace("检查字体等宽性失败: {}, 原因: {}", fontName, e.getMessage());
-            return false;
-        }
     }
 
     /**
@@ -213,29 +95,26 @@ public class AITerminalUI {
 
     public void start() {
         try {
-            // 1. 优化字体配置 - 使用系统最佳等宽字体
-            SwingTerminalFontConfiguration fontConfig = createOptimizedFontConfiguration();
+            // 使用FontUtils创建优化后的字体配置
+            SwingTerminalFontConfiguration fontConfig = FontUtils.createOptimizedFontConfiguration();
 
-            // 2. 配置终端仿真器设备设置，优化显示效果
+            // 配置终端仿真器设备设置
             TerminalEmulatorDeviceConfiguration deviceConfig = new TerminalEmulatorDeviceConfiguration(2000, 500, VERTICAL_BAR, new TextColor.RGB(255, 255, 255), true, true);
-            // 3. 创建终端工厂并应用配置
             DefaultTerminalFactory factory = new DefaultTerminalFactory();
             factory.setInitialTerminalSize(new TerminalSize(120, 45));
-            // 启用鼠标点击和滚轮事件支持，以便聊天消息列表可以使用鼠标滚轮滚动
-
             factory.setMouseCaptureMode(MouseCaptureMode.CLICK_RELEASE);
             factory.setTerminalEmulatorDeviceConfiguration(deviceConfig);
-//            factory.setForceAWTOverSwing(true);
             factory.setTerminalEmulatorTitle("AI AGENTS - 智能助手 v2.0.0");
             factory.setTerminalEmulatorFontConfiguration(fontConfig);
             factory.setTerminalEmulatorColorConfiguration(TerminalEmulatorColorConfiguration.newInstance(TerminalEmulatorPalette.MAC_OS_X_TERMINAL_APP));
-            // 4. 直接创建屏幕（纯终端模式）
+
             Screen screen = new TerminalScreen(factory.createTerminal());
             screen.startScreen();
-            // 设置自定义图标，替换默认JDK图标
-            setCustomIcon(screen);
-            final WindowBasedTextGUI textGUI = new MultiWindowTextGUI(screen);
 
+            // 使用IconGenerator设置自定义图标
+            IconGenerator.setCustomIcon(screen);
+
+            final WindowBasedTextGUI textGUI = new MultiWindowTextGUI(screen);
             textGUI.setTheme(modernTheme);
 
             showMainMenu(textGUI);
@@ -249,239 +128,10 @@ public class AITerminalUI {
         }
     }
 
-
-    /**
-     * 计算文本在指定宽度下需要的行数（改进版）
-     * 正确处理换行符、中文字符和特殊字符
-     */
-    private int calculateTextLines(String text, int width) {
-        if (text == null || text.isEmpty()) {
-            return 1;
-        }
-
-        // 移除 "AI: " 前缀（4个字符）
-        String content = text.startsWith("AI: ") ? text.substring(4) : text;
-
-        if (content.isEmpty()) {
-            return 1;
-        }
-
-        // 先按原文本中的换行符分割，计算每行的行数
-        String[] lines = content.split("\n", -1);
-        int totalLines = 0;
-
-        for (String line : lines) {
-            if (line.isEmpty()) {
-                // 空行也需要1行高度
-                totalLines++;
-                continue;
-            }
-
-            // 计算单行文本在指定宽度下需要的行数
-            int lineLines = calculateSingleLineWrappedLines(line, width);
-            totalLines += lineLines;
-        }
-
-        return Math.max(1, totalLines);
+    /* ========================= 聊天窗口 ========================= */
+    private void startChat(WindowBasedTextGUI textGUI, Window returnTo) {
+        startChatWithSession(textGUI, returnTo, "session-" + System.nanoTime());
     }
-
-    /**
-     * 计算单行文本在指定宽度下自动换行需要的行数
-     */
-    private int calculateSingleLineWrappedLines(String line, int width) {
-        if (line == null || line.isEmpty()) {
-            return 1;
-        }
-
-        int wrappedLines = 1;
-        int currentLineLength = 0;
-
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-
-            // 处理中文字符和其他非ASCII字符（占2个字符宽度）
-            int charWidth = (c > 127) ? 2 : 1;
-            // 特殊处理全角标点符号
-            if (c >= 0xFF00 && c <= 0xFFEF) {
-                charWidth = 2;
-            }
-
-            if (currentLineLength + charWidth > width) {
-                wrappedLines++;
-                currentLineLength = charWidth;
-            } else {
-                currentLineLength += charWidth;
-            }
-        }
-
-        return wrappedLines;
-    }
-
-    /**
-     * 根据文本内容动态计算并设置TextBox的推荐尺寸
-     * 考虑了文本的实际行数和最小高度需求
-     */
-    private TerminalSize calculateTextBoxSize(String text, int width) {
-        int calculatedLines = calculateTextLines(text, width);
-        // 根据文本内容动态调整最小高度
-        // 短文本（少于100字符）：最小3行
-        // 中等文本（100-500字符）：最小4行
-        // 长文本（超过500字符）：最小5行
-        int minHeight = text.length() > 500 ? 5 : (text.length() > 100 ? 4 : 3);
-        int height = Math.max(minHeight, calculatedLines);
-        // 限制最大高度，防止过长文本导致布局问题
-        height = Math.min(height, 50);
-        return new TerminalSize(width, height);
-    }
-
-    /**
-     * 重新计算并更新所有消息组件的高度
-     * 当新增消息或窗口宽度变化时调用，确保所有消息高度符合当前宽度
-     * @param contentPanel 消息内容面板
-     * @param scrollPanel 滚动面板
-     * @param textGUI GUI实例
-     * @param allResponseTextBoxes 所有AI响应的TextBox列表
-     */
-    private void recalculateAllMessageHeights(Panel contentPanel, Panel scrollPanel,
-                                               WindowBasedTextGUI textGUI,
-                                               java.util.List<TextBox> allResponseTextBoxes) {
-        try {
-            // 动态计算宽度：基于当前窗口大小
-            int dynamicWidth = textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10;
-            dynamicWidth = Math.max(50, dynamicWidth);
-
-            // 遍历所有AI响应的TextBox，重新计算高度
-            for (TextBox textBox : allResponseTextBoxes) {
-                if (textBox != null) {
-                    String text = textBox.getText();
-                    if (text != null && !text.isEmpty()) {
-                        TerminalSize newSize = calculateTextBoxSize(text, dynamicWidth);
-                        textBox.setPreferredSize(newSize);
-                    }
-                }
-            }
-
-            // 重新布局面板
-            contentPanel.invalidate();
-            scrollPanel.invalidate();
-
-            // 更新滚动条范围
-            updateScrollBarRange(contentPanel, scrollPanel);
-
-            // 刷新界面
-            textGUI.getGUIThread().invokeLater(() -> {
-                try {
-                    if (textGUI.getScreen() != null) {
-                        textGUI.getScreen().refresh();
-                    }
-                } catch (IOException e) {
-                    log.error("屏幕刷新失败", e);
-                }
-            });
-        } catch (Exception e) {
-            log.debug("重新计算消息高度失败: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * 滚动到面板底部 - 修复版
-     * 正确配置滚动条范围和位置，并确保布局正确更新
-     */
-    private void scrollToBottom(Panel contentPanel, Panel scrollPanel, WindowBasedTextGUI textGUI) {
-        try {
-            // 启用自动滚动
-            autoScrollEnabled.set(true);
-
-            // 首先使面板失效并重新布局，确保尺寸计算正确
-            contentPanel.invalidate();
-            scrollPanel.invalidate();
-
-            // 计算内容面板的总高度（所有消息的总行数）
-            int totalHeight = 0;
-//            for (Component component : contentPanel.getChildrenList()) {
-//                TerminalSize size = component.getSize();
-//                if (size != null) {
-//                    totalHeight += size.getRows();
-//                }
-//            }
-            totalHeight = contentPanel.getSize().getRows();
-            // 更新消息区域行数
-            messageAreaLines.set(totalHeight);
-
-            // 获取滚动面板的可见区域大小
-            TerminalSize scrollPanelSize = scrollPanel.getSize();
-            if (scrollPanelSize == null) {
-                scrollPanelSize = scrollPanel.getSize();
-            }
-
-            // 计算滚动范围：总高度 - 可见区域高度
-            int visibleHeight = scrollPanelSize != null ? scrollPanelSize.getRows() : 20;
-            int scrollRange = Math.max(0, totalHeight - visibleHeight);
-
-            // 更新滚动位置
-            scrollPosition.set(scrollRange);
-
-            // 正确配置滚动条
-            if (verticalScrollBar != null) {
-                // 确保滚动条可见
-                verticalScrollBar.setVisible(true);
-
-                // 设置滚动范围（可滚动的行数）
-                verticalScrollBar.setScrollMaximum(Math.max(0, scrollRange));
-
-                // 滚动到底部
-                verticalScrollBar.setScrollPosition(Math.max(0, scrollRange));
-            }
-
-            // 强制刷新GUI - 多次刷新确保布局完全更新
-            Runnable refreshGUI = () -> {
-                try {
-                    if (textGUI.getScreen() != null) {
-                        textGUI.getScreen().refresh();
-                    }
-                } catch (IOException e) {
-                    log.error("屏幕刷新失败", e);
-                }
-            };
-
-            // 在GUI线程中执行刷新
-            textGUI.getGUIThread().invokeLater(refreshGUI);
-
-            // 延迟再次刷新，确保布局完全更新
-            textGUI.getGUIThread().invokeLater(() -> {
-                try {
-                    Thread.sleep(50);
-                    contentPanel.invalidate();
-                    scrollPanel.invalidate();
-
-                    // 重新计算并设置滚动位置
-                    int newTotalHeight = 0;
-                    for (Component component : contentPanel.getChildrenList()) {
-                        TerminalSize size = component.getPreferredSize();
-                        if (size != null) {
-                            newTotalHeight += size.getRows();
-                        }
-                    }
-
-                    int newScrollRange = Math.max(0, newTotalHeight - visibleHeight);
-                    if (verticalScrollBar != null) {
-                        verticalScrollBar.setScrollMaximum(Math.max(0, newScrollRange));
-                        verticalScrollBar.setScrollPosition(Math.max(0, newScrollRange));
-                    }
-
-                    if (textGUI.getScreen() != null) {
-                        textGUI.getScreen().refresh();
-                    }
-                } catch (Exception e) {
-                    log.debug("延迟刷新失败: {}", e.getMessage());
-                }
-            });
-        } catch (Exception e) {
-            log.debug("滚动到底部失败: {}", e.getMessage());
-        }
-    }
-
-
 
     /* ========================= 主菜单 ========================= */
     private void showMainMenu(WindowBasedTextGUI textGUI) {
@@ -490,39 +140,19 @@ public class AITerminalUI {
         // 给窗口本身也套渐变边框
 //        window.setBorder(new GradientBorder("═", "║", "╔", "╗", "╚", "╝"));
 
-        Panel mainPanel = new Panel();
-        mainPanel.setLayoutManager(new LinearLayout(Direction.VERTICAL).setSpacing(1));
-        mainPanel.setTheme(modernTheme);
+        Panel mainPanel = componentFactory.createThemedVerticalPanel(modernTheme);
 
-        Label titleLabel = new Label("\n=== AI AGENTS ===\n");
-        titleLabel.addStyle(SGR.BOLD);
-        titleLabel.addStyle(SGR.UNDERLINE);
-        titleLabel.setTheme(modernTheme);
-        titleLabel.setForegroundColor(ACCENT_COLOR);
+        Label titleLabel = componentFactory.createTitleLabel("\n=== AI AGENTS ===\n");
         mainPanel.addComponent(titleLabel);
 
-        Panel btnPanel = new Panel(new LinearLayout(Direction.VERTICAL).setSpacing(1));
-        Button chatBtn = new Button("  开始聊天  ", () -> startChat(textGUI, window));
-        Button sessionBtn = new Button("  会话管理  ", () -> showSessionManagement(textGUI, window));
-        Button helpBtn = new Button("  查看帮助  ", () -> showHelp(textGUI, window));
-        Button exitBtn = new Button("    退出    ", () -> {
+        Panel btnPanel = componentFactory.createVerticalPanel();
+        Button chatBtn = componentFactory.createButton("  开始聊天  ", () -> startChat(textGUI, window), 25);
+        Button sessionBtn = componentFactory.createButton("  会话管理  ", () -> showSessionManagement(textGUI, window), 25);
+        Button helpBtn = componentFactory.createButton("  查看帮助  ", () -> showHelp(textGUI, window), 25);
+        Button exitBtn = componentFactory.createButton("    退出    ", () -> {
             running.set(false);
             window.close();
-        });
-
-        // 设置按钮首选大小以显示完整中文文本
-        chatBtn.setPreferredSize(new TerminalSize(25, 1));
-        sessionBtn.setPreferredSize(new TerminalSize(25, 1));
-        helpBtn.setPreferredSize(new TerminalSize(25, 1));
-        exitBtn.setPreferredSize(new TerminalSize(25, 1));
-
-        // 为所有按钮设置现代化样式
-        chatBtn.setTheme(modernTheme);
-        sessionBtn.setTheme(modernTheme);
-        helpBtn.setTheme(modernTheme);
-        exitBtn.setTheme(modernTheme);
-
-        // Button类不支持addStyle，通过主题设置样式
+        }, 25);
 
         btnPanel.addComponent(chatBtn);
         btnPanel.addComponent(sessionBtn);
@@ -547,11 +177,6 @@ public class AITerminalUI {
         textGUI.addWindowAndWait(window);
     }
 
-    /* ========================= 聊天窗口 ========================= */
-    private void startChat(WindowBasedTextGUI textGUI, Window returnTo) {
-        startChatWithSession(textGUI, returnTo, "session-" + System.nanoTime());
-    }
-
     /* ========================= 指定会话的聊天窗口 ========================= */
     private void startChatWithSession(WindowBasedTextGUI textGUI, Window returnTo, String sessionId) {
         BasicWindow window = new BasicWindow("AGI AGENT - 聊天" + (sessionId != null ? " (" + sessionId + ")" : ""));
@@ -562,24 +187,22 @@ public class AITerminalUI {
         Panel root = new Panel(new BorderLayout());
 
         // 左侧聊天面板 (85%宽度) - 使用优化后的聊天主题
-        Panel chatPanel = new Panel(new LinearLayout(Direction.VERTICAL));
+        Panel chatPanel = componentFactory.createVerticalPanel();
         chatPanel.setTheme(chatTheme);
 
         // 使用可滚动的面板来显示消息
-        Panel scrollableMsgArea = new Panel(new LinearLayout(Direction.VERTICAL));
+        Panel scrollableMsgArea = componentFactory.createVerticalPanel();
         scrollableMsgArea.setTheme(chatTheme);
 
         // 创建内容容器 - 使用 GridLayout 以支持滚动
-        Panel contentPanel = new Panel(new GridLayout(1)); // 单列网格布局
+        Panel contentPanel = componentFactory.createVerticalPanel();
+        contentPanel.setLayoutManager(new GridLayout(1)); // 单列网格布局
         contentPanel.setTheme(chatTheme);
 
         // 创建垂直滚动条 - 优化样式，支持自动滚动
-        verticalScrollBar = new ScrollBar(Direction.VERTICAL);
-        verticalScrollBar.setTheme(chatTheme);
-        // 初始化滚动条
-        verticalScrollBar.setScrollMaximum(100);
-        verticalScrollBar.setScrollPosition(0);
-        verticalScrollBar.setVisible(true);
+        ScrollBar verticalScrollBar = componentFactory.createVerticalScrollBar(chatTheme);
+        // 设置ScrollHelper的滚动条
+        scrollHelper.setVerticalScrollBar(verticalScrollBar);
 
 
         // 创建滚动面板容器 - 使用 BorderLayout 实现内容区域和滚动条的正确布局
@@ -637,7 +260,7 @@ public class AITerminalUI {
                     // 使用动态宽度计算，与聊天区域85%宽度保持一致
                     // 终端默认宽度120，聊天区域占85%，再减去边距
                     int dynamicWidth = Math.max(50, 120 * 85 / 100 - 10);
-                    TerminalSize textBoxSize = calculateTextBoxSize(msg.getContent(), dynamicWidth);
+                    TerminalSize textBoxSize = TextMeasureUtils.calculateTextBoxSize(msg.getContent(), dynamicWidth);
                     historyTextBox.setPreferredSize(textBoxSize);
                     // 添加到所有响应TextBox列表
                     allResponseTextBoxes.add(historyTextBox);
@@ -650,8 +273,8 @@ public class AITerminalUI {
             }
 
             // 加载完所有历史消息后，重新计算所有消息高度并滚动到底部
-            recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
-            scrollToBottom(contentPanel, scrollPanel, textGUI);
+            scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+            scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
         }
 
         // 创建自定义 TextBox，支持粘贴，处理 Ctrl+Enter 和 Ctrl+V
@@ -665,7 +288,8 @@ public class AITerminalUI {
                 // 如果是 Ctrl+V，尝试获取系统剪贴板内容并粘贴
                 if (keyStroke.getCharacter() != null && keyStroke.getCharacter() == 'v' && keyStroke.isCtrlDown()) {
                     try {
-                        java.awt.datatransfer.Clipboard clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+                        java.awt.datatransfer.Clipboard clipboard = java.awt.Toolkit.getDefaultToolkit()
+                                .getSystemClipboard();
                         if (clipboard.isDataFlavorAvailable(java.awt.datatransfer.DataFlavor.stringFlavor)) {
                             String pasteText = (String) clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor);
                             if (pasteText != null) {
@@ -673,7 +297,11 @@ public class AITerminalUI {
                                 String currentText = getText();
                                 String newText = currentText + pasteText;
                                 setText(newText);
-                                setCaretPosition((int) newText.lines().count(), newText.lines().skip(newText.lines().count() - 1).findAny().orElse("").length());
+                                setCaretPosition((int) newText.lines().count(), newText.lines()
+                                        .skip(newText.lines().count() - 1)
+                                        .findAny()
+                                        .orElse("")
+                                        .length());
                             }
                         }
                         return Result.HANDLED;
@@ -685,22 +313,17 @@ public class AITerminalUI {
                 return super.handleKeyStroke(keyStroke);
             }
         };
-        input.setPreferredSize(new TerminalSize(70, 5)); // 调整输入框宽度为70
+        input.setPreferredSize(new TerminalSize(70, 5));
         input.setTheme(chatTheme);
-        input.setVerticalFocusSwitching(false); // 禁用垂直焦点切换
-        // TextBox不支持addStyle，通过主题设置样式
+        input.setVerticalFocusSwitching(false);
 
         // 添加快捷键说明面板
-        Panel shortcutPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Label shortcutLabel = new Label("快捷键: Ctrl+Enter 发送 | Ctrl+/- 调整字体 | Esc 返回");
-        shortcutLabel.addStyle(SGR.BOLD);
-        shortcutLabel.setTheme(modernTheme);
-        shortcutLabel.setForegroundColor(new TextColor.RGB(255, 200, 100));
+        Panel shortcutPanel = componentFactory.createHorizontalPanel();
+        Label shortcutLabel = componentFactory.createStyledLabel("快捷键: Ctrl+Enter 发送 | Ctrl+/- 调整字体 | Esc 返回", UIThemeConfig.LOADING_COLOR, SGR.BOLD);
         shortcutPanel.addComponent(shortcutLabel);
 
         chatPanel.addComponent(wrapWithChatBorder(scrollContainer));
-        Label inputLabel = new Label("输入消息:");
-        inputLabel.setTheme(chatTheme);
+        Label inputLabel = componentFactory.createChatLabel("输入消息:");
         inputLabel.addStyle(SGR.BOLD);
         chatPanel.addComponent(inputLabel);
         chatPanel.addComponent(input);
@@ -740,7 +363,7 @@ public class AITerminalUI {
                     if (responseBox != null) {
                         // 根据实际行数动态计算高度
                         String text = responseBox.getText();
-                        newSize = calculateTextBoxSize(text, responseBoxWidth);
+                        newSize = TextMeasureUtils.calculateTextBoxSize(text, responseBoxWidth);
                         responseBox.setPreferredSize(newSize);
                     }
                 }
@@ -758,7 +381,7 @@ public class AITerminalUI {
                 });
 
                 // 窗口大小改变后滚动到底部
-                scrollToBottom(contentPanel, scrollPanel, textGUI);
+                scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
             }
         });
 
@@ -771,15 +394,14 @@ public class AITerminalUI {
                     String txt = input.getText().trim();
                     if (!txt.isEmpty() && !isWaitingForResponse.get()) {
                         // 1. 立即渲染用户消息到界面上
-                        Label userLabel = new Label("你: " + txt);
-                        userLabel.setTheme(chatTheme);
+                        Label userLabel = componentFactory.createChatLabel("你: " + txt);
                         contentPanel.addComponent(userLabel);
 
                         // 重新计算所有消息高度，确保布局正确
-                        recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+                        scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
 
                         // 发送用户消息后滚动到底部
-                        scrollToBottom(contentPanel, scrollPanel, textGUI);
+                        scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
 
                         // 2. 立即刷新界面显示用户消息
                         textGUI.getGUIThread().invokeLater(() -> {
@@ -801,16 +423,14 @@ public class AITerminalUI {
                         input.setEnabled(false);
 
                         // 3. 显示loading状态
-                        Label loading = new Label("🤖 AI正在思考...");
-                        loading.setTheme(chatTheme);
-                        loading.setForegroundColor(new TextColor.RGB(255, 200, 100));
+                        Label loading = componentFactory.createLoadingLabel("🤖 AI正在思考...");
                         contentPanel.addComponent(loading);
                         loadingLabel.set(loading);
 
                         // 更新滚动条范围
-                        updateScrollBarRange(contentPanel, scrollPanel);
+                        scrollHelper.updateScrollBarRange(contentPanel, scrollPanel);
                         // 添加loading后滚动到底部
-                        scrollToBottom(contentPanel, scrollPanel, textGUI);
+                        scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
 
                         // 刷新界面显示loading - 使用更彻底的刷新机制
                         textGUI.getGUIThread().invokeLater(() -> {
@@ -833,19 +453,16 @@ public class AITerminalUI {
 
                             // 处理对话
                             try {
-                                updateUIWithGraph(txt, contentPanel, scrollPanel, sessionManager, currentResponseTextBox,
-                                        textGUI, statusPanel, allResponseTextBoxes, loadingLabel, isWaitingForResponse, input);
+                                updateUIWithGraph(txt, contentPanel, scrollPanel, sessionManager, currentResponseTextBox, textGUI, statusPanel, allResponseTextBoxes, loadingLabel, isWaitingForResponse, input);
                             } catch (Exception e) {
                                 // 隐藏loading
                                 hideLoading(contentPanel, scrollPanel, loadingLabel, isWaitingForResponse, input, textGUI);
-                                Label errorLabel = new Label("[错误]: " + e.getMessage());
-                                errorLabel.setTheme(chatTheme);
-                                errorLabel.setForegroundColor(TextColor.ANSI.RED);
+                                Label errorLabel = componentFactory.createErrorLabel(e.getMessage());
                                 contentPanel.addComponent(errorLabel);
                                 // 更新滚动条范围
-                                updateScrollBarRange(contentPanel, scrollPanel);
+                                scrollHelper.updateScrollBarRange(contentPanel, scrollPanel);
                                 // 错误消息添加后滚动到底部
-                                scrollToBottom(contentPanel, scrollPanel, textGUI);
+                                scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                                 sessionManager.addErrorMessage(sessionId, e.getMessage());
                                 textGUI.getGUIThread().invokeLater(() -> {
                                     contentPanel.invalidate();
@@ -891,29 +508,25 @@ public class AITerminalUI {
         root.addComponent(new Label("\n=== 会话列表 ===\n").addStyle(SGR.BOLD));
 
         Table<String> table = new Table<>("会话ID", "创建时间", "消息数", "简要描述");
-        table.setTheme(theme);
+        table.setTheme(modernTheme);
 
         // 从sessionManager获取真实的会话数据
         var sessionInfoList = sessionManager.getSessionInfoList();
         for (var info : sessionInfoList) {
-            table.getTableModel().addRow(
-                    info.getSessionId(),
-                    info.getCreatedAt(),
-                    String.valueOf(info.getMessageCount()),
-                    info.getBriefDescription()
-            );
+            table.getTableModel()
+                    .addRow(info.getSessionId(), info.getCreatedAt(), String.valueOf(info.getMessageCount()), info.getBriefDescription());
         }
 
-        Panel btnPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Button newSessionBtn = new Button("创建新会话", () -> {
+        Panel btnPanel = componentFactory.createHorizontalPanel();
+        Button newSessionBtn = componentFactory.createButton("创建新会话", () -> {
             String id = "session" + System.currentTimeMillis();
             sessionManager.getOrCreateSession(id);
             MessageDialog.showMessageDialog(textGUI, "提示", "已创建: " + id, MessageDialogButton.OK);
             // 刷新会话列表
             window.close();
             showSessionManagement(textGUI, returnTo);
-        });
-        Button switchSessionBtn = new Button("进入聊天", () -> {
+        }, 50);
+        Button switchSessionBtn = componentFactory.createButton("进入聊天", () -> {
             int idx = table.getSelectedRow();
             if (idx >= 0) {
                 String id = table.getTableModel().getRow(idx).get(0);
@@ -922,10 +535,10 @@ public class AITerminalUI {
             } else {
                 MessageDialog.showMessageDialog(textGUI, "提示", "请先选择一个会话", MessageDialogButton.OK);
             }
-        });
+        }, 50);
         btnPanel.addComponent(newSessionBtn);
         btnPanel.addComponent(switchSessionBtn);
-        btnPanel.addComponent(new Button("返回", window::close));
+        btnPanel.addComponent(componentFactory.createButton("返回", window::close, 50));
 
         root.addComponent(table);
         root.addComponent(btnPanel);
@@ -934,15 +547,10 @@ public class AITerminalUI {
         textGUI.addWindowAndWait(window);
     }
 
-    private void updateUIWithGraph(String input, Panel contentPanel, Panel scrollPanel, ConversationSessionManager sessionManager,
-                                   AtomicReference<TextBox> currentResponseTextBox, WindowBasedTextGUI textGUI,
-                                   Panel statusPanel, java.util.List<TextBox> allResponseTextBoxes,
-                                   AtomicReference<Label> loadingLabel, AtomicBoolean isWaitingForResponse,
-                                   TextBox inputBox) {
+    private void updateUIWithGraph(String input, Panel contentPanel, Panel scrollPanel, ConversationSessionManager sessionManager, AtomicReference<TextBox> currentResponseTextBox, WindowBasedTextGUI textGUI, Panel statusPanel, java.util.List<TextBox> allResponseTextBoxes, AtomicReference<Label> loadingLabel, AtomicBoolean isWaitingForResponse, TextBox inputBox) {
         StringBuilder responseBuilder = new StringBuilder();
 
-        Flux<ServerSentEvent<AgentOutput<Object>>> outputFlux = localAgent.processWithGraphV2(
-                supervisorAgent, input, currentSessionId, interruptionMetadata.get(), stateUpdate);
+        Flux<ServerSentEvent<AgentOutput<Object>>> outputFlux = localAgent.processWithGraphV2(supervisorAgent, input, currentSessionId, interruptionMetadata.get(), stateUpdate);
 
         // 使用异步订阅，避免阻塞UI线程
         outputFlux.doOnNext(output -> {
@@ -974,10 +582,10 @@ public class AITerminalUI {
 
                 if (responseTextBox == null) {
                     responseTextBox = new TextBox(responseBuilder.toString(), TextBox.Style.MULTI_LINE);
-                    responseTextBox.setTheme(theme);
+                    responseTextBox.setTheme(chatTheme);
                     responseTextBox.setReadOnly(true);
                     // 使用辅助方法根据实际行数设置尺寸
-                    TerminalSize size = calculateTextBoxSize(responseBuilder.toString(), dynamicWidth);
+                    TerminalSize size = TextMeasureUtils.calculateTextBoxSize(responseBuilder.toString(), dynamicWidth);
                     responseTextBox.setPreferredSize(size);
                     responseTextBox.setVerticalFocusSwitching(false); // 禁用垂直焦点切换，专注于滚动
                     currentResponseTextBox.set(responseTextBox);
@@ -991,22 +599,22 @@ public class AITerminalUI {
                     contentPanel.addComponent(responseTextBox);
 
                     // 重新计算所有消息高度，确保布局正确
-                    recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+                    scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
 
                     // 添加新的AI响应后滚动到底部
-                    scrollToBottom(contentPanel, scrollPanel, textGUI);
+                    scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                 } else {
                     // 更新现有TextBox的内容
                     responseTextBox.setText(responseBuilder.toString());
                     // 使用辅助方法根据实际行数动态设置高度
-                    TerminalSize size = calculateTextBoxSize(responseBuilder.toString(), dynamicWidth);
+                    TerminalSize size = TextMeasureUtils.calculateTextBoxSize(responseBuilder.toString(), dynamicWidth);
                     responseTextBox.setPreferredSize(size);
 
                     // 重新计算所有消息高度，确保布局正确
-                    recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+                    scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
 
                     // 自动滚动到底部
-                    scrollToBottom(contentPanel, scrollPanel, textGUI);
+                    scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
 
                     TextBox.TextBoxRenderer renderer = responseTextBox.getRenderer();
                     if (renderer instanceof TextBox.DefaultTextBoxRenderer defaultRenderer) {
@@ -1046,8 +654,7 @@ public class AITerminalUI {
             // 处理工具反馈
             if (!CollectionUtils.isEmpty(agentOutput.getToolFeedbacks())) {
                 for (InterruptionMetadata.ToolFeedback toolFeedback : agentOutput.getToolFeedbacks()) {
-                    String feedbackMsg = String.format("\n[系统提示] %s: %s",
-                            toolFeedback.getName(), toolFeedback.getDescription());
+                    String feedbackMsg = String.format("\n[系统提示] %s: %s", toolFeedback.getName(), toolFeedback.getDescription());
 
                     // 在GUI线程中添加工具反馈消息到responseTextBox
                     try {
@@ -1058,7 +665,7 @@ public class AITerminalUI {
                                 feedbackTextBox.setTheme(chatTheme);
                                 feedbackTextBox.setReadOnly(true);
                                 int dynamicWidth = textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10;
-                                TerminalSize size = calculateTextBoxSize(feedbackMsg, dynamicWidth);
+                                TerminalSize size = TextMeasureUtils.calculateTextBoxSize(feedbackMsg, dynamicWidth);
                                 feedbackTextBox.setPreferredSize(size);
                                 feedbackTextBox.setVerticalFocusSwitching(false);
 
@@ -1066,10 +673,10 @@ public class AITerminalUI {
                                 allResponseTextBoxes.add(feedbackTextBox);
 
                                 // 重新计算所有消息高度，确保布局正确
-                                recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+                                scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
 
                                 // 添加工具反馈后滚动到底部
-                                scrollToBottom(contentPanel, scrollPanel, textGUI);
+                                scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                                 contentPanel.invalidate();
                                 scrollPanel.invalidate();
                                 statusPanel.invalidate();
@@ -1126,10 +733,10 @@ public class AITerminalUI {
 
                                     responseBuilder.setLength(0);
                                     // 重新计算所有消息高度，确保布局正确
-                                    recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+                                    scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
 
                                     // 添加工具调用后滚动到底部
-                                    scrollToBottom(contentPanel, scrollPanel, textGUI);
+                                    scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                                 });
                             }
                         } catch (Exception e) {
@@ -1203,7 +810,7 @@ public class AITerminalUI {
                         errorTextBox.setTheme(chatTheme);
                         errorTextBox.setReadOnly(true);
                         int dynamicWidth = textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10;
-                        TerminalSize size = calculateTextBoxSize(errorMsg, dynamicWidth);
+                        TerminalSize size = TextMeasureUtils.calculateTextBoxSize(errorMsg, dynamicWidth);
                         errorTextBox.setPreferredSize(size);
                         errorTextBox.setVerticalFocusSwitching(false);
 
@@ -1211,9 +818,9 @@ public class AITerminalUI {
                         allResponseTextBoxes.add(errorTextBox);
 
                         // 更新滚动条范围
-                        updateScrollBarRange(contentPanel, scrollPanel);
+                        scrollHelper.updateScrollBarRange(contentPanel, scrollPanel);
                         // 滚动到底部
-                        scrollToBottom(contentPanel, scrollPanel, textGUI);
+                        scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                         contentPanel.invalidate();
                         scrollPanel.invalidate();
                         statusPanel.invalidate();
@@ -1236,9 +843,7 @@ public class AITerminalUI {
     /**
      * 隐藏loading状态并重新启用输入框，同时聚焦到输入框
      */
-    private void hideLoading(Panel contentPanel, Panel scrollPanel,
-                             AtomicReference<Label> loadingLabel, AtomicBoolean isWaitingForResponse,
-                             TextBox inputBox, WindowBasedTextGUI textGUI) {
+    private void hideLoading(Panel contentPanel, Panel scrollPanel, AtomicReference<Label> loadingLabel, AtomicBoolean isWaitingForResponse, TextBox inputBox, WindowBasedTextGUI textGUI) {
         Label loading = loadingLabel.get();
         if (loading != null) {
             try {
@@ -1261,7 +866,7 @@ public class AITerminalUI {
         }
 
         // 隐藏loading后滚动到底部
-        scrollToBottom(contentPanel, scrollPanel, textGUI);
+        scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
 
         // 刷新界面 - 使用更彻底的刷新机制
         if (textGUI != null) {
@@ -1279,57 +884,13 @@ public class AITerminalUI {
         }
     }
 
-    /**
-     * 更新滚动条范围 - 当内容变化时调用
-     */
-    private void updateScrollBarRange(Panel contentPanel, Panel scrollPanel) {
-        try {
-            // 计算内容总高度
-            int totalHeight = 0;
-            for (Component component : contentPanel.getChildrenList()) {
-                TerminalSize size = component.getPreferredSize();
-                if (size != null) {
-                    totalHeight += size.getRows();
-                }
-            }
-
-            // 获取滚动面板大小
-            TerminalSize scrollPanelSize = scrollPanel.getPreferredSize();
-            if (scrollPanelSize == null) {
-                scrollPanelSize = scrollPanel.getSize();
-            }
-            int visibleHeight = scrollPanelSize != null ? scrollPanelSize.getRows() : 20;
-
-            // 计算新的滚动范围
-            int newRange = Math.max(0, totalHeight - visibleHeight);
-            messageAreaLines.set(totalHeight);
-
-            // 更新滚动条范围
-            if (verticalScrollBar != null) {
-                // 设置滚动范围（可滚动的行数）
-                verticalScrollBar.setScrollMaximum(Math.max(0, newRange));
-
-                // 如果启用自动滚动，滚动到底部
-                if (autoScrollEnabled.get()) {
-                    verticalScrollBar.setScrollPosition(Math.max(0, newRange));
-                }
-            }
-        } catch (Exception e) {
-            log.debug("更新滚动条范围失败: {}", e.getMessage());
-        }
-    }
-
     /* ========================= 创建会话状态面板 ========================= */
     private Panel createSessionStatusPanel(String sessionId) {
         Panel statusPanel = new Panel(new LinearLayout(Direction.VERTICAL));
         statusPanel.setTheme(modernTheme);
 
         // 标题
-        Label title = new Label("=== 会话状态 ===");
-        title.addStyle(SGR.BOLD);
-        title.addStyle(SGR.UNDERLINE);
-        title.setTheme(modernTheme);
-        title.setForegroundColor(ACCENT_COLOR);
+        Label title = componentFactory.createTitleLabel("=== 会话状态 ===");
         statusPanel.addComponent(title);
 
         // 初始化状态信息
@@ -1386,8 +947,7 @@ public class AITerminalUI {
 
                 if (sessionInfo != null) {
                     // 会话ID
-                    Label idTitle = new Label("会话ID:");
-                    idTitle.setTheme(modernTheme);
+                    Label idTitle = componentFactory.createModernLabel("会话ID:");
                     idTitle.addStyle(SGR.BOLD);
                     statusPanel.addComponent(idTitle);
                     Label idLabel = new Label(sessionId.length() > 12 ? sessionId.substring(0, 12) + "..." : sessionId);
@@ -1398,25 +958,21 @@ public class AITerminalUI {
                     statusPanel.addComponent(new Label(""));
 
                     // 创建时间
-                    Label timeTitle = new Label("创建时间:");
-                    timeTitle.setTheme(modernTheme);
+                    Label timeTitle = componentFactory.createModernLabel("创建时间:");
                     timeTitle.addStyle(SGR.BOLD);
                     statusPanel.addComponent(timeTitle);
-                    Label timeLabel = new Label(sessionInfo.getCreatedAt());
-                    timeLabel.setTheme(modernTheme);
-                    timeLabel.setForegroundColor(new TextColor.RGB(200, 255, 200));
+                    Label timeLabel = componentFactory.createModernLabel(sessionInfo.getCreatedAt());
+                    timeLabel.setForegroundColor(UIThemeConfig.SYSTEM_MSG_COLOR);
                     statusPanel.addComponent(timeLabel);
 
                     statusPanel.addComponent(new Label(""));
 
                     // 消息统计
-                    Label statsTitle = new Label("消息统计:");
-                    statsTitle.setTheme(modernTheme);
+                    Label statsTitle = componentFactory.createModernLabel("消息统计:");
                     statsTitle.addStyle(SGR.BOLD);
                     statusPanel.addComponent(statsTitle);
-                    Label countLabel = new Label("总计: " + sessionInfo.getMessageCount());
-                    countLabel.setTheme(modernTheme);
-                    countLabel.setForegroundColor(new TextColor.RGB(255, 255, 150));
+                    Label countLabel = componentFactory.createModernLabel("总计: " + sessionInfo.getMessageCount());
+                    countLabel.setForegroundColor(UIThemeConfig.TOOL_MSG_COLOR);
                     statusPanel.addComponent(countLabel);
 
                     // 按类型统计消息数量
@@ -1432,89 +988,42 @@ public class AITerminalUI {
                         }
                     }
 
-                    Label userLabel = new Label("用户: " + userCount);
-                    userLabel.setTheme(modernTheme);
-                    userLabel.setForegroundColor(new TextColor.RGB(150, 255, 150));
+                    Label userLabel = componentFactory.createModernLabel("用户: " + userCount);
+                    userLabel.setForegroundColor(UIThemeConfig.USER_MSG_COLOR);
                     statusPanel.addComponent(userLabel);
 
-                    Label aiLabel = new Label("AI: " + assistantCount);
-                    aiLabel.setTheme(modernTheme);
-                    aiLabel.setForegroundColor(new TextColor.RGB(150, 220, 255));
+                    Label aiLabel = componentFactory.createModernLabel("AI: " + assistantCount);
+                    aiLabel.setForegroundColor(UIThemeConfig.AI_MSG_COLOR);
                     statusPanel.addComponent(aiLabel);
-
-                    Label systemLabel = new Label("系统: " + systemCount);
-                    systemLabel.setTheme(modernTheme);
-                    systemLabel.setForegroundColor(new TextColor.RGB(255, 200, 100));
-                    statusPanel.addComponent(systemLabel);
-
-                    Label toolLabel = new Label("工具: " + toolCount);
-                    toolLabel.setTheme(modernTheme);
-                    toolLabel.setForegroundColor(new TextColor.RGB(255, 150, 200));
-                    statusPanel.addComponent(toolLabel);
-
-                    statusPanel.addComponent(new Label(""));
-
-                    // 简要描述
-                    Label descTitle = new Label("简要描述:");
-                    descTitle.setTheme(modernTheme);
-                    descTitle.addStyle(SGR.BOLD);
-                    statusPanel.addComponent(descTitle);
                     String desc = sessionInfo.getBriefDescription();
                     if (desc != null && !desc.isEmpty()) {
                         // 分行显示描述，每行最多12个字符
                         String[] descLines = desc.length() > 12 ? desc.split("(?<=\\G.{12})") : new String[]{desc};
                         for (String line : descLines) {
-                            Label descLabel = new Label(line);
-                            descLabel.setTheme(modernTheme);
-                            descLabel.setForegroundColor(new TextColor.RGB(200, 200, 255));
-                            statusPanel.addComponent(descLabel);
-                        }
-                    } else {
-                        Label noDescLabel = new Label("暂无描述");
-                        noDescLabel.setTheme(modernTheme);
-                        noDescLabel.setForegroundColor(new TextColor.RGB(150, 150, 150));
-                        statusPanel.addComponent(noDescLabel);
-                    }
-                } else {
-                    // 新会话还没有任何消息
-                    Label newIdTitle = new Label("会话ID:");
-                    newIdTitle.setTheme(modernTheme);
-                    newIdTitle.addStyle(SGR.BOLD);
-                    statusPanel.addComponent(newIdTitle);
-                    Label idLabel = new Label(sessionId.length() > 12 ? sessionId.substring(0, 12) + "..." : sessionId);
-                    idLabel.setTheme(modernTheme);
-                    idLabel.setForegroundColor(new TextColor.RGB(150, 220, 255));
-                    statusPanel.addComponent(idLabel);
 
-                    statusPanel.addComponent(new Label(""));
-                    Label statusLabel = new Label("状态: 新会话");
-                    statusLabel.setTheme(modernTheme);
-                    statusLabel.setForegroundColor(new TextColor.RGB(150, 255, 150));
-                    statusPanel.addComponent(statusLabel);
-                    Label msgCountLabel = new Label("消息数: 0");
-                    msgCountLabel.setTheme(modernTheme);
-                    msgCountLabel.setForegroundColor(new TextColor.RGB(200, 200, 200));
-                    statusPanel.addComponent(msgCountLabel);
+                            statusPanel.addComponent(new Label(""));
+                            Label statusLabel = componentFactory.createModernLabel("状态: 新会话");
+                            statusLabel.setForegroundColor(UIThemeConfig.USER_MSG_COLOR);
+                            statusPanel.addComponent(statusLabel);
+                            Label msgCountLabel = componentFactory.createModernLabel("消息数: 0");
+                            msgCountLabel.setForegroundColor(new TextColor.RGB(200, 200, 200));
+                            statusPanel.addComponent(msgCountLabel);
+                        }
+                    }
                 }
+
             } catch (Exception e) {
-                Label errorTitle = new Label("状态更新失败:");
-                errorTitle.setTheme(modernTheme);
+                Label errorTitle = componentFactory.createModernLabel("状态更新失败:");
                 errorTitle.addStyle(SGR.BOLD);
                 statusPanel.addComponent(errorTitle);
-                Label errorLabel = new Label(e.getMessage());
-                errorLabel.setTheme(modernTheme);
-                errorLabel.setForegroundColor(new TextColor.RGB(255, 100, 100));
+                Label errorLabel = componentFactory.createErrorLabel(e.getMessage());
                 statusPanel.addComponent(errorLabel);
             }
-        } else {
-            Label noSessionLabel = new Label("无会话信息");
-            noSessionLabel.setTheme(modernTheme);
-            noSessionLabel.setForegroundColor(new TextColor.RGB(150, 150, 150));
-            statusPanel.addComponent(noSessionLabel);
         }
     }
 
     /* ========================= 帮助 ========================= */
+
     private void showHelp(WindowBasedTextGUI textGUI, Window returnTo) {
         String help = """
                 \n=== AI 助手帮助 ===
@@ -1533,65 +1042,5 @@ public class AITerminalUI {
                 版本：v2.0.0 - 现代化UI升级
                 """;
         MessageDialog.showMessageDialog(textGUI, "帮助", help, MessageDialogButton.OK);
-    }
-
-    /**
-     * 设置自定义窗口图标，替换默认JDK图标
-     */
-    private void setCustomIcon(Screen screen) {
-        try {
-            // 获取底层的AWT窗口
-            if (screen instanceof TerminalScreen terminalScreen) {
-                if (terminalScreen.getTerminal() instanceof SwingTerminalFrame swingTerminalFrame) {
-                    // 获取包含终端的JFrame
-                    java.awt.Container parent = swingTerminalFrame.getRootPane().getParent();
-                    while (parent != null && !(parent instanceof java.awt.Frame)) {
-                        parent = parent.getParent();
-                    }
-                    if (parent != null) {
-                        java.awt.Frame frame = (java.awt.Frame) parent;
-                        // 创建一个现代化的机器人图标（16x16像素）
-                        java.awt.image.BufferedImage icon = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-                        java.awt.Graphics2D g2d = icon.createGraphics();
-
-                        // 设置抗锯齿和高质量渲染
-                        g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                        g2d.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
-
-                        // 绘制渐变背景
-                        java.awt.GradientPaint gradient = new java.awt.GradientPaint(0, 0,
-                                new java.awt.Color(100, 200, 255), 8, 8,
-                                new java.awt.Color(150, 100, 255));
-                        g2d.setPaint(gradient);
-                        g2d.fillRoundRect(1, 1, 14, 14, 3, 3);
-
-                        // 绘制机器人头部
-                        g2d.setColor(new java.awt.Color(50, 50, 80)); // 深蓝灰色
-                        g2d.fillRoundRect(3, 4, 10, 8, 2, 2);
-
-                        // 绘制发光的眼睛
-                        g2d.setColor(new java.awt.Color(150, 220, 255)); // 明亮青色
-                        g2d.fillOval(5, 6, 2, 2);
-                        g2d.fillOval(9, 6, 2, 2);
-
-                        // 绘制眼睛高光
-                        g2d.setColor(java.awt.Color.WHITE);
-                        g2d.fillOval(5, 6, 1, 1);
-                        g2d.fillOval(9, 6, 1, 1);
-
-                        // 绘制微笑嘴巴
-                        g2d.setColor(new java.awt.Color(255, 150, 200)); // 粉色
-                        g2d.drawArc(6, 7, 4, 3, 0, -180);
-
-                        g2d.dispose();
-
-                        // 设置窗口图标
-                        frame.setIconImage(icon);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("设置自定义图标失败", e);
-        }
     }
 }

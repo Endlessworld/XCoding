@@ -14,10 +14,6 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 public class FilesystemInterceptor extends ModelInterceptor {
-    private static final String EMPTY_CONTENT_WARNING = "System reminder: File exists but has empty contents";
-    private static final int DEFAULT_READ_OFFSET = 0;
-    private static final int DEFAULT_READ_LIMIT = 500;
-    private static final String DEFAULT_SYSTEM_PROMPT = "## Filesystem Tools `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`\n\nYou have access to a filesystem which you can interact with using these tools.\nAll file paths must start with a /.\nAvoid using the root path because you might not have permission to read/write there.\n\n- ls: list files in a directory (requires absolute path)\n- read_file: read a file from the filesystem\n- write_file: write to a file in the filesystem\n- edit_file: edit a file in the filesystem\n- glob: find files matching a pattern (e.g., \"**/*.py\")\n- grep: search for text within files\n";
     private static final Pattern TRAVERSAL_PATTERN = Pattern.compile("\\.\\.|~");
     private final List<ToolCallback> tools;
     private final String systemPrompt;
@@ -33,7 +29,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
         toolList.add(ReadFileTool.createReadFileToolCallback(null));
         if (!this.readOnly) {
             toolList.add(WriteFileTool.createWriteFileToolCallback(this.customToolDescriptions.getOrDefault("write_file", "Writes to a new file in the filesystem.\n\nUsage:\n- The file_path parameter must be an absolute path, not a relative path\n- The content parameter must be a string\n- The write_file tool will create a new file.\n- When writing to a file, the content will completely replace the existing content.\n")));
-            toolList.add(EditFileTool.createEditFileToolCallback(this.customToolDescriptions.getOrDefault("edit_file", "在文件中批量执行精确的字符串替换。\n\n使用法：\n- 编辑输出文本时，请保持精确缩进，- 始终优先编辑现有文件。 \n- 如果“old_string”在文件中不唯一，编辑将失败。\n- \n")));
+            toolList.add(EditFileTool.createEditFileToolCallback(this.customToolDescriptions.getOrDefault("edit_file", "在文件中批量执行精确的字符串替换。\n\n使用法：\n- 编辑输出文本时，请保持精确缩进，- 始终优先编辑现有文件。 \n- 如果“old_string”在文件中不唯一，编辑将失败。\n- new_string 不得超过1000字符，超过1000字符使用新的工具调用\n")));
         }
 
         toolList.add(GlobTool.createGlobToolCallback(this.customToolDescriptions.getOrDefault("glob", "Find files matching a glob pattern.\n\nUsage:\n- Supports standard glob patterns: `*` (any characters), `**` (any directories), `?` (single character)\n- Returns a list of absolute file paths that match the pattern\n\nExamples:\n- `**/*.java` - Find all Java files\n- `*.txt` - Find all text files in root\n- `/src/**/*.xml` - Find all XML files under /src\n")));
