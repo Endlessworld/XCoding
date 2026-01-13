@@ -14,6 +14,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -37,7 +38,7 @@ public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, To
         var apiKey = System.getenv("SEARCH_BOCHA_KEY");
         try {
             // 从数据库获取配置信息 如果后面引入mybaits这里优化下
-            log.debug("baseUrl {},apiKey {}", BASE_URL, apiKey);
+            log.info("baseUrl {},apiKey {}", BASE_URL, apiKey);
             if (!StringUtils.hasText(apiKey)) {
                 return Map.of("msg", "apiKey 配置为空,请提醒用户配置检索apikey!");
             }
@@ -47,7 +48,7 @@ public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, To
                     .build();
             var body = restClient.post().body(searchParams).retrieve().body(Map.class);
             // todo 1、根据检索结果 重新爬取对应网页  2、文本清理、分段、向量化、入向量库 3、向量检索相关内容 4、返回
-            log.debug("WebSearch result {}", body);
+            log.info("WebSearch result {}", body);
             return body;
         } finally {
             long endTime = System.currentTimeMillis();
@@ -72,10 +73,14 @@ public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, To
                 })))
                 .flatMap(List::stream)
                 .map(e -> {
-                    for (String filterKey : filterKeys) {
-                        e.remove(filterKey);
+                    // 创建一个新的Map，只保留filterKeys中指定的键
+                    Map<String, Object> filtered = new HashMap<>();
+                    for (String key : filterKeys) {
+                        if (e.containsKey(key)) {
+                            filtered.put(key, e.get(key));
+                        }
                     }
-                    return e;
+                    return filtered;
                 })
                 .toList();
         log.info("WebSearch result {}", data);
