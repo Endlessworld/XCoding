@@ -340,8 +340,7 @@ public class LocalAgent {
                 .instruction("你是AI小助手可以帮助用户解答问题")
                 .outputKey("fallback_agent")
                 .build();
-
-        return ReactAgent.builder()
+        var supervisor = ReactAgent.builder()
                 .name("content_supervisor")
                 .description("你是一个超级智能体，可以调用子智能体完成用户任务")
                 .systemPrompt(getSystemPrompt())
@@ -349,6 +348,7 @@ public class LocalAgent {
                 .model(chatModel)
                 .tools(List.of(AgentTool.create(writerAgent), AgentTool.create(checkAgent), AgentTool.create(fallbackAgent)))
                 .build();
+        return writerAgent;
     }
 
     private String getSystemPrompt() {

@@ -230,6 +230,18 @@ public class AITerminalUI {
         mainPanel.addComponent(btnPanel);
 
         window.setComponent(wrapWithGradientBorder(mainPanel));
+
+        // 添加ESC键监听器，按ESC直接结束程序
+        window.addWindowListener(new WindowListenerAdapter() {
+            @Override
+            public void onUnhandledInput(Window basePane, KeyStroke key, AtomicBoolean handled) {
+                if (key.getKeyType() == KeyType.Escape) {
+                    running.set(false);
+                    window.close();
+                }
+            }
+        });
+
         textGUI.addWindowAndWait(window);
     }
 
