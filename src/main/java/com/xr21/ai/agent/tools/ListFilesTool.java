@@ -1,6 +1,7 @@
 package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -126,7 +127,8 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
     @AllArgsConstructor
     @NoArgsConstructor
     public static class ListFilesRequest {
-        @JsonProperty(required = true, value = "目录路径.  only path:" + WORKSPACE_ROOT)
+        @JsonProperty(required = true, value = "path")
+        @JsonPropertyDescription("目录路径. only parent path:" + WORKSPACE_ROOT)
         private String directoryPath;
 
         @JsonProperty(value = "maxDepth")

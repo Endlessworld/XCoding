@@ -131,7 +131,7 @@ public class LocalAgent {
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(contextEditingInterceptor);
         var largeResultEvictionInterceptor = LargeResultEvictionInterceptor.builder()
-                .toolTokenLimitBeforeEvict(10000)
+                .toolTokenLimitBeforeEvict(100000)
                 .backend(new LocalFilesystemBackend(WORKSPACE_ROOT))
                 .build();
         interceptors.add(largeResultEvictionInterceptor);
