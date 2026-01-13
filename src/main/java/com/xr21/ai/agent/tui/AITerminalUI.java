@@ -1,10 +1,10 @@
 package com.xr21.ai.agent.tui;
 
+import cn.hutool.core.convert.Convert;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
 import com.alibaba.cloud.ai.graph.agent.Agent;
 import com.googlecode.lanterna.SGR;
-import com.googlecode.lanterna.TerminalPosition;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.graphics.Theme;
@@ -24,8 +24,10 @@ import com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguratio
 import com.googlecode.lanterna.terminal.swing.TerminalEmulatorPalette;
 import com.xr21.ai.agent.LocalAgent;
 import com.xr21.ai.agent.entity.AgentOutput;
+import com.xr21.ai.agent.entity.ConversationMessage;
 import com.xr21.ai.agent.session.ConversationSessionManager;
 import com.xr21.ai.agent.session.SessionInfo;
+import com.xr21.ai.agent.utils.Json;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -50,16 +52,9 @@ import static com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfi
 @Slf4j
 public class AITerminalUI {
 
-    // 使用UIThemeConfig中的颜色常量，移除重复定义
-    // 保留原有常量用于兼容
-    private static final TextColor TRANSPARENT_BG = UIThemeConfig.TRANSPARENT_BG;
-    // 使用ScrollHelper管理滚动状态，移除重复的静态变量
-    // 滚动条由ScrollHelper管理
-
     // 使用tui工具类
     private final ScrollHelper scrollHelper = new ScrollHelper();
     private final UIComponentFactory componentFactory = new UIComponentFactory();
-
     private final ConversationSessionManager sessionManager;
     private final LocalAgent localAgent;
     private final AtomicBoolean running = new AtomicBoolean(true);
@@ -72,12 +67,6 @@ public class AITerminalUI {
 
     private Agent supervisorAgent;
     private String currentSessionId;
-
-    {
-        Label noSessionLabel = componentFactory.createModernLabel("无会话信息");
-        noSessionLabel.setForegroundColor(new TextColor.RGB(150, 150, 150));
-//        statusPanel.addComponent(noSessionLabel);
-    }
 
 
     public AITerminalUI(ConversationSessionManager sessionManager, LocalAgent localAgent) {
@@ -117,7 +106,8 @@ public class AITerminalUI {
             final WindowBasedTextGUI textGUI = new MultiWindowTextGUI(screen);
             textGUI.setTheme(modernTheme);
 
-            showMainMenu(textGUI);
+            // 直接开始聊天，不显示主菜单
+            startChat(textGUI);
 
             while (running.get()) {
                 Thread.sleep(100);
@@ -129,56 +119,12 @@ public class AITerminalUI {
     }
 
     /* ========================= 聊天窗口 ========================= */
-    private void startChat(WindowBasedTextGUI textGUI, Window returnTo) {
-        startChatWithSession(textGUI, returnTo, "session-" + System.nanoTime());
-    }
-
-    /* ========================= 主菜单 ========================= */
-    private void showMainMenu(WindowBasedTextGUI textGUI) {
-        BasicWindow window = new BasicWindow("AGI AGENT");
-        window.setHints(java.util.List.of(Window.Hint.CENTERED));
-        // 给窗口本身也套渐变边框
-//        window.setBorder(new GradientBorder("═", "║", "╔", "╗", "╚", "╝"));
-
-        Panel mainPanel = componentFactory.createThemedVerticalPanel(modernTheme);
-
-        Label titleLabel = componentFactory.createTitleLabel("\n=== AI AGENTS ===\n");
-        mainPanel.addComponent(titleLabel);
-
-        Panel btnPanel = componentFactory.createVerticalPanel();
-        Button chatBtn = componentFactory.createButton("  开始聊天  ", () -> startChat(textGUI, window), 25);
-        Button sessionBtn = componentFactory.createButton("  会话管理  ", () -> showSessionManagement(textGUI, window), 25);
-        Button helpBtn = componentFactory.createButton("  查看帮助  ", () -> showHelp(textGUI, window), 25);
-        Button exitBtn = componentFactory.createButton("    退出    ", () -> {
-            running.set(false);
-            window.close();
-        }, 25);
-
-        btnPanel.addComponent(chatBtn);
-        btnPanel.addComponent(sessionBtn);
-        btnPanel.addComponent(helpBtn);
-        btnPanel.addComponent(exitBtn);
-
-        mainPanel.addComponent(btnPanel);
-
-        window.setComponent(mainPanel);
-
-        // 添加ESC键监听器，按ESC直接结束程序
-        window.addWindowListener(new WindowListenerAdapter() {
-            @Override
-            public void onUnhandledInput(Window basePane, KeyStroke key, AtomicBoolean handled) {
-                if (key.getKeyType() == KeyType.Escape) {
-                    running.set(false);
-                    window.close();
-                }
-            }
-        });
-
-        textGUI.addWindowAndWait(window);
+    private void startChat(WindowBasedTextGUI textGUI) {
+        startChatWithSession(textGUI, "session-" + System.nanoTime());
     }
 
     /* ========================= 指定会话的聊天窗口 ========================= */
-    private void startChatWithSession(WindowBasedTextGUI textGUI, Window returnTo, String sessionId) {
+    private void startChatWithSession(WindowBasedTextGUI textGUI, String sessionId) {
         BasicWindow window = new BasicWindow("AGI AGENT - 聊天" + (sessionId != null ? " (" + sessionId + ")" : ""));
         window.setHints(java.util.List.of(Window.Hint.EXPANDED, Window.Hint.FULL_SCREEN));
 //        window.setBorder(new GradientBorder("─", "│", "┌", "┐", "└", "┘"));
@@ -237,6 +183,9 @@ public class AITerminalUI {
         if (sessionId != null) {
             sessionManager.loadSessionById(sessionId);
             var messages = sessionManager.loadSessionHistory(sessionId);
+            // 动态计算宽度：基于当前窗口大小
+            int dynamicWidth = textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10;
+
             for (var msg : messages) {
                 String prefix = switch (msg.getType()) {
                     case USER -> "你: ";
@@ -247,29 +196,19 @@ public class AITerminalUI {
                     case ERROR -> "[错误]: ";
                     case FEEDBACK -> "[反馈]: ";
                 };
-
-                // 为AI响应创建TextBox，其他消息类型使用Label
-                if (msg.getType() == com.xr21.ai.agent.entity.ConversationMessage.MessageType.ASSISTANT) {
-                    Label aiPrefixLabel = new Label(prefix);
-                    aiPrefixLabel.setTheme(chatTheme);
-                    contentPanel.addComponent(aiPrefixLabel);
-                    TextBox historyTextBox = new TextBox(msg.getContent(), TextBox.Style.MULTI_LINE);
-                    historyTextBox.setTheme(chatTheme);
-                    historyTextBox.setReadOnly(true);
-                    historyTextBox.setVerticalFocusSwitching(false);
-                    // 使用动态宽度计算，与聊天区域85%宽度保持一致
-                    // 终端默认宽度120，聊天区域占85%，再减去边距
-                    int dynamicWidth = Math.max(50, 120 * 85 / 100 - 10);
-                    TerminalSize textBoxSize = TextMeasureUtils.calculateTextBoxSize(msg.getContent(), dynamicWidth);
-                    historyTextBox.setPreferredSize(textBoxSize);
-                    // 添加到所有响应TextBox列表
-                    allResponseTextBoxes.add(historyTextBox);
-                    contentPanel.addComponent(historyTextBox);
-                } else {
-                    Label msgLabel = new Label(prefix + msg.getContent());
-                    msgLabel.setTheme(chatTheme);
-                    contentPanel.addComponent(msgLabel);
+                var message = Convert.toStr(msg.getContent(), "");
+                // 为AI响应创建可选择TextBox，其他消息类型使用可选择Label
+                if (ConversationMessage.MessageType.TOOL_CALL == msg.getType()) {
+                    if (msg.getToolCall() != null) {
+                        message += Json.toJson(msg.getToolCall());
+                    }
                 }
+                Label aiPrefixLabel = componentFactory.createLabel(prefix, chatTheme);
+                contentPanel.addComponent(aiPrefixLabel);
+                TextBox historyTextBox = componentFactory.createReadOnlyTextBox(message, dynamicWidth);
+
+                allResponseTextBoxes.add(historyTextBox);
+                contentPanel.addComponent(historyTextBox);
             }
 
             // 加载完所有历史消息后，重新计算所有消息高度并滚动到底部
@@ -283,6 +222,18 @@ public class AITerminalUI {
             public Result handleKeyStroke(KeyStroke keyStroke) {
                 // 如果是 Ctrl+Enter，不处理，让它传递到父级发送消息
                 if (keyStroke.getKeyType() == KeyType.Enter && keyStroke.isCtrlDown()) {
+                    return Result.UNHANDLED;
+                }
+                // 如果是 Ctrl+N，不处理，让它传递到父级处理新建会话
+                if (keyStroke.getCharacter() != null && keyStroke.getCharacter() == 'n' && keyStroke.isCtrlDown()) {
+                    return Result.UNHANDLED;
+                }
+                // 如果是 Ctrl+S，不处理，让它传递到父级处理会话管理
+                if (keyStroke.getCharacter() != null && keyStroke.getCharacter() == 's' && keyStroke.isCtrlDown()) {
+                    return Result.UNHANDLED;
+                }
+                // 如果是 Ctrl+H，不处理，让它传递到父级处理帮助
+                if (keyStroke.getCharacter() != null && keyStroke.getCharacter() == 'h' && keyStroke.isCtrlDown()) {
                     return Result.UNHANDLED;
                 }
                 // 如果是 Ctrl+V，尝试获取系统剪贴板内容并粘贴
@@ -319,7 +270,7 @@ public class AITerminalUI {
 
         // 添加快捷键说明面板
         Panel shortcutPanel = componentFactory.createHorizontalPanel();
-        Label shortcutLabel = componentFactory.createStyledLabel("快捷键: Ctrl+Enter 发送 | Ctrl+/- 调整字体 | Esc 返回", UIThemeConfig.LOADING_COLOR, SGR.BOLD);
+        Label shortcutLabel = componentFactory.createStyledLabel("快捷键: Ctrl+Enter 发送 | Ctrl+N 新建会话 | Ctrl+S 会话管理 | Ctrl+H 帮助 | Esc 返回", UIThemeConfig.LOADING_COLOR, SGR.BOLD);
         shortcutPanel.addComponent(shortcutLabel);
 
         chatPanel.addComponent(wrapWithChatBorder(scrollContainer));
@@ -381,6 +332,9 @@ public class AITerminalUI {
                 });
 
                 // 窗口大小改变后滚动到底部
+                // 加载完所有历史消息后，重新计算所有消息高度并滚动到底部
+                scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+
                 scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
             }
         });
@@ -429,6 +383,7 @@ public class AITerminalUI {
 
                         // 更新滚动条范围
                         scrollHelper.updateScrollBarRange(contentPanel, scrollPanel);
+                        scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
                         // 添加loading后滚动到底部
                         scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
 
@@ -462,6 +417,8 @@ public class AITerminalUI {
                                 // 更新滚动条范围
                                 scrollHelper.updateScrollBarRange(contentPanel, scrollPanel);
                                 // 错误消息添加后滚动到底部
+                                scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+
                                 scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                                 sessionManager.addErrorMessage(sessionId, e.getMessage());
                                 textGUI.getGUIThread().invokeLater(() -> {
@@ -480,15 +437,28 @@ public class AITerminalUI {
                     }
                     handled.set(true);
                 }
+                // 处理 Ctrl+N 新建会话
+                else if (key.getCharacter() != null && key.getCharacter() == 'n' && key.isCtrlDown()) {
+                    String newSessionId = sessionManager.createSession();
+                    window.close();
+                    startChatWithSession(textGUI, newSessionId);
+                    handled.set(true);
+                }
+                // 处理 Ctrl+S 打开会话管理
+                else if (key.getCharacter() != null && key.getCharacter() == 's' && key.isCtrlDown()) {
+                    window.close();
+                    showSessionManagement(textGUI);
+                    handled.set(true);
+                }
+                // 处理 Ctrl+H 显示帮助
+                else if (key.getCharacter() != null && key.getCharacter() == 'h' && key.isCtrlDown()) {
+                    showHelp(textGUI, window);
+                    handled.set(true);
+                }
                 // 处理 Esc 返回主菜单
                 else if (key.getKeyType() == KeyType.Escape) {
                     window.close();
-                    handled.set(true);
-                }
-                // 保留原有的 q 键退出功能
-                else if (key.getCharacter() != null && key.getCharacter() == 'q') {
-                    window.close();
-                    handled.set(true);
+                    System.exit(0);
                 }
             }
         });
@@ -500,7 +470,7 @@ public class AITerminalUI {
     }
 
     /* ========================= 会话管理 ========================= */
-    private void showSessionManagement(WindowBasedTextGUI textGUI, Window returnTo) {
+    private void showSessionManagement(WindowBasedTextGUI textGUI) {
         BasicWindow window = new BasicWindow("AGI AGENT - 会话管理");
 //        window.setBorder(new GradientBorder("═", "║", "╔", "╗", "╚", "╝"));
 
@@ -518,30 +488,28 @@ public class AITerminalUI {
         }
 
         Panel btnPanel = componentFactory.createHorizontalPanel();
-        Button newSessionBtn = componentFactory.createButton("创建新会话", () -> {
-            String id = "session" + System.currentTimeMillis();
-            sessionManager.getOrCreateSession(id);
-            MessageDialog.showMessageDialog(textGUI, "提示", "已创建: " + id, MessageDialogButton.OK);
-            // 刷新会话列表
-            window.close();
-            showSessionManagement(textGUI, returnTo);
-        }, 50);
-        Button switchSessionBtn = componentFactory.createButton("进入聊天", () -> {
-            int idx = table.getSelectedRow();
-            if (idx >= 0) {
-                String id = table.getTableModel().getRow(idx).get(0);
-                window.close();
-                startChatWithSession(textGUI, returnTo, id);
-            } else {
-                MessageDialog.showMessageDialog(textGUI, "提示", "请先选择一个会话", MessageDialogButton.OK);
-            }
-        }, 50);
-        btnPanel.addComponent(newSessionBtn);
-        btnPanel.addComponent(switchSessionBtn);
         btnPanel.addComponent(componentFactory.createButton("返回", window::close, 50));
 
         root.addComponent(table);
         root.addComponent(btnPanel);
+        // 添加窗口级别键盘事件监听器，处理回车键进入会话
+        window.addWindowListener(new WindowListenerAdapter() {
+            @Override
+            public void onInput(Window basePane, KeyStroke key, AtomicBoolean handled) {
+                // 处理回车键进入会话
+                if (key.getKeyType() == KeyType.Enter) {
+                    int idx = table.getSelectedRow();
+                    if (idx >= 0) {
+                        String id = table.getTableModel().getRow(idx).get(0);
+                        window.close();
+                        startChatWithSession(textGUI, id);
+                    } else {
+                        MessageDialog.showMessageDialog(textGUI, "提示", "请先选择一个会话", MessageDialogButton.OK);
+                    }
+                    handled.set(true);
+                }
+            }
+        });
 
         window.setComponent(root);
         textGUI.addWindowAndWait(window);
@@ -601,7 +569,6 @@ public class AITerminalUI {
                     // 重新计算所有消息高度，确保布局正确
                     scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
 
-                    // 添加新的AI响应后滚动到底部
                     scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                 } else {
                     // 更新现有TextBox的内容
@@ -609,21 +576,10 @@ public class AITerminalUI {
                     // 使用辅助方法根据实际行数动态设置高度
                     TerminalSize size = TextMeasureUtils.calculateTextBoxSize(responseBuilder.toString(), dynamicWidth);
                     responseTextBox.setPreferredSize(size);
-
                     // 重新计算所有消息高度，确保布局正确
                     scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
-
                     // 自动滚动到底部
                     scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
-
-                    TextBox.TextBoxRenderer renderer = responseTextBox.getRenderer();
-                    if (renderer instanceof TextBox.DefaultTextBoxRenderer defaultRenderer) {
-                        // 计算文本总行数
-                        int totalLines = responseTextBox.getLineCount();
-                        TerminalPosition viewTopLeft = defaultRenderer.getViewTopLeft();
-                        defaultRenderer.setViewTopLeft(viewTopLeft.withRow(totalLines));
-                        defaultRenderer.setHideScrollBars(true);
-                    }
                 }
 
                 // 更新会话状态面板
@@ -714,7 +670,9 @@ public class AITerminalUI {
                     AtomicBoolean toolCallOccurred = new AtomicBoolean(false);
 
                     for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
-                        String toolCallMsg = String.format("\n[工具调用]: %s 参数: %s", toolCall.name(), toolCall.arguments());
+                        String arguments = toolCall.arguments();
+                        String displayArgs = (arguments != null && !arguments.trim().isEmpty()) ? arguments : "无参数";
+                        String toolCallMsg = String.format("\n[工具调用]: %s 参数: %s", toolCall.name(), displayArgs);
                         System.err.println(toolCallMsg);
                         // 在GUI线程中添加工具调用消息到responseTextBox
                         try {
@@ -744,8 +702,17 @@ public class AITerminalUI {
                         }
 
                         try {
-                            sessionManager.addToolCallMessage(currentSessionId, toolCall.name(), McpJsonMapper.getDefault()
-                                    .readValue(toolCall.arguments(), Map.class), toolCall.id());
+                            Map<String, Object> argumentsMap = new HashMap<>();
+                            if (arguments != null && !arguments.trim().isEmpty()) {
+                                try {
+                                    argumentsMap = McpJsonMapper.getDefault().readValue(arguments, Map.class);
+                                } catch (Exception jsonException) {
+                                    log.warn("解析工具调用参数失败: {}", jsonException.getMessage());
+                                    // 使用原始字符串作为参数
+                                    argumentsMap.put("raw_arguments", arguments);
+                                }
+                            }
+                            sessionManager.addToolCallMessage(currentSessionId, toolCall.name(), argumentsMap, toolCall.id());
                         } catch (Exception e) {
                             log.error("记录工具调用失败", e);
                         }
@@ -819,6 +786,8 @@ public class AITerminalUI {
 
                         // 更新滚动条范围
                         scrollHelper.updateScrollBarRange(contentPanel, scrollPanel);
+                        scrollHelper.recalculateAllMessageHeights(contentPanel, scrollPanel, textGUI, allResponseTextBoxes);
+
                         // 滚动到底部
                         scrollHelper.scrollToBottom(contentPanel, scrollPanel, textGUI);
                         contentPanel.invalidate();

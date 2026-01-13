@@ -24,8 +24,8 @@ import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.session.ConversationSessionManager;
 import com.xr21.ai.agent.tools.DefaultTokenCounter;
 import com.xr21.ai.agent.tools.FeedBackTool;
-import com.xr21.ai.agent.tools.Json;
 import com.xr21.ai.agent.tools.WebSearchTool;
+import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.SinksUtil;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -603,12 +603,23 @@ public class LocalAgent {
                             for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
                                 System.err.print("\n[工具调用]:" + toolCall.name());
                                 try {
-
-                                    System.err.print(" 参数: " + toolCall.arguments() + "\n");
+                                    String arguments = toolCall.arguments();
+                                    String displayArgs = (arguments != null && !arguments.trim().isEmpty()) ? arguments : "无参数";
+                                    System.err.print(" 参数: " + displayArgs + "\n");
                                     // 记录工具调用
-                                    sessionManager.addToolCallMessage(finalSessionId, toolCall.name(), Json.to(toolCall.arguments(), Map.class), toolCall.id());
+                                    Map<String, Object> argumentsMap = new HashMap<>();
+                                    if (arguments != null && !arguments.trim().isEmpty()) {
+                                        try {
+                                            argumentsMap = Json.to(arguments, Map.class);
+                                        } catch (Exception jsonException) {
+                                            log.warn("解析工具调用参数失败: {}", jsonException.getMessage());
+                                            // 使用原始字符串作为参数
+                                            argumentsMap.put("raw_arguments", arguments);
+                                        }
+                                    }
+                                    sessionManager.addToolCallMessage(finalSessionId, toolCall.name(), argumentsMap, toolCall.id());
                                 } catch (Exception e) {
-                                    System.err.print(" 参数: [参数打印失败]");
+                                    System.err.print(" 参数: [参数处理失败]");
                                 }
                             }
                         }

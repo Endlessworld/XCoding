@@ -1,6 +1,7 @@
 package com.xr21.ai.agent.tui;
 
 import com.googlecode.lanterna.SGR;
+import com.googlecode.lanterna.TerminalPosition;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.graphics.Theme;
@@ -75,16 +76,54 @@ public class UIComponentFactory {
     }
 
     /**
-     * 创建只读的多行TextBox
+     * 创建只读的多行TextBox - 优化版本，支持更好的自动换行
      */
     public TextBox createReadOnlyTextBox(String text, int width) {
         TextBox textBox = new TextBox(text, TextBox.Style.MULTI_LINE);
         textBox.setTheme(chatTheme);
         textBox.setReadOnly(true);
         textBox.setVerticalFocusSwitching(false);
-        TerminalSize size = TextMeasureUtils.calculateTextBoxSize(text, width);
+
+        // 优化：确保最小宽度，避免过窄导致换行异常
+        int optimizedWidth = Math.max(width, 30);
+
+        // 优化：使用改进的文本测量算法
+        TerminalSize size = TextMeasureUtils.calculateTextBoxSize(text, optimizedWidth);
         textBox.setPreferredSize(size);
+
+        // 优化：设置文本换行策略
+        enableWordWrapping(textBox);
+
         return textBox;
+    }
+
+    /**
+     * 创建自适应宽度的只读多行TextBox
+     * @param text 文本内容
+     * @param terminalColumns 终端列数
+     * @param percentage 宽度百分比（0-100）
+     * @param margin 边距
+     * @return 配置好的TextBox
+     */
+    public TextBox createAdaptiveReadOnlyTextBox(String text, int terminalColumns, int percentage, int margin) {
+        int dynamicWidth = TextMeasureUtils.calculateDynamicWidth(terminalColumns, percentage, margin);
+        return createReadOnlyTextBox(text, dynamicWidth);
+    }
+
+    /**
+     * 为TextBox启用更好的单词换行功能
+     */
+    private void enableWordWrapping(TextBox textBox) {
+        // 通过设置自定义渲染器来改善换行效果
+        TextBox.TextBoxRenderer renderer = textBox.getRenderer();
+        if (renderer instanceof TextBox.DefaultTextBoxRenderer defaultRenderer) {
+            // 隐藏滚动条，让文本自然换行
+            int totalLines = textBox.getLineCount();
+            TerminalPosition viewTopLeft = defaultRenderer.getViewTopLeft();
+            defaultRenderer.setViewTopLeft(viewTopLeft.withRow(totalLines));
+            defaultRenderer.setHideScrollBars(true);
+        }
+
     }
 
     /**
