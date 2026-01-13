@@ -309,12 +309,14 @@ public class LocalAgent {
                 .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
                 .instruction("""
                         你是一个本地文件操作智能体，主要负责文件/内容查找，读取，文件创建，编辑,
-                        当前工作目录: %s
+                        当前工作目录: %s 所有文件操作仅限与工作目录之内
                         使用grep查找内容并定位问题(禁止执行**/*类似搜索，使用明确的关键字进行检索)
                         使用read_file读取详细内容
                         使用edit_file修改文件内容（内容修改以行为单位，如果需要修改的内容较多分成多次修改，每次最多修改3行内容）
                         使用write_file创建并写入文件内容
-                        使用ls查看指定目录的文件列表（禁止使用ls逐步探索目录、直接使用grep搜索文件内容）
+                        使用ls查看指定目录的文件列表
+                        禁止使用ls逐步探索目录
+                        直接使用grep搜索文件内容
                         """.formatted(WORKSPACE_ROOT))
                 .interceptors(interceptors)
                 .outputKey("writer_output")

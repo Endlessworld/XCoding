@@ -10,6 +10,12 @@ import com.googlecode.lanterna.TextColor;
 import com.googlecode.lanterna.graphics.SimpleTheme;
 import com.googlecode.lanterna.graphics.Theme;
 import com.googlecode.lanterna.gui2.*;
+import com.googlecode.lanterna.gui2.BorderLayout;
+import com.googlecode.lanterna.gui2.Button;
+import com.googlecode.lanterna.gui2.Component;
+import com.googlecode.lanterna.gui2.Label;
+import com.googlecode.lanterna.gui2.Panel;
+import com.googlecode.lanterna.gui2.Window;
 import com.googlecode.lanterna.gui2.dialogs.MessageDialog;
 import com.googlecode.lanterna.gui2.dialogs.MessageDialogButton;
 import com.googlecode.lanterna.gui2.table.Table;
@@ -19,8 +25,7 @@ import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import com.googlecode.lanterna.terminal.MouseCaptureMode;
-import com.googlecode.lanterna.terminal.swing.SwingTerminalFrame;
-import com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguration;
+import com.googlecode.lanterna.terminal.swing.*;
 import com.xr21.ai.agent.LocalAgent;
 import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.session.ConversationSessionManager;
@@ -32,11 +37,17 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
+import java.awt.*;
+import java.awt.font.FontRenderContext;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguration.CursorStyle.VERTICAL_BAR;
 
 /**
  * 基于 Lanterna 的 TUI 界面
@@ -90,11 +101,83 @@ public class AITerminalUI {
         this.supervisorAgent = localAgent.buildSupervisorAgent();
     }
 
+    // 优化后的字体配置 - 支持多种现代等宽字体
+    private static SwingTerminalFontConfiguration createOptimizedFontConfiguration() {
+        String selectedFont = findAvailableFont();
+        int fontSize = 16; // 14号字体，适合中文显示
+        var planFont = new Font(selectedFont, Font.PLAIN, fontSize);
+        var italicFont = new Font(selectedFont, Font.ITALIC, fontSize);
+        var boldFont = new Font(selectedFont, Font.BOLD, fontSize);
+        return SwingTerminalFontConfiguration.newInstance(planFont, italicFont, boldFont);
+    }
+
     /**
-     * 给任意组件包一层渐变边框，方便复用
+     * 查找系统中可用的等宽字体
+     * @return 可用的等宽字体名称，如果没有找到则返回系统默认等宽字体
      */
-    private static Component wrapWithGradientBorder(Component component) {
-        return component; // 暂时不使用边框，避免编译错误
+    private static String findAvailableFont() {
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+
+        // 收集所有可用的字体名称
+        Set<String> availableFonts = new HashSet<>();
+        for (Font font : ge.getAllFonts()) {
+            availableFonts.add(font.getFamily());
+            availableFonts.add(font.getFontName());
+        }
+
+        // 收集所有可用的等宽字体
+        Set<String> monospacedFonts = new HashSet<>();
+        for (String fontName : availableFonts) {
+            if (isMonospacedFont(fontName)) {
+                monospacedFonts.add(fontName);
+            }
+        }
+
+        log.debug("系统中发现的等宽字体: {}", monospacedFonts);
+
+        // 如果没有找到预定义字体，返回系统默认等宽字体
+        String defaultMonospaced = "Monospaced";
+        if (monospacedFonts.contains(defaultMonospaced)) {
+            log.info("使用系统默认等宽字体: {}", defaultMonospaced);
+            return defaultMonospaced;
+        }
+
+        // 如果 Monospaced 不可用，从发现的等宽字体中选择一个
+        if (!monospacedFonts.isEmpty()) {
+            String firstMonospaced = monospacedFonts.iterator().next();
+            log.info("使用发现的等宽字体: {}", firstMonospaced);
+            return firstMonospaced;
+        }
+
+        log.warn("未找到任何等宽字体，使用通用字体名称");
+        return defaultMonospaced;
+    }
+
+    /**
+     * 检查指定名称的字体是否为等宽字体
+     * @param fontName 字体名称
+     * @return 如果是等宽字体返回 true，否则返回 false
+     */
+    private static boolean isMonospacedFont(String fontName) {
+        try {
+            // 创建字体的 12pt 纯样式版本
+            Font font = new Font(fontName, Font.PLAIN, 12);
+            if (font == null || font.getFamily().equals("Dialog")) {
+                return false;
+            }
+
+            // 测试字符：'i' (窄字符) 和 'W' (宽字符)
+            FontRenderContext frc = new FontRenderContext(null, true, true);
+            double widthI = font.getStringBounds("i", frc).getWidth();
+            double widthW = font.getStringBounds("W", frc).getWidth();
+
+            // 如果两个字符宽度相同或非常接近（考虑浮点误差），则为等宽字体
+            double tolerance = 0.1;
+            return Math.abs(widthI - widthW) < tolerance;
+        } catch (Exception e) {
+            log.trace("检查字体等宽性失败: {}, 原因: {}", fontName, e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -106,20 +189,25 @@ public class AITerminalUI {
 
     public void start() {
         try {
-            // 1. 指定 14 号粗体等宽字体，更现代化
+            // 1. 优化字体配置 - 使用系统最佳等宽字体
+            SwingTerminalFontConfiguration fontConfig = createOptimizedFontConfiguration();
+
+            // 2. 配置终端仿真器设备设置，优化显示效果
+            TerminalEmulatorDeviceConfiguration deviceConfig = new TerminalEmulatorDeviceConfiguration(2000, 500, VERTICAL_BAR, new TextColor.RGB(255, 255, 255), true, true);
+            // 3. 创建终端工厂并应用配置
             DefaultTerminalFactory factory = new DefaultTerminalFactory();
             factory.setInitialTerminalSize(new TerminalSize(120, 45));
             factory.setMouseCaptureMode(MouseCaptureMode.CLICK);
-//            factory.setForceTextTerminal(true);
-            factory.setTerminalEmulatorDeviceConfiguration(new TerminalEmulatorDeviceConfiguration());
-            factory.setForceAWTOverSwing(true);
+            factory.setTerminalEmulatorDeviceConfiguration(deviceConfig);
+//            factory.setForceAWTOverSwing(true);
             factory.setTerminalEmulatorTitle("AI AGENTS - 智能助手 v2.0.0");
-            // 直接创建屏幕（纯终端模式）
+            factory.setTerminalEmulatorFontConfiguration(fontConfig);
+            factory.setTerminalEmulatorColorConfiguration(TerminalEmulatorColorConfiguration.newInstance(TerminalEmulatorPalette.MAC_OS_X_TERMINAL_APP));
+            // 4. 直接创建屏幕（纯终端模式）
             Screen screen = factory.createScreen();
             screen.startScreen();
             // 设置自定义图标，替换默认JDK图标
             setCustomIcon(screen);
-
             final WindowBasedTextGUI textGUI = new MultiWindowTextGUI(screen);
 
             textGUI.setTheme(modernTheme);
@@ -229,7 +317,7 @@ public class AITerminalUI {
 
         mainPanel.addComponent(btnPanel);
 
-        window.setComponent(wrapWithGradientBorder(mainPanel));
+        window.setComponent(mainPanel);
 
         // 添加ESC键监听器，按ESC直接结束程序
         window.addWindowListener(new WindowListenerAdapter() {
@@ -383,7 +471,7 @@ public class AITerminalUI {
 
         // 添加快捷键说明面板
         Panel shortcutPanel = new Panel(new LinearLayout(Direction.HORIZONTAL));
-        Label shortcutLabel = new Label("快捷键: Ctrl+Enter 发送 | Esc 返回");
+        Label shortcutLabel = new Label("快捷键: Ctrl+Enter 发送 | Ctrl+/- 调整字体 | Esc 返回");
         shortcutLabel.addStyle(SGR.BOLD);
         shortcutLabel.setTheme(modernTheme);
         shortcutLabel.setForegroundColor(new TextColor.RGB(255, 200, 100));
@@ -593,7 +681,7 @@ public class AITerminalUI {
         btnPanel.addComponent(switchSessionBtn);
         btnPanel.addComponent(new Button("返回", window::close));
 
-        root.addComponent(wrapWithGradientBorder(table));
+        root.addComponent(table);
         root.addComponent(btnPanel);
 
         window.setComponent(root);
@@ -1106,17 +1194,13 @@ public class AITerminalUI {
             // 获取底层的AWT窗口
             if (screen instanceof TerminalScreen terminalScreen) {
                 if (terminalScreen.getTerminal() instanceof SwingTerminalFrame swingTerminalFrame) {
-
-
                     // 获取包含终端的JFrame
                     java.awt.Container parent = swingTerminalFrame.getRootPane().getParent();
                     while (parent != null && !(parent instanceof java.awt.Frame)) {
                         parent = parent.getParent();
                     }
-
-                    if (parent instanceof java.awt.Frame) {
+                    if (parent != null) {
                         java.awt.Frame frame = (java.awt.Frame) parent;
-
                         // 创建一个现代化的机器人图标（16x16像素）
                         java.awt.image.BufferedImage icon = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
                         java.awt.Graphics2D g2d = icon.createGraphics();
