@@ -1,0 +1,110 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    alias(libs.plugins.kotlinMultiplatform)
+
+    alias(libs.plugins.vanniktech.mavenPublish)
+    id("org.jetbrains.compose") version "1.6.10"
+    id("org.jetbrains.kotlin.kapt")
+}
+
+group = "io.github.kotlin"
+version = "1.0.0"
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
+kotlin {
+    jvm("jvm") {
+        compilations.all {
+            compileTaskProvider.configure {
+                compilerOptions {
+                    jvmTarget.set(JvmTarget.JVM_17)
+                }
+            }
+        }
+    }
+
+    sourceSets {
+        commonMain.dependencies {
+        }
+
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
+        }
+
+        jvmMain.dependencies {
+            implementation(compose.desktop.currentOs)
+            implementation(compose.material3)
+            implementation("org.jetbrains.compose.material:material-icons-extended:1.6.10")
+
+            // Spring Framework
+            implementation(libs.spring.core)
+            implementation(libs.spring.context)
+
+            // Spring AI
+            implementation(libs.spring.ai.openai)
+
+            // Reactor
+            implementation(libs.reactor.core)
+
+            // Jackson
+            implementation(libs.jackson.databind)
+
+            // Alibaba AI
+            implementation(libs.spring.ai.alibaba.graph)
+            implementation(libs.spring.ai.alibaba.agent)
+
+            // Utilities
+            implementation(libs.hutool.all)
+            compileOnly(libs.lombok)
+            implementation(libs.jna)
+            implementation(libs.lanterna)
+        }
+    }
+}
+
+tasks.register<JavaExec>("run") {
+    group = "application"
+    mainClass.set("com.xr21.ai.agent.gui.ChatApplicationKt")
+    classpath = configurations["jvmRuntimeClasspath"] + files("$buildDir/classes/kotlin/jvm/main")
+    workingDir = projectDir
+}
+
+
+mavenPublishing {
+    publishToMavenCentral()
+
+    signAllPublications()
+
+    coordinates(group.toString(), "library", version.toString())
+
+    pom {
+        name = "My library"
+        description = "A library."
+        inceptionYear = "2024"
+        url = "https://github.com/kotlin/multiplatform-library-template/"
+        licenses {
+            license {
+                name = "XXX"
+                url = "YYY"
+                distribution = "ZZZ"
+            }
+        }
+        developers {
+            developer {
+                id = "XXX"
+                name = "YYY"
+                url = "ZZZ"
+            }
+        }
+        scm {
+            url = "XXX"
+            connection = "YYY"
+            developerConnection = "ZZZ"
+        }
+    }
+}
