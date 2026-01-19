@@ -1,39 +1,36 @@
 package com.xr21.ai.agent.session;
 
-import lombok.Data;
-
 /**
  * 会话简要信息
  */
-@Data
 public class SessionInfo {
     /**
      * 会话ID
      */
-    private String sessionId;
-    
+    public String sessionId;
+
     /**
      * 文件路径
      */
-    private String filePath;
-    
+    public String filePath;
+
     /**
      * 消息数量
      */
-    private int messageCount;
-    
+    public int messageCount;
+
     /**
      * 创建时间
      */
-    private String createdAt;
-    
+    public String createdAt;
+
     /**
      * 最后更新时间
      */
-    private String lastUpdated;
-    
+    public String lastUpdated;
+
     /**
      * 简要描述（第一条用户消息）
      */
-    private String briefDescription;
+    public String briefDescription;
 }

@@ -1,10 +1,6 @@
 package com.xr21.ai.agent.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -13,57 +9,61 @@ import java.util.Map;
  * 对话消息实体类
  * 使用JSON格式记录不同类型的对话消息
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class ConversationMessage {
 
     /**
      * 消息ID
      */
     @JsonProperty("id")
-    private String id;
+    public String id;
+
     /**
      * 消息类型
      */
     @JsonProperty("type")
-    private MessageType type;
+    public MessageType type;
+
     /**
      * 消息内容
      */
     @JsonProperty("content")
-    private String content;
+    public String content;
+
     /**
      * 消息时间戳
      */
     @JsonProperty("timestamp")
-    private LocalDateTime timestamp;
+    public LocalDateTime timestamp;
+
     /**
      * 消息所属会话ID
      */
     @JsonProperty("session_id")
-    private String sessionId;
+    public String sessionId;
+
     /**
      * 消息轮次
      */
     @JsonProperty("round")
-    private int round;
+    public int round;
+
     /**
      * 工具调用信息（当type为TOOL_CALL时）
      */
     @JsonProperty("tool_call")
-    private ToolCallInfo toolCall;
+    public ToolCallInfo toolCall;
+
     /**
      * 工具响应信息（当type为TOOL_RESPONSE时）
      */
     @JsonProperty("tool_response")
-    private ToolResponseInfo toolResponse;
+    public ToolResponseInfo toolResponse;
+
     /**
      * 元数据
      */
     @JsonProperty("metadata")
-    private Map<String, Object> metadata;
+    public Map<String, Object> metadata;
 
     /**
      * 创建用户消息

@@ -18,8 +18,10 @@ lanterna = "3.1.2"
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 spring-core = { group = "org.springframework", name = "spring-core", version.ref = "spring" }
 spring-context = { group = "org.springframework", name = "spring-context", version.ref = "spring" }
+spring-web = { group = "org.springframework", name = "spring-web", version.ref = "spring" }
 spring-ai-openai = { group = "org.springframework.ai", name = "spring-ai-openai", version.ref = "springAi" }
 reactor-core = { group = "io.projectreactor", name = "reactor-core", version.ref = "reactor" }
+reactor-extra = { group = "io.projectreactor", name = "reactor-extra", version.ref = "reactor" }
 jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson" }
 spring-ai-alibaba-graph = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-graph-core", version.ref = "springAiAlibaba" }
 spring-ai-alibaba-agent = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-agent-framework", version.ref = "springAiAlibaba" }

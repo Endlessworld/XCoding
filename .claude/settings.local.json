@@ -3,7 +3,8 @@
     "allow": [
       "Bash(./gradlew run)",
       "Bash(./gradlew:*)",
-      "Bash(java:*)"
+      "Bash(java:*)",
+      "Bash(./gradlew.bat clean compileKotlinJvm:*)"
     ]
   }
 }

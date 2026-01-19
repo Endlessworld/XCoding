@@ -26,6 +26,14 @@ kotlin {
                 }
             }
         }
+
+        // 包含 Java 源文件
+        withJava()
+
+        // 配置 kapt 注解处理器
+        kapt {
+            correctErrorTypes = true
+        }
     }
 
     sourceSets {
@@ -70,7 +78,9 @@ kotlin {
 tasks.register<JavaExec>("run") {
     group = "application"
     mainClass.set("com.xr21.ai.agent.gui.ChatApplicationKt")
-    classpath = configurations["jvmRuntimeClasspath"] + files("$buildDir/classes/kotlin/jvm/main")
+    classpath = configurations["jvmRuntimeClasspath"] +
+        files("${layout.buildDirectory.get().asFile}/classes/kotlin/jvm/main") +
+        files("${layout.buildDirectory.get().asFile}/classes/java/main")
     workingDir = projectDir
 }
 

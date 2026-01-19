@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ai-agents-multiplatform"
 include(":library")
+include(":agent-core")
