@@ -73,7 +73,7 @@ public class AITerminalUI {
     public AITerminalUI(ConversationSessionManager sessionManager, LocalAgent localAgent) {
         this.sessionManager = sessionManager;
         this.localAgent = localAgent;
-        this.supervisorAgent = localAgent.buildSupervisorAgent();
+        this.supervisorAgent = localAgent.buildAgent();
     }
 
     /**
@@ -519,7 +519,7 @@ public class AITerminalUI {
     private void updateUIWithGraph(String input, Panel contentPanel, Panel scrollPanel, ConversationSessionManager sessionManager, AtomicReference<TextBox> currentResponseTextBox, WindowBasedTextGUI textGUI, Panel statusPanel, java.util.List<TextBox> allResponseTextBoxes, AtomicReference<Label> loadingLabel, AtomicBoolean isWaitingForResponse, TextBox inputBox) {
         StringBuilder responseBuilder = new StringBuilder();
 
-        Flux<ServerSentEvent<AgentOutput<Object>>> outputFlux = localAgent.processWithGraphV2(supervisorAgent, input, currentSessionId, interruptionMetadata.get(), stateUpdate);
+        Flux<ServerSentEvent<AgentOutput<Object>>> outputFlux = localAgent.toFlux(supervisorAgent, input, currentSessionId, interruptionMetadata.get(), stateUpdate);
 
         // 使用异步订阅，避免阻塞UI线程
         outputFlux.doOnNext(output -> {

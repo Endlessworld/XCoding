@@ -50,6 +50,11 @@ fun ChatApplication() {
     val sessionManager = remember { SessionManager.getInstance() }
     val chatColors = getCurrentChatColors()
 
+    // 更新会话ID的回调
+    val updateSessionId: (String) -> Unit = { newSessionId ->
+        currentSessionId = newSessionId
+    }
+
     val windowState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.Center), width = 1200.dp, height = 800.dp
     )
@@ -71,9 +76,11 @@ fun ChatApplication() {
                     },
                     onOpenSessionManager = {
                         currentScreen = Screen.SessionManager
-                    }, onOpenSettings = {
+                    },
+                    onOpenSettings = {
                         currentScreen = Screen.Settings
-                    })
+                    },
+                    onSessionIdUpdate = updateSessionId)
 
                 is Screen.SessionManager -> SessionManagerScreen(
                     sessionManager = sessionManager,
@@ -115,30 +122,48 @@ sealed class Screen {
 fun ChatScreen(
     sessionId: String?, sessionManager: SessionManager,
     onNewSession: () -> Unit,
-    onSessionSelected: (String) -> Unit, onOpenSessionManager: () -> Unit, onOpenSettings: () -> Unit
+    onSessionSelected: (String) -> Unit, onOpenSessionManager: () -> Unit, onOpenSettings: () -> Unit,
+    onSessionIdUpdate: (String) -> Unit = {}
 ) {
 
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
     var messages by remember { mutableStateOf(listOf<UiChatMessage>()) }
     var isLoading by remember { mutableStateOf(false) }
+    var isSending by remember { mutableStateOf(false) }  // 防止重复发送
     var sessions by remember { mutableStateOf(listOf<UiSessionInfo>()) }
+    var currentJob by remember { mutableStateOf< kotlinx.coroutines.Job?>(null) }
+    var isProcessingMessage by remember { mutableStateOf(false) }  // 跟踪是否正在处理消息
+    var lastSessionId by remember { mutableStateOf<String?>(null) }  // 跟踪上一个sessionId，避免不必要的消息重新加载
 
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val chatColors = getCurrentChatColors()
 
+    // 取消当前请求
+    val onCancelRequest = {
+        currentJob?.cancel()
+        isLoading = false
+        isSending = false
+        isProcessingMessage = false
+    }
+
     // 加载会话列表
     LaunchedEffect(Unit) {
         sessions = sessionManager.loadSessions()
     }
 
-    // 加载会话消息
+    // 加载会话消息 - 只在sessionId真正改变时才重新加载
     LaunchedEffect(sessionId) {
         if (sessionId != null) {
-            messages = sessionManager.loadMessages(sessionId)
+            // 只有当sessionId真正改变时才重新加载消息
+            if (sessionId != lastSessionId) {
+                messages = sessionManager.loadMessages(sessionId)
+                lastSessionId = sessionId
+            }
         } else {
             messages = emptyList()
+            lastSessionId = null
         }
     }
 
@@ -195,7 +220,7 @@ fun ChatScreen(
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             ) {
                 Text(
-                    text = "提示: Ctrl+Enter 发送 | Ctrl+N 新建会话 | Ctrl+S 会话管理", style = TextStyle(
+                    text = "提示: Enter 发送 | Ctrl+Enter 换行 | Ctrl+N 新建会话 | Ctrl+S 会话管理", style = TextStyle(
                         color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp
                     ), modifier = Modifier.padding(bottom = 8.dp)
                 )
@@ -217,13 +242,17 @@ fun ChatScreen(
                         value = inputText,
                         onValueChange = { inputText = it },
                         modifier = Modifier.weight(1f).heightIn(min = 56.dp, max = 150.dp).onKeyEvent { event ->
-                            if (event.key == Key.Enter && event.isCtrlPressed) {
-                                if (inputText.text.isNotBlank() && !isLoading) {
+                            // Enter 发送消息（单独按 Enter 时发送，Ctrl+Enter 和 Shift+Enter 允许换行）
+                            if (event.key == Key.Enter && !event.isCtrlPressed) {
+                                if (inputText.text.isNotBlank() && !isLoading && !isSending) {
                                     // 使用 LocalChatService 发送消息
                                     val chatService = ChatService.getInstance()
                                     val userInput = inputText.text
 
-                                    scope.launch {
+                                    currentJob = scope.launch {
+                                        isSending = true
+                                        isProcessingMessage = true
+
                                         val userMsg = UiChatMessage(
                                             id = UUID.randomUUID().toString(),
                                             content = userInput,
@@ -233,49 +262,89 @@ fun ChatScreen(
                                         messages = messages + userMsg
                                         inputText = TextFieldValue("")
 
-                                        if (sessionId != null) {
-                                            sessionManager.saveMessages(sessionId, listOf(userMsg))
-                                        }
+                                        // 立即滚动到用户消息
+                                        listState.animateScrollToItem(messages.size - 1)
 
                                         isLoading = true
 
-                                        // 调用 LocalChatService
-                                        chatService.sendMessage(userInput).collect { response ->
-                                            when (response.type) {
-                                                ResponseType.THINKING -> {
-                                                    // 显示加载状态
+                                        // 调用 LocalChatService，传入 sessionId
+                                        try {
+                                            chatService.sendMessage(userInput, sessionId).collect { response ->
+                                                // 如果创建了新会话，更新 sessionId 和 lastSessionId
+                                                response.sessionId?.let { newSessionId ->
+                                                    onSessionIdUpdate(newSessionId)
+                                                    lastSessionId = newSessionId
                                                 }
 
-                                                ResponseType.ASSISTANT -> {
-                                                    val aiMsg = UiChatMessage(
-                                                        id = response.messageId,
-                                                        content = response.content,
-                                                        type = UiMessageType.ASSISTANT,
-                                                        timestamp = LocalDateTime.now()
-                                                    )
-                                                    messages = messages + aiMsg
-
-                                                    if (sessionId != null) {
-                                                        sessionManager.saveMessages(sessionId, listOf(aiMsg))
+                                                when (response.type) {
+                                                    ResponseType.THINKING -> {
+                                                        // 显示加载状态
                                                     }
-                                                }
 
-                                                ResponseType.ERROR -> {
-                                                    val errorMsg = UiChatMessage(
-                                                        id = response.messageId,
-                                                        content = response.content,
-                                                        type = UiMessageType.ERROR,
-                                                        timestamp = LocalDateTime.now()
-                                                    )
-                                                    messages = messages + errorMsg
-                                                }
+                                                    ResponseType.STREAMING -> {
+                                                        // 查找是否已有该消息ID的消息
+                                                        val existingIndex =
+                                                            messages.indexOfFirst { it.id == response.messageId }
+                                                        if (existingIndex >= 0) {
+                                                            // 追加内容到现有消息
+                                                            val existingMsg = messages[existingIndex]
+                                                            val newContent = existingMsg.content + response.content
+                                                            messages = messages.toMutableList().apply {
+                                                                this[existingIndex] = existingMsg.copy(
+                                                                    content = newContent
+                                                                )
+                                                            }
+                                                        } else {
+                                                            // 创建新消息
+                                                            val aiMsg = UiChatMessage(
+                                                                id = response.messageId,
+                                                                content = response.content,
+                                                                type = UiMessageType.ASSISTANT,
+                                                                timestamp = LocalDateTime.now()
+                                                            )
+                                                            messages = messages + aiMsg
+                                                        }
+                                                        // 自动滚动到最新消息
+                                                        listState.animateScrollToItem(messages.size - 1)
+                                                    }
 
-                                                else -> {}
+                                                    ResponseType.ASSISTANT -> {
+                                                        val aiMsg = UiChatMessage(
+                                                            id = response.messageId,
+                                                            content = response.content,
+                                                            type = UiMessageType.ASSISTANT,
+                                                            timestamp = LocalDateTime.now()
+                                                        )
+                                                        messages = messages + aiMsg
+                                                        // 自动滚动到最新消息
+                                                        listState.animateScrollToItem(messages.size - 1)
+                                                    }
+
+                                                    ResponseType.ERROR -> {
+                                                        val errorMsg = UiChatMessage(
+                                                            id = response.messageId,
+                                                            content = response.content,
+                                                            type = UiMessageType.ERROR,
+                                                            timestamp = LocalDateTime.now()
+                                                        )
+                                                        messages = messages + errorMsg
+                                                        // 自动滚动到最新消息
+                                                        listState.animateScrollToItem(messages.size - 1)
+                                                    }
+
+                                                    else -> {}
+                                                }
                                             }
+                                        } catch (e: Exception) {
+                                            // 处理异常情况
+                                            println("Error collecting response: ${e.message}")
+                                        } finally {
+                                            // 确保在所有情况下都关闭Loading状态
+                                            isLoading = false
+                                            isSending = false
+                                            isProcessingMessage = false
+                                            sessions = sessionManager.loadSessions()
                                         }
-
-                                        isLoading = false
-                                        sessions = sessionManager.loadSessions()
                                     }
                                 }
                                 true
@@ -285,7 +354,7 @@ fun ChatScreen(
                         },
                         placeholder = {
                             Text(
-                                text = "输入消息... (Ctrl+Enter 发送)",
+                                text = "输入消息... (Enter 发送，Ctrl+Enter 换行)",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
@@ -305,11 +374,14 @@ fun ChatScreen(
 
                     FilledIconButton(
                         onClick = {
-                            if (inputText.text.isNotBlank() && !isLoading) {
+                            if (inputText.text.isNotBlank() && !isLoading && !isSending) {
                                 val chatService = ChatService.getInstance()
                                 val userInput = inputText.text
 
-                                scope.launch {
+                                currentJob = scope.launch {
+                                    isSending = true
+                                    isProcessingMessage = true
+
                                     val userMsg = UiChatMessage(
                                         id = UUID.randomUUID().toString(),
                                         content = userInput,
@@ -319,48 +391,91 @@ fun ChatScreen(
                                     messages = messages + userMsg
                                     inputText = TextFieldValue("")
 
-                                    if (sessionId != null) {
-                                        sessionManager.saveMessages(sessionId, listOf(userMsg))
-                                    }
+                                    // 立即滚动到用户消息
+                                    listState.animateScrollToItem(messages.size - 1)
 
                                     isLoading = true
 
-                                    chatService.sendMessage(userInput).collect { response ->
-                                        when (response.type) {
-                                            ResponseType.ASSISTANT -> {
-                                                val aiMsg = UiChatMessage(
-                                                    id = response.messageId,
-                                                    content = response.content,
-                                                    type = UiMessageType.ASSISTANT,
-                                                    timestamp = LocalDateTime.now()
-                                                )
-                                                messages = messages + aiMsg
-
-                                                if (sessionId != null) {
-                                                    sessionManager.saveMessages(sessionId, listOf(aiMsg))
+                                    // 调用 LocalChatService，传入 sessionId
+                                    try {
+                                        chatService.sendMessage(userInput, sessionId).collect { response ->
+                                            // 如果创建了新会话，更新 sessionId 和 lastSessionId
+                                            response.sessionId?.let { newSessionId ->
+                                                onSessionIdUpdate(newSessionId)
+                                                lastSessionId = newSessionId
+                                            }
+                                            when (response.type) {
+                                                ResponseType.THINKING -> {
+                                                    // 显示加载状态
                                                 }
-                                            }
 
-                                            ResponseType.ERROR -> {
-                                                val errorMsg = UiChatMessage(
-                                                    id = response.messageId,
-                                                    content = response.content,
-                                                    type = UiMessageType.ERROR,
-                                                    timestamp = LocalDateTime.now()
-                                                )
-                                                messages = messages + errorMsg
-                                            }
+                                                ResponseType.STREAMING -> {
+                                                    // 打字机效果：逐个字符追加
+                                                    val existingIndex =
+                                                        messages.indexOfFirst { it.id == response.messageId }
+                                                    if (existingIndex >= 0) {
+                                                        // 追加内容到现有消息
+                                                        val existingMsg = messages[existingIndex]
+                                                        val newContent = existingMsg.content + response.content
+                                                        messages = messages.toMutableList().apply {
+                                                            this[existingIndex] = existingMsg.copy(
+                                                                content = newContent
+                                                            )
+                                                        }
+                                                    } else {
+                                                        // 创建新消息
+                                                        val aiMsg = UiChatMessage(
+                                                            id = response.messageId,
+                                                            content = response.content,
+                                                            type = UiMessageType.ASSISTANT,
+                                                            timestamp = LocalDateTime.now()
+                                                        )
+                                                        messages = messages + aiMsg
+                                                    }
+                                                    // 自动滚动到最新消息
+                                                    listState.animateScrollToItem(messages.size - 1)
+                                                }
 
-                                            else -> {}
+                                                ResponseType.ASSISTANT -> {
+                                                    val aiMsg = UiChatMessage(
+                                                        id = response.messageId,
+                                                        content = response.content,
+                                                        type = UiMessageType.ASSISTANT,
+                                                        timestamp = LocalDateTime.now()
+                                                    )
+                                                    messages = messages + aiMsg
+                                                    // 自动滚动到最新消息
+                                                    listState.animateScrollToItem(messages.size - 1)
+                                                }
+
+                                                ResponseType.ERROR -> {
+                                                    val errorMsg = UiChatMessage(
+                                                        id = response.messageId,
+                                                        content = response.content,
+                                                        type = UiMessageType.ERROR,
+                                                        timestamp = LocalDateTime.now()
+                                                    )
+                                                    messages = messages + errorMsg
+                                                    // 自动滚动到最新消息
+                                                    listState.animateScrollToItem(messages.size - 1)
+                                                }
+
+                                                else -> {}
+                                            }
                                         }
+                                    } catch (e: Exception) {
+                                        // 处理异常情况
+                                        println("Error collecting response: ${e.message}")
+                                    } finally {
+                                        // 确保在所有情况下都关闭Loading状态
+                                        isLoading = false
+                                        isSending = false
+                                        isProcessingMessage = false
+                                        sessions = sessionManager.loadSessions()
                                     }
-
-                                    isLoading = false
-                                    sessions = sessionManager.loadSessions()
                                 }
                             }
-                        },
-                        enabled = inputText.text.isNotBlank() && !isLoading,
+                        }, enabled = inputText.text.isNotBlank() && !isLoading && !isSending,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -405,7 +520,8 @@ fun ChatScreen(
 
                 if (isLoading) {
                     LoadingIndicator(
-                        modifier = Modifier.align(Alignment.BottomCenter)
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        onStop = onCancelRequest
                     )
                 }
             }
@@ -484,7 +600,7 @@ fun MessageBubble(
                 ) {
 
                     Text(
-                        text = parseMarkdown(message.content), style = TextStyle(
+                        text = message.content, style = TextStyle(
                             color = chatColors.textPrimary, fontSize = 14.sp, lineHeight = 20.sp
                         )
                     )
@@ -512,62 +628,27 @@ fun MessageBubble(
 }
 
 // ==================== Markdown 解析 ====================
-
+var isThink = false
 @Composable
 fun parseMarkdown(text: String): AnnotatedString {
+    var result = text;
     val builder = remember { AnnotatedString.Builder() }
-
-    val content = buildString {
-        var i = 0
-        while (i < text.length) {
-            when {
-                text.startsWith("**", i) -> {
-                    val end = text.indexOf("**", i + 2)
-                    if (end != -1) {
-                        append(text.substring(i + 2, end))
-                        i = end + 2
-                    } else {
-                        append(text[i])
-                        i++
-                    }
-                }
-
-                text.startsWith("*", i) -> {
-                    val end = text.indexOf("*", i + 1)
-                    if (end != -1) {
-                        append(text.substring(i + 1, end))
-                        i = end + 1
-                    } else {
-                        append(text[i])
-                        i++
-                    }
-                }
-
-                text.startsWith("```", i) -> {
-                    val end = text.indexOf("```", i + 3)
-                    if (end != -1) {
-                        append(text.substring(i + 3, end).trimIndent())
-                        i = end + 3
-                    } else {
-                        append(text[i])
-                        i++
-                    }
-                }
-
-                text.startsWith("- ", i) -> {
-                    append("• ")
-                    i += 2
-                }
-
-                else -> {
-                    append(text[i])
-                    i++
-                }
-            }
-        }
+    if (text.contains("<think>")) {
+        isThink = true;
+        result = text.replace("<think>", "");
     }
-    builder.append(content)
-    return builder.toAnnotatedString()
+    if (text.contains("</think>")) {
+        isThink = false;
+        result = text.replace("</think>", "");
+    }
+    if (isThink) {
+        result = result.replace("\r\n", "\r\n > ");
+        result = result.replace("\n", "\n > ")
+
+    }
+    println(text + " >>>>>> " + result)
+    builder.append(result)
+    return builder.toAnnotatedString();
 }
 
 // ==================== 空状态 ====================
@@ -631,7 +712,7 @@ fun EmptyState(
 // ==================== 加载指示器 ====================
 
 @Composable
-fun LoadingIndicator(modifier: Modifier = Modifier) {
+fun LoadingIndicator(modifier: Modifier = Modifier, onStop: (() -> Unit)? = null) {
     Surface(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
         tonalElevation = 4.dp,
@@ -639,17 +720,38 @@ fun LoadingIndicator(modifier: Modifier = Modifier) {
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = "AI 正在思考...", style = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp
                 )
-            )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "AI 正在思考...", style = TextStyle(
+                        color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp
+                    )
+                )
+            }
+
+            if (onStop != null) {
+                Spacer(modifier = Modifier.width(16.dp))
+                FilledTonalButton(
+                    onClick = onStop,
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text(
+                        text = "停止",
+                        style = TextStyle(
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+            }
         }
     }
 }

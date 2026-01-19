@@ -74,7 +74,7 @@ public class SinksUtil {
 
     public static void processStream(Flux<NodeOutput> outputFlux, Sinks.Many<ServerSentEvent<AgentOutput<Object>>> sink) {
         outputFlux.doOnNext(output -> {
-//            logger.info("output = {}", output);
+            logger.info("output = {}", output);
             sink.tryEmitNext(ServerSentEvent.builder(buildContent(output)).build());
         }).doOnComplete(() -> {
             // 正常完成

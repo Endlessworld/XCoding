@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.xr21.ai.agent.entity.ConversationMessage;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,12 +29,12 @@ import java.util.stream.Collectors;
  * 负责管理对话会话的自动保存和加载
  * 使用JSON格式存储，区分不同消息类型
  */
-@Slf4j
 public class ConversationSessionManager {
 
     private static final DateTimeFormatter FILE_NAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(ConversationSessionManager.class);
 
     private final ObjectMapper objectMapper;
 
@@ -50,7 +50,7 @@ public class ConversationSessionManager {
 
     private final boolean autoSave = true;
 
-    private Path savePath ;
+    private Path savePath;
 
     public ConversationSessionManager() {
         // 获取用户目录并设置保存路径为 .agi_working/conversations
@@ -394,11 +394,11 @@ public class ConversationSessionManager {
                     info.setSessionId(session.getSessionId());
                     info.setFilePath(filePath.toString());
                     info.setMessageCount(session.getMessageCount());
-                    info.setCreatedAt(session.getCreatedAt() != null ? 
-                        session.getCreatedAt().format(TIME_FORMATTER) : "未知");
-                    info.setLastUpdated(session.getLastUpdated() != null ? 
-                        session.getLastUpdated().format(TIME_FORMATTER) : "未知");
-                    
+                    info.setCreatedAt(session.getCreatedAt() != null ?
+                            session.getCreatedAt().format(TIME_FORMATTER) : "未知");
+                    info.setLastUpdated(session.getLastUpdated() != null ?
+                            session.getLastUpdated().format(TIME_FORMATTER) : "未知");
+
                     // 提取会话简要描述（第一条用户消息）
                     if (session.getMessages() != null && !session.getMessages().isEmpty()) {
                         String firstUserMessage = session.getMessages().stream()
@@ -406,14 +406,14 @@ public class ConversationSessionManager {
                                 .findFirst()
                                 .map(ConversationMessage::getContent)
                                 .orElse("无用户消息");
-                        
+
                         // 截取前50个字符
-                        info.setBriefDescription(firstUserMessage.length() > 50 ? 
-                            firstUserMessage.substring(0, 50) + "..." : firstUserMessage);
+                        info.setBriefDescription(firstUserMessage.length() > 50 ?
+                                firstUserMessage.substring(0, 50) + "..." : firstUserMessage);
                     } else {
                         info.setBriefDescription("空会话");
                     }
-                    
+
                     sessionInfoList.add(info);
                 } catch (IOException e) {
                     log.warn("读取会话文件信息失败: {}", filePath);
@@ -448,7 +448,7 @@ public class ConversationSessionManager {
             // 加载第一个匹配的文件
             Path filePath = matchingFiles.get(0);
             ConversationSession session = objectMapper.readValue(filePath.toFile(), ConversationSession.class);
-            
+
             if (session.getSessionId() != null && session.getMessages() != null) {
                 sessionMessages.put(session.getSessionId(), session.getMessages());
                 int maxRound = session.getMessages().stream()

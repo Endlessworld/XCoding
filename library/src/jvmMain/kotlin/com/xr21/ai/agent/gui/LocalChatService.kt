@@ -1,18 +1,19 @@
 package com.xr21.ai.agent.gui
 
+import com.alibaba.cloud.ai.graph.agent.Agent
 import com.xr21.ai.agent.LocalAgent
-import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.session.ConversationSessionManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withContext
-import org.springframework.lang.NonNull
-import reactor.core.publisher.Flux
 import java.time.LocalDateTime
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * 基于 LocalAgent 的聊天服务
@@ -27,45 +28,64 @@ class LocalChatService {
         sessionManager = ConversationSessionManager()
         sessionManager.init()
         localAgent = LocalAgent()
+        localAgent.initializeChatModel()
     }
 
     /**
      * 发送消息并接收响应
      */
-    fun sendMessage(userInput: String): Flow<ChatResponse> = flow {
-        emit(ChatResponse(type = ResponseType.THINKING, content = "正在思考..."))
+    fun sendMessage(userInput: String, threadId: String? = null): Flow<ChatResponse> = flow {
+        val newSessionCreated = threadId == null
+        val currentThreadId = threadId ?: sessionManager.getOrCreateSession("gui-${System.nanoTime()}")
+
+        // 第一个响应包含新会话ID（如果创建了新会话）
+        emit(ChatResponse(
+            type = ResponseType.THINKING,
+            content = "正在思考...",
+            sessionId = if (newSessionCreated) currentThreadId else null
+        ))
+
+        // 处理对话的变量移到try外部，以便在catch中访问
+        val responseBuilder = StringBuilder()
+        val messageId = UUID.randomUUID().toString()
 
         try {
-            // 获取或创建会话
-            val threadId = sessionManager.getOrCreateSession("gui-${System.nanoTime()}")
-
             // 记录用户消息
-            sessionManager.addUserMessage(threadId, userInput)
+            sessionManager.addUserMessage(currentThreadId, userInput)
 
             // 构建 Agent
-            val agent = localAgent.buildSupervisorAgent()
+            val agent = localAgent.buildAgent()
 
-            // 处理对话
-            val responseBuilder = StringBuilder()
             val interruptionMetadata = AtomicReference<Any?>()
             val stateUpdate = HashMap<String, Any>()
 
             // 调用 LocalAgent 处理
-            processWithAgent(agent, userInput, threadId, interruptionMetadata, stateUpdate)
+            processWithAgent(agent, userInput, currentThreadId, interruptionMetadata, stateUpdate)
                 .collect { chunk ->
+                    // 检查是否被取消 - 确保在处理每个chunk前都检查
                     responseBuilder.append(chunk)
                     emit(ChatResponse(
-                        type = ResponseType.ASSISTANT,
+                        type = ResponseType.STREAMING,
                         content = chunk,
-                        messageId = UUID.randomUUID().toString()
+                        messageId = messageId
                     ))
                 }
 
-            // 保存助手响应
+            // 只有在未取消且没有流式响应的情况下才发送 ASSISTANT 响应
+            // 注意：流式响应已经在 UI 中显示内容，这里不需要额外的 ASSISTANT 响应
             if (responseBuilder.isNotEmpty()) {
-                sessionManager.addAssistantMessage(threadId, responseBuilder.toString())
+                sessionManager.addAssistantMessage(currentThreadId, responseBuilder.toString())
             }
 
+        } catch (e: CancellationException) {
+            // 处理取消异常 - 发送取消响应以完成UI的collect循环
+            if (responseBuilder.isNotEmpty()) {
+                emit(ChatResponse(
+                    type = ResponseType.ASSISTANT,
+                    content = responseBuilder.toString(),
+                    messageId = messageId
+                ))
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             emit(ChatResponse(
@@ -77,76 +97,56 @@ class LocalChatService {
     }.flowOn(Dispatchers.IO)
 
     /**
-     * 处理对话（简化版本，无流式输出时使用）
+     * 处理对话 - 统一使用 LocalAgent 处理
      */
-    private suspend fun processWithAgent(
+
+    private fun processWithAgent(
         agent: Any,
         input: String,
         threadId: String,
         interruptionMetadata: AtomicReference<Any?>,
         stateUpdate: HashMap<String, Any>
-    ): Flow<String> = flow {
-        try {
-            // 简化处理：直接返回响应
-            val response = getAIResponse(input)
-            emit(response)
-        } catch (e: Exception) {
-            emit("处理时出错: ${e.message}")
-        }
-    }.flowOn(Dispatchers.IO)
+    ): Flow<String> = callbackFlow {
 
-    /**
-     * AI 响应生成（降级方案）
-     */
-    private fun getAIResponse(input: String): String {
-        val lowerInput = input.lowercase()
+       var  flux = localAgent.toFlux(
+            agent as Agent, input, threadId, null, stateUpdate
+        );
+        var subscriptionRef: Any? = null
+        val subscription = flux
+            .mapNotNull { output -> output.data()?.getChunk() } // 使用 mapNotNull 替代 filter
+            .subscribe(
+                { chunk ->
+                    // 发送数据到 Flow
+                    chunk?.let {
+                        val result = trySend(it)
+                        result.onFailure { error ->
+                            // 发送失败时关闭 Flow
+                            close(error)
+                        }
+                    }
+                },
+                { error ->
+                    // 发生错误时关闭 Flow
+                    close(error)
+                },
+                {
+                    // 完成时关闭 Flow
+                    close()
+                }
+            )
+        subscriptionRef = subscription
 
-        return when {
-            lowerInput.contains("你好") || lowerInput.contains("hello") || lowerInput.contains("hi") -> """
-                你好！我是 AI Agents，一个智能助手。
-
-                我可以帮助你：
-                • 回答问题和解释概念
-                • 编写和调试代码
-                • 分析和解决问题
-                • 提供建议和信息查询
-
-                请告诉我你需要什么帮助！
-            """.trimIndent()
-
-            lowerInput.contains("代码") || lowerInput.contains("code") -> """
-                好的，我理解你想讨论编程相关的问题。
-
-                为了更好地帮助你，请告诉我：
-                1. 你使用的编程语言是什么？
-                2. 你想要实现什么功能？
-                3. 是否有特定的代码问题需要解决？
-
-                你可以粘贴代码片段，我会帮你分析和优化。
-            """.trimIndent()
-
-            lowerInput.contains("帮助") || lowerInput.contains("help") -> """
-                这是 AI Agents 的主要功能：
-
-                **核心能力**
-                • 智能对话 - 自然语言交互
-                • 代码分析 - 理解、编写、调试代码
-                • 工具调用 - 执行各种任务
-                • 会话管理 - 保存和恢复对话历史
-
-                有什么我可以帮你的吗？
-            """.trimIndent()
-
-            else -> """
-                收到！我理解你的问题是：
-
-                > ${input.take(100)}${if (input.length > 100) "..." else ""}
-
-                请稍等，让我思考一下...
-
-                作为一个 AI 助手，我会尽力帮助你解决问题。
-                你能否提供更多细节？
-            """.trimIndent()
+        // 当 Flow 被取消时，取消 Flux 的订阅
+        awaitClose {
+            try {
+                subscriptionRef?.let { sub ->
+                    // 尝试调用 dispose 方法
+                    val disposeMethod = sub.javaClass.getMethod("dispose")
+                    disposeMethod.invoke(sub)
+                }
+            } catch (e: Exception) {
+                // 忽略释放异常
+            }
         }
     }
 
@@ -250,7 +250,8 @@ data class KotlinSessionInfo(
 data class ChatResponse(
     val type: ResponseType,
     val content: String,
-    val messageId: String = UUID.randomUUID().toString()
+    val messageId: String = UUID.randomUUID().toString(),
+    val sessionId: String? = null  // 新创建的会话ID
 )
 
 /**
@@ -258,7 +259,8 @@ data class ChatResponse(
  */
 enum class ResponseType {
     THINKING,
-    ASSISTANT,
+    STREAMING,  // 流式响应（追加到当前消息）
+    ASSISTANT,  // 完整响应（独立消息）
     ERROR
 }
 

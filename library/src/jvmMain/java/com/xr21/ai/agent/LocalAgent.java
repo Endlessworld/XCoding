@@ -5,7 +5,6 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
 import com.alibaba.cloud.ai.graph.agent.Agent;
-import com.alibaba.cloud.ai.graph.agent.AgentTool;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.file.LocalFilesystemBackend;
 import com.alibaba.cloud.ai.graph.agent.extension.interceptor.LargeResultEvictionInterceptor;
@@ -40,7 +39,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.lang.NonNull;
-import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
@@ -56,15 +54,43 @@ public class LocalAgent {
     protected static final List<ChatModel> fallbackModels = new ArrayList<>();
     public static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents";
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(LocalAgent.class);
-    public ChatModel chatModel = AiModels.MINIMAX_M2_1.createChatModel();
+    private ChatModel chatModel;
     protected ConversationSessionManager sessionManager;
 
     public static void main(String[] args) {
         LocalAgent localAgent = new LocalAgent();
-        localAgent.chatModel = AiModels.MINIMAX_M2_1.createChatModel();
-        var agent = localAgent.buildSupervisorAgent();
+        localAgent.initializeChatModel();
+        var agent = localAgent.buildAgent();
         localAgent.startInteractiveSession(agent);
     }
+
+    /**
+     * 初始化聊天模型，延迟加载以避免启动时依赖环境变量
+     */
+    public void initializeChatModel() {
+        try {
+            this.chatModel = AiModels.MINIMAX_M2_1.createChatModel();
+            log.info("ChatModel initialized successfully");
+        } catch (Exception e) {
+            log.error("Failed to initialize ChatModel: {}", e.getMessage());
+            // 创建一个简单的回退模型，不依赖外部API
+            this.chatModel = createFallbackChatModel();
+        }
+    }
+
+    /**
+     * 创建回退聊天模型
+     */
+    private ChatModel createFallbackChatModel() {
+        try {
+            return AiModels.MINIMAX_M2_1.createChatModel();
+        } catch (Exception e) {
+            log.error("Failed to create fallback ChatModel: {}", e.getMessage());
+            throw new RuntimeException(e);
+
+        }
+    }
+
 
     private static ArrayList<ToolCallback> getTools() {
         List<ToolCallback> mcpTools = getMcpTools();
@@ -279,7 +305,7 @@ public class LocalAgent {
             case "feedback":
                 // 发送反馈给模型
                 if (!arg.isEmpty()) {
-                    processWithGraphV2(agent, "用户反馈: " + arg, threadId, null, new HashMap<>()).blockLast();
+                    toFlux(agent, "用户反馈: " + arg, threadId, null, new HashMap<>()).blockLast();
                     history.add("用户反馈: " + arg);
                     System.out.println("\n[系统提示] 反馈已发送\n");
                 } else {
@@ -293,7 +319,7 @@ public class LocalAgent {
         return true;
     }
 
-    public Agent buildSupervisorAgent() {
+    public Agent buildAgent() {
         var tools = getTools();
         List<Interceptor> interceptors = getInterceptors();
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
@@ -324,35 +350,35 @@ public class LocalAgent {
                 .interceptors(interceptors)
                 .outputKey("writer_output")
                 .build();
-        ReactAgent checkAgent = ReactAgent.builder()
-                .name("check_agent")
-                .model(chatModel)
-                .saver(new MemorySaver())
-                .description("任务检查智能体，负责检查当前用户任务是否已经完成")
-                .instruction("""
-                        你是任务检查智能体，负责检查当前用户任务是否已经完成。
-                        判断标准不用过于严谨，80%以上的完成度即可视为完成。
-                        完成任务后输出：FINISH
-                        未完成时输出：NOT_DONE
-                        """)
-                .outputKey("check_agent")
-                .build();
-        ReactAgent fallbackAgent = ReactAgent.builder()
-                .name("fallback_agent")
-                .model(chatModel)
-                .saver(new MemorySaver())
-                .description("后备智能体，负责处理其他Agent无法处理的输入或简单的问候")
-                .instruction("你是AI小助手可以帮助用户解答问题")
-                .outputKey("fallback_agent")
-                .build();
-        var supervisor = ReactAgent.builder()
-                .name("content_supervisor")
-                .description("你是一个超级智能体，可以调用子智能体完成用户任务")
-                .systemPrompt(getSystemPrompt())
-                .saver(new MemorySaver())
-                .model(chatModel)
-                .tools(List.of(AgentTool.create(writerAgent), AgentTool.create(checkAgent), AgentTool.create(fallbackAgent)))
-                .build();
+//        ReactAgent checkAgent = ReactAgent.builder()
+//                .name("check_agent")
+//                .model(chatModel)
+//                .saver(new MemorySaver())
+//                .description("任务检查智能体，负责检查当前用户任务是否已经完成")
+//                .instruction("""
+//                        你是任务检查智能体，负责检查当前用户任务是否已经完成。
+//                        判断标准不用过于严谨，80%以上的完成度即可视为完成。
+//                        完成任务后输出：FINISH
+//                        未完成时输出：NOT_DONE
+//                        """)
+//                .outputKey("check_agent")
+//                .build();
+//        ReactAgent fallbackAgent = ReactAgent.builder()
+//                .name("fallback_agent")
+//                .model(chatModel)
+//                .saver(new MemorySaver())
+//                .description("后备智能体，负责处理其他Agent无法处理的输入或简单的问候")
+//                .instruction("你是AI小助手可以帮助用户解答问题")
+//                .outputKey("fallback_agent")
+//                .build();
+//        ReactAgent supervisor = ReactAgent.builder()
+//                .name("content_supervisor")
+//                .description("你是一个超级智能体，可以调用子智能体完成用户任务")
+//                .systemPrompt(getSystemPrompt())
+//                .saver(new MemorySaver())
+//                .model(chatModel)
+//                .tools(List.of(AgentTool.create(writerAgent), AgentTool.create(checkAgent), AgentTool.create(fallbackAgent)))
+//                .build();
         return writerAgent;
     }
 
@@ -393,7 +419,7 @@ public class LocalAgent {
                 """;
     }
 
-    public Flux<ServerSentEvent<AgentOutput<Object>>> processWithGraphV2(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
+    public Flux<ServerSentEvent<AgentOutput<Object>>> toFlux(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
         var builder = RunnableConfig.builder().threadId(threadId);
         if (feedbackMetadata != null) {
             builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, feedbackMetadata);
@@ -569,7 +595,7 @@ public class LocalAgent {
                 System.out.println("\n助手: ");
                 assistantResponseBuilder.setLength(0); // 清空助手响应构建器
                 String finalSessionId = sessionId;
-                processWithGraphV2(agent, userInput, sessionId, interruptionMetadata.get(), stateUpdate).doOnNext(output -> {
+                toFlux(agent, userInput, sessionId, interruptionMetadata.get(), stateUpdate).doOnNext(output -> {
                     if (output.data().getChunk() != null) {
                         String chunk = output.data().getChunk();
                         System.out.print(chunk);
