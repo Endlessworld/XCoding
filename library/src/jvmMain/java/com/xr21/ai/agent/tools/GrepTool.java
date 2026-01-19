@@ -48,8 +48,7 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
                                     String var10000;
                                     switch (request.outputMode) {
                                         case "files_with_matches" -> var10000 = path.toString();
-                                        case "content" ->
-                                                var10000 = path + ":" + (i + 1) + ": " + lines.get(i);
+                                        case "content" -> var10000 = path + ":" + (i + 1) + ": " + lines.get(i);
                                         case "count" -> var10000 = path + ": matched";
                                         default -> var10000 = path.toString();
                                     }

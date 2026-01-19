@@ -2,10 +2,6 @@ package com.xr21.ai.agent.session;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.xr21.ai.agent.entity.ConversationMessage;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,76 +11,189 @@ import java.util.Map;
  * 对话会话记录
  * 包含会话元数据和所有消息
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class ConversationSession {
 
-    /**
-     * 会话ID
-     */
     @JsonProperty("session_id")
-    private String sessionId;
+    public String sessionId;
 
-    /**
-     * 会话创建时间
-     */
     @JsonProperty("created_at")
-    private LocalDateTime createdAt;
+    public LocalDateTime createdAt;
 
-    /**
-     * 最后更新时间
-     */
     @JsonProperty("last_updated")
-    private LocalDateTime lastUpdated;
+    public LocalDateTime lastUpdated;
 
-    /**
-     * 消息总数
-     */
     @JsonProperty("message_count")
-    private int messageCount;
+    public int messageCount;
 
-    /**
-     * 消息列表
-     */
     @JsonProperty("messages")
-    private List<ConversationMessage> messages;
+    public List<ConversationMessage> messages;
 
-    /**
-     * 按类型统计的消息数量
-     */
     @JsonProperty("type_statistics")
-    private Map<ConversationMessage.MessageType, Long> typeStatistics;
+    public Map<ConversationMessage.MessageType, Long> typeStatistics;
 
-    /**
-     * 会话标签
-     */
     @JsonProperty("tags")
-    private List<String> tags;
+    public List<String> tags;
 
-    /**
-     * 会话描述
-     */
     @JsonProperty("description")
-    private String description;
+    public String description;
 
-    /**
-     * 会话版本
-     */
     @JsonProperty("version")
-    private String version;
+    public String version;
 
-    /**
-     * 元数据
-     */
     @JsonProperty("metadata")
-    private Map<String, Object> metadata;
+    public Map<String, Object> metadata;
+
+    public ConversationSession() {
+    }
 
     public ConversationSession(String sessionId) {
         this.sessionId = sessionId;
         this.createdAt = LocalDateTime.now();
         this.lastUpdated = LocalDateTime.now();
         this.version = "1.0";
+    }
+
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getLastUpdated() {
+        return lastUpdated;
+    }
+
+    public void setLastUpdated(LocalDateTime lastUpdated) {
+        this.lastUpdated = lastUpdated;
+    }
+
+    public int getMessageCount() {
+        return messageCount;
+    }
+
+    public void setMessageCount(int messageCount) {
+        this.messageCount = messageCount;
+    }
+
+    public List<ConversationMessage> getMessages() {
+        return messages;
+    }
+
+    public void setMessages(List<ConversationMessage> messages) {
+        this.messages = messages;
+    }
+
+    public Map<ConversationMessage.MessageType, Long> getTypeStatistics() {
+        return typeStatistics;
+    }
+
+    public void setTypeStatistics(Map<ConversationMessage.MessageType, Long> typeStatistics) {
+        this.typeStatistics = typeStatistics;
+    }
+
+    public List<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(List<String> tags) {
+        this.tags = tags;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public Map<String, Object> getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(Map<String, Object> metadata) {
+        this.metadata = metadata;
+    }
+
+    // Builder pattern
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+        private final ConversationSession session = new ConversationSession();
+
+        public Builder sessionId(String sessionId) {
+            session.sessionId = sessionId;
+            return this;
+        }
+
+        public Builder createdAt(LocalDateTime createdAt) {
+            session.createdAt = createdAt;
+            return this;
+        }
+
+        public Builder lastUpdated(LocalDateTime lastUpdated) {
+            session.lastUpdated = lastUpdated;
+            return this;
+        }
+
+        public Builder messageCount(int messageCount) {
+            session.messageCount = messageCount;
+            return this;
+        }
+
+        public Builder messages(List<ConversationMessage> messages) {
+            session.messages = messages;
+            return this;
+        }
+
+        public Builder typeStatistics(Map<ConversationMessage.MessageType, Long> typeStatistics) {
+            session.typeStatistics = typeStatistics;
+            return this;
+        }
+
+        public Builder tags(List<String> tags) {
+            session.tags = tags;
+            return this;
+        }
+
+        public Builder description(String description) {
+            session.description = description;
+            return this;
+        }
+
+        public Builder version(String version) {
+            session.version = version;
+            return this;
+        }
+
+        public Builder metadata(Map<String, Object> metadata) {
+            session.metadata = metadata;
+            return this;
+        }
+
+        public ConversationSession build() {
+            return session;
+        }
     }
 }

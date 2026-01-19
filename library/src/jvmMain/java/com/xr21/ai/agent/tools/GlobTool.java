@@ -1,6 +1,5 @@
 package com.xr21.ai.agent.tools;
 
-import lombok.Data;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -41,9 +40,46 @@ public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, M
         }
     }
 
-    @Data
     public static class GlobPattern {
         @ToolParam(description = "The glob pattern to match files")
         private String pattern;
+
+        public GlobPattern() {
+        }
+
+        public String getPattern() {
+            return this.pattern;
+        }
+
+        public void setPattern(String pattern) {
+            this.pattern = pattern;
+        }
+
+        public boolean equals(final Object o) {
+            if (o == this) return true;
+            if (!(o instanceof GlobPattern)) return false;
+            final GlobPattern other = (GlobPattern) o;
+            if (!other.canEqual((Object) this)) return false;
+            final Object this$pattern = this.getPattern();
+            final Object other$pattern = other.getPattern();
+            if (this$pattern == null ? other$pattern != null : !this$pattern.equals(other$pattern)) return false;
+            return true;
+        }
+
+        protected boolean canEqual(final Object other) {
+            return other instanceof GlobPattern;
+        }
+
+        public int hashCode() {
+            final int PRIME = 59;
+            int result = 1;
+            final Object $pattern = this.getPattern();
+            result = result * PRIME + ($pattern == null ? 43 : $pattern.hashCode());
+            return result;
+        }
+
+        public String toString() {
+            return "GlobTool.GlobPattern(pattern=" + this.getPattern() + ")";
+        }
     }
 }

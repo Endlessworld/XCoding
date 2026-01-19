@@ -33,7 +33,7 @@ import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -51,12 +51,11 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * 本地智能体
  */
-@Slf4j
-@Component
 public class LocalAgent {
 
     protected static final List<ChatModel> fallbackModels = new ArrayList<>();
     public static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents";
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(LocalAgent.class);
     public ChatModel chatModel = AiModels.MINIMAX_M2_1.createChatModel();
     protected ConversationSessionManager sessionManager;
 
@@ -604,7 +603,8 @@ public class LocalAgent {
                                 System.err.print("\n[工具调用]:" + toolCall.name());
                                 try {
                                     String arguments = toolCall.arguments();
-                                    String displayArgs = (arguments != null && !arguments.trim().isEmpty()) ? arguments : "无参数";
+                                    String displayArgs = (arguments != null && !arguments.trim()
+                                            .isEmpty()) ? arguments : "无参数";
                                     System.err.print(" 参数: " + displayArgs + "\n");
                                     // 记录工具调用
                                     Map<String, Object> argumentsMap = new HashMap<>();

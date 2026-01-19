@@ -2,7 +2,6 @@ package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import lombok.Data;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -153,7 +152,6 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
         }
     }
 
-    @Data
     public static class ReadFileRequest {
         @JsonProperty("offset")
         @JsonPropertyDescription("Line offset to start reading from (default: 0)")
@@ -164,5 +162,73 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
         @JsonProperty(required = true, value = "file_paths")
         @JsonPropertyDescription("List of absolute paths of files or directory to read. only parent path:" + WORKSPACE_ROOT)
         private List<String> filePaths;
+
+        public ReadFileRequest() {
+        }
+
+        public Integer getOffset() {
+            return this.offset;
+        }
+
+        public Integer getLimit() {
+            return this.limit;
+        }
+
+        public List<String> getFilePaths() {
+            return this.filePaths;
+        }
+
+        @JsonProperty("offset")
+        public void setOffset(Integer offset) {
+            this.offset = offset;
+        }
+
+        @JsonProperty("limit")
+        public void setLimit(Integer limit) {
+            this.limit = limit;
+        }
+
+        @JsonProperty(required = true, value = "file_paths")
+        public void setFilePaths(List<String> filePaths) {
+            this.filePaths = filePaths;
+        }
+
+        public boolean equals(final Object o) {
+            if (o == this) return true;
+            if (!(o instanceof ReadFileRequest)) return false;
+            final ReadFileRequest other = (ReadFileRequest) o;
+            if (!other.canEqual((Object) this)) return false;
+            final Object this$offset = this.getOffset();
+            final Object other$offset = other.getOffset();
+            if (this$offset == null ? other$offset != null : !this$offset.equals(other$offset)) return false;
+            final Object this$limit = this.getLimit();
+            final Object other$limit = other.getLimit();
+            if (this$limit == null ? other$limit != null : !this$limit.equals(other$limit)) return false;
+            final Object this$filePaths = this.getFilePaths();
+            final Object other$filePaths = other.getFilePaths();
+            if (this$filePaths == null ? other$filePaths != null : !this$filePaths.equals(other$filePaths))
+                return false;
+            return true;
+        }
+
+        protected boolean canEqual(final Object other) {
+            return other instanceof ReadFileRequest;
+        }
+
+        public int hashCode() {
+            final int PRIME = 59;
+            int result = 1;
+            final Object $offset = this.getOffset();
+            result = result * PRIME + ($offset == null ? 43 : $offset.hashCode());
+            final Object $limit = this.getLimit();
+            result = result * PRIME + ($limit == null ? 43 : $limit.hashCode());
+            final Object $filePaths = this.getFilePaths();
+            result = result * PRIME + ($filePaths == null ? 43 : $filePaths.hashCode());
+            return result;
+        }
+
+        public String toString() {
+            return "ReadFileTool.ReadFileRequest(offset=" + this.getOffset() + ", limit=" + this.getLimit() + ", filePaths=" + this.getFilePaths() + ")";
+        }
     }
 }

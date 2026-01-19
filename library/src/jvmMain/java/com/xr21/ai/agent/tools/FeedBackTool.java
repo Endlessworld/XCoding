@@ -17,7 +17,6 @@ package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.Data;
 import lombok.SneakyThrows;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -96,7 +95,6 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
         return "操作完成";
     }
 
-    @Data
     public static class AskRequest {
         /**
          * 提示信息
@@ -121,5 +119,80 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
          */
         @JsonProperty("require_input")
         private boolean requireInput = false;
+
+        public AskRequest() {
+        }
+
+        public String getPrompt() {
+            return this.prompt;
+        }
+
+        public String getMessage() {
+            return this.message;
+        }
+
+        public boolean isRequireConfirmation() {
+            return this.requireConfirmation;
+        }
+
+        public boolean isRequireInput() {
+            return this.requireInput;
+        }
+
+        @JsonProperty("prompt")
+        public void setPrompt(String prompt) {
+            this.prompt = prompt;
+        }
+
+        @JsonProperty("message")
+        public void setMessage(String message) {
+            this.message = message;
+        }
+
+        @JsonProperty("require_confirmation")
+        public void setRequireConfirmation(boolean requireConfirmation) {
+            this.requireConfirmation = requireConfirmation;
+        }
+
+        @JsonProperty("require_input")
+        public void setRequireInput(boolean requireInput) {
+            this.requireInput = requireInput;
+        }
+
+        public boolean equals(final Object o) {
+            if (o == this) return true;
+            if (!(o instanceof AskRequest)) return false;
+            final AskRequest other = (AskRequest) o;
+            if (!other.canEqual((Object) this)) return false;
+            final Object this$prompt = this.getPrompt();
+            final Object other$prompt = other.getPrompt();
+            if (this$prompt == null ? other$prompt != null : !this$prompt.equals(other$prompt)) return false;
+            final Object this$message = this.getMessage();
+            final Object other$message = other.getMessage();
+            if (this$message == null ? other$message != null : !this$message.equals(other$message)) return false;
+            if (this.isRequireConfirmation() != other.isRequireConfirmation()) return false;
+            if (this.isRequireInput() != other.isRequireInput()) return false;
+            return true;
+        }
+
+        protected boolean canEqual(final Object other) {
+            return other instanceof AskRequest;
+        }
+
+        public int hashCode() {
+            final int PRIME = 59;
+            int result = 1;
+            final Object $prompt = this.getPrompt();
+            result = result * PRIME + ($prompt == null ? 43 : $prompt.hashCode());
+            final Object $message = this.getMessage();
+            result = result * PRIME + ($message == null ? 43 : $message.hashCode());
+            result = result * PRIME + (this.isRequireConfirmation() ? 79 : 97);
+            result = result * PRIME + (this.isRequireInput() ? 79 : 97);
+            return result;
+        }
+
+        public String toString() {
+            return "FeedBackTool.AskRequest(prompt=" + this.getPrompt() + ", message=" + this.getMessage() + ", requireConfirmation=" + this.isRequireConfirmation() + ", requireInput=" + this.isRequireInput() + ")";
+        }
     }
 }

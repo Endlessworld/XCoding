@@ -75,10 +75,14 @@ kotlin {
     }
 }
 
+kapt {
+    correctErrorTypes = true
+}
+
 tasks.register<JavaExec>("run") {
     group = "application"
     mainClass.set("com.xr21.ai.agent.gui.ChatApplicationKt")
-    classpath = configurations["jvmRuntimeClasspath"] +
+    classpath = configurations["runtimeClasspath"] +
         files("${layout.buildDirectory.get().asFile}/classes/kotlin/jvm/main") +
         files("${layout.buildDirectory.get().asFile}/classes/java/main")
     workingDir = projectDir

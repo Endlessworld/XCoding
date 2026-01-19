@@ -1,7 +1,7 @@
 package com.xr21.ai.agent.tui;
 
 import com.googlecode.lanterna.terminal.swing.SwingTerminalFontConfiguration;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 import java.awt.*;
 import java.awt.font.FontRenderContext;
@@ -11,10 +11,10 @@ import java.util.Set;
 /**
  * 字体工具类 - 处理字体查找和配置
  */
-@Slf4j
 public class FontUtils {
 
     private static final int DEFAULT_FONT_SIZE = 16;
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(FontUtils.class);
 
     private FontUtils() {
         // 工具类，禁止实例化

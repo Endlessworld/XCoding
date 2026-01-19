@@ -49,7 +49,7 @@ public class TextMeasureUtils {
         if (line == null || line.isEmpty()) {
             return 1;
         }
-        
+
         if (width <= 0) {
             return 1;
         }
@@ -57,13 +57,13 @@ public class TextMeasureUtils {
         int wrappedLines = 1;
         int currentLineLength = 0;
         StringBuilder currentWord = new StringBuilder();
-        
+
         for (int i = 0; i < line.length(); i++) {
             char c = line.charAt(i);
-            
+
             // 处理字符宽度
             int charWidth = getCharWidth(c);
-            
+
             // 处理空格和换行符
             if (c == ' ' || c == '\t') {
                 // 如果当前单词可以放入当前行
@@ -92,7 +92,7 @@ public class TextMeasureUtils {
             } else {
                 // 累积字符到当前单词
                 currentWord.append(c);
-                
+
                 // 检查当前单词是否超过行宽
                 if (currentLineLength + currentWord.length() > width) {
                     // 如果是单个字符就超过宽度，强制换行
@@ -105,12 +105,12 @@ public class TextMeasureUtils {
                         String wordToProcess = currentWord.toString();
                         currentWord.setLength(0);
                         currentWord.append(c); // 保留当前字符
-                        
+
                         // 处理剩余的单词部分
                         for (int j = 0; j < wordToProcess.length() - 1; j++) {
                             char prevChar = wordToProcess.charAt(j);
                             int prevCharWidth = getCharWidth(prevChar);
-                            
+
                             if (currentLineLength + prevCharWidth > width) {
                                 wrappedLines++;
                                 currentLineLength = prevCharWidth;
@@ -122,17 +122,17 @@ public class TextMeasureUtils {
                 }
             }
         }
-        
+
         // 处理最后一个单词
         if (!currentWord.isEmpty()) {
             if (currentLineLength + currentWord.length() > width) {
                 wrappedLines++;
             }
         }
-        
+
         return Math.max(1, wrappedLines);
     }
-    
+
     /**
      * 获取字符的显示宽度
      */
@@ -147,7 +147,9 @@ public class TextMeasureUtils {
         }
         // 处理一些特殊字符
         switch (c) {
-            case '…': case '—': case '–':
+            case '…':
+            case '—':
+            case '–':
                 return 2;
             default:
                 return 1;
@@ -161,28 +163,28 @@ public class TextMeasureUtils {
         if (text == null || text.isEmpty()) {
             return new TerminalSize(Math.max(width, 30), 3);
         }
-        
+
         // 确保最小宽度
         int optimizedWidth = Math.max(width, 30);
-        
+
         int calculatedLines = calculateTextLines(text, optimizedWidth);
-        
+
         // 根据文本内容动态调整最小高度
         int minHeight = calculateMinHeight(text);
         int height = Math.max(minHeight, calculatedLines);
-        
+
         // 限制最大高度，避免TextBox过高
         int maxHeight = Math.min(height, 20);
-        
+
         return new TerminalSize(optimizedWidth, maxHeight);
     }
-    
+
     /**
      * 根据文本内容计算最小高度
      */
     private static int calculateMinHeight(String text) {
         int textLength = text.length();
-        
+
         if (textLength > 1000) {
             return 8;
         } else if (textLength > 500) {

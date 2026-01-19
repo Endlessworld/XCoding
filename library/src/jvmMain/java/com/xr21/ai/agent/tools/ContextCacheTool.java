@@ -1,9 +1,7 @@
 package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -14,7 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.BiFunction;
 
-@Slf4j
 public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest, ToolContext, Map<String, Object>> {
 
     /**
@@ -34,13 +31,14 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
      * 使用双端队列记录访问顺序，支持LRU淘汰
      */
     private static final ConcurrentLinkedDeque<String> accessOrder = new ConcurrentLinkedDeque<>();
-    
+
     /**
      * 记录每个条目的创建时间，用于过期清理
      */
     private static final ConcurrentHashMap<String, Long> creationTime = new ConcurrentHashMap<>();
 
     public static final String DESCRIPTION = "指针数据读取器，上下文编辑器会将你超长的工具调用参数或工具调用执行结果转换成指针,指针地址格式：$ref+工具调用id，你可以在需要的时候 重新根据指针地址 重新获取具体内容";
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(ContextCacheTool.class);
 
     /**
      * 工厂方法创建ToolCallback
@@ -60,16 +58,16 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
             log.warn("尝试添加无效的引用: refId={}, content={}", refId, content);
             return;
         }
-        
+
         // 检查缓存容量
         if (argumentsRef.size() >= MAX_CACHE_SIZE) {
             evictOldEntries(argumentsRef, responsesRef, accessOrder, creationTime);
         }
-        
+
         argumentsRef.put(refId, content);
         creationTime.put(refId, System.currentTimeMillis());
         accessOrder.addLast(refId);
-        
+
         log.debug("添加参数引用 {}，当前缓存大小: {}", refId, argumentsRef.size());
     }
 
@@ -81,28 +79,28 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
             log.warn("尝试添加无效的引用: refId={}, content={}", refId, content);
             return;
         }
-        
+
         // 检查缓存容量
         if (responsesRef.size() >= MAX_CACHE_SIZE) {
             evictOldEntries(argumentsRef, responsesRef, accessOrder, creationTime);
         }
-        
+
         responsesRef.put(refId, content);
         creationTime.put(refId, System.currentTimeMillis());
         accessOrder.addLast(refId);
-        
+
         log.debug("添加响应引用 {}，当前缓存大小: {}", refId, responsesRef.size());
     }
 
     /**
      * 清理过期或最旧的条目（LRU策略）
      */
-    private static void evictOldEntries(ConcurrentHashMap<String, String> argsRef, 
-                                       ConcurrentHashMap<String, String> respRef,
-                                       ConcurrentLinkedDeque<String> order,
-                                       ConcurrentHashMap<String, Long> timeMap) {
+    private static void evictOldEntries(ConcurrentHashMap<String, String> argsRef,
+                                        ConcurrentHashMap<String, String> respRef,
+                                        ConcurrentLinkedDeque<String> order,
+                                        ConcurrentHashMap<String, Long> timeMap) {
         int targetSize = (int) (MAX_CACHE_SIZE * 0.8); // 保留80%容量
-        
+
         while (argsRef.size() + respRef.size() >= MAX_CACHE_SIZE && !order.isEmpty()) {
             String oldestRef = order.pollFirst();
             if (oldestRef != null) {
@@ -113,7 +111,7 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
                 log.debug("清理过期缓存: {}", oldestRef);
             }
         }
-        
+
         // 清理过期条目（超过过期时间）
         long currentTime = System.currentTimeMillis();
         Iterator<Map.Entry<String, Long>> iterator = timeMap.entrySet().iterator();
@@ -137,7 +135,7 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
         if (!StringUtils.hasText(refId)) {
             return;
         }
-        
+
         argumentsRef.remove(refId);
         responsesRef.remove(refId);
         creationTime.remove(refId);
@@ -178,7 +176,7 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
         }
 
         log.debug("ContextCacheTool收到请求: {}", request.getRefs());
-        
+
         Map<String, Object> result = new HashMap<>();
         Set<String> processedRefs = new HashSet<>();
 
@@ -187,7 +185,7 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
             if (!processedRefs.add(ref)) {
                 continue;
             }
-            
+
             if (!StringUtils.hasText(ref)) {
                 result.put("invalid_ref", "错误：无效的指针地址");
                 continue;
@@ -219,11 +217,49 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
     /**
      * 请求对象
      */
-    @Data
-    @AllArgsConstructor
     public static class RefRequest {
 
         @JsonProperty(required = true, value = "指针地址列表，指针格式：$ref+工具调用id，根据指针地址重新获取具体内容")
         private List<String> refs;
+
+        public RefRequest(List<String> refs) {
+            this.refs = refs;
+        }
+
+        public List<String> getRefs() {
+            return this.refs;
+        }
+
+        @JsonProperty(required = true, value = "指针地址列表，指针格式：$ref+工具调用id，根据指针地址重新获取具体内容")
+        public void setRefs(List<String> refs) {
+            this.refs = refs;
+        }
+
+        public boolean equals(final Object o) {
+            if (o == this) return true;
+            if (!(o instanceof RefRequest)) return false;
+            final RefRequest other = (RefRequest) o;
+            if (!other.canEqual((Object) this)) return false;
+            final Object this$refs = this.getRefs();
+            final Object other$refs = other.getRefs();
+            if (this$refs == null ? other$refs != null : !this$refs.equals(other$refs)) return false;
+            return true;
+        }
+
+        protected boolean canEqual(final Object other) {
+            return other instanceof RefRequest;
+        }
+
+        public int hashCode() {
+            final int PRIME = 59;
+            int result = 1;
+            final Object $refs = this.getRefs();
+            result = result * PRIME + ($refs == null ? 43 : $refs.hashCode());
+            return result;
+        }
+
+        public String toString() {
+            return "ContextCacheTool.RefRequest(refs=" + this.getRefs() + ")";
+        }
     }
 }

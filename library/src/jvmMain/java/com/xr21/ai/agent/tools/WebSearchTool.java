@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -20,10 +20,10 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
-@Slf4j
 public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, ToolContext, List<Map<String, Object>>> {
     public static final String DESCRIPTION = "从搜索引擎检索网络信息";
     private static final String BASE_URL = "https://api.bochaai.com/v1/web-search";
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(WebSearchTool.class);
 
     public static ToolCallback createWebSearchToolCallback() {
         return FunctionToolCallback.builder("webSearch", new WebSearchTool())

@@ -29,7 +29,7 @@ import com.xr21.ai.agent.session.ConversationSessionManager;
 import com.xr21.ai.agent.session.SessionInfo;
 import com.xr21.ai.agent.utils.Json;
 import io.modelcontextprotocol.json.McpJsonMapper;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.CollectionUtils;
@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfiguration.CursorStyle.VERTICAL_BAR;
+import static com.xr21.ai.agent.entity.ConversationMessage.MessageType.*;
 
 
 /**
@@ -49,9 +50,9 @@ import static com.googlecode.lanterna.terminal.swing.TerminalEmulatorDeviceConfi
  * 特性：透明背景、渐变边框、14号粗体字体、现代化UI设计
  * 优化：使用tui工具类（FontUtils, IconGenerator, ScrollHelper, TextMeasureUtils, UIComponentFactory, UIThemeConfig）
  */
-@Slf4j
 public class AITerminalUI {
 
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(AITerminalUI.class);
     // 使用tui工具类
     private final ScrollHelper scrollHelper = new ScrollHelper();
     private final UIComponentFactory componentFactory = new UIComponentFactory();
@@ -905,8 +906,7 @@ public class AITerminalUI {
                                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
 
                         // 提取第一条用户消息作为简要描述
-                        String firstUserMessage = messages.stream()
-                                .filter(m -> m.getType() == com.xr21.ai.agent.entity.ConversationMessage.MessageType.USER)
+                        String firstUserMessage = messages.stream().filter(m -> m.getType() == USER)
                                 .findFirst()
                                 .map(com.xr21.ai.agent.entity.ConversationMessage::getContent)
                                 .orElse("新会话");

@@ -2,7 +2,7 @@ package com.xr21.ai.agent.tui;
 
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.gui2.*;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.List;
@@ -12,9 +12,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 滚动辅助类 - 管理滚动条和自动滚动
  */
-@Slf4j
 public class ScrollHelper {
 
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(ScrollHelper.class);
     private final AtomicInteger scrollPosition = new AtomicInteger(0);
     private final AtomicBoolean autoScrollEnabled = new AtomicBoolean(true);
     private final AtomicInteger messageAreaLines = new AtomicInteger(0);
@@ -128,8 +128,8 @@ public class ScrollHelper {
      * 重新计算并更新所有消息组件的高度
      */
     public void recalculateAllMessageHeights(Panel contentPanel, Panel scrollPanel,
-                                              WindowBasedTextGUI textGUI,
-                                              List<TextBox> allResponseTextBoxes) {
+                                             WindowBasedTextGUI textGUI,
+                                             List<TextBox> allResponseTextBoxes) {
         try {
             int dynamicWidth = textGUI.getScreen().getTerminalSize().getColumns() * 75 / 100 - 10;
             dynamicWidth = Math.max(50, dynamicWidth);

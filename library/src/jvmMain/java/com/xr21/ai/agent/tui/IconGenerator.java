@@ -3,7 +3,7 @@ package com.xr21.ai.agent.tui;
 import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.swing.SwingTerminalFrame;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -11,8 +11,9 @@ import java.awt.image.BufferedImage;
 /**
  * 图标生成器 - 创建自定义窗口图标
  */
-@Slf4j
 public class IconGenerator {
+
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(IconGenerator.class);
 
     private IconGenerator() {
         // 工具类，禁止实例化

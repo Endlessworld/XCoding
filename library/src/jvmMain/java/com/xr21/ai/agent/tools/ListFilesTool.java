@@ -2,9 +2,6 @@ package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -123,9 +120,6 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
         }
     }
 
-    @Data
-    @AllArgsConstructor
-    @NoArgsConstructor
     public static class ListFilesRequest {
         @JsonProperty(required = true, value = "directory")
         @JsonPropertyDescription("目录路径. only parent directory:" + WORKSPACE_ROOT)
@@ -133,5 +127,64 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
 
         @JsonProperty(value = "maxDepth")
         private Integer maxDepth = 3; // 默认遍历3层目录
+
+        public ListFilesRequest(String directory, Integer maxDepth) {
+            this.directory = directory;
+            this.maxDepth = maxDepth;
+        }
+
+        public ListFilesRequest() {
+        }
+
+        public String getDirectory() {
+            return this.directory;
+        }
+
+        public Integer getMaxDepth() {
+            return this.maxDepth;
+        }
+
+        @JsonProperty(required = true, value = "directory")
+        public void setDirectory(String directory) {
+            this.directory = directory;
+        }
+
+        @JsonProperty("maxDepth")
+        public void setMaxDepth(Integer maxDepth) {
+            this.maxDepth = maxDepth;
+        }
+
+        public boolean equals(final Object o) {
+            if (o == this) return true;
+            if (!(o instanceof ListFilesRequest)) return false;
+            final ListFilesRequest other = (ListFilesRequest) o;
+            if (!other.canEqual((Object) this)) return false;
+            final Object this$directory = this.getDirectory();
+            final Object other$directory = other.getDirectory();
+            if (this$directory == null ? other$directory != null : !this$directory.equals(other$directory))
+                return false;
+            final Object this$maxDepth = this.getMaxDepth();
+            final Object other$maxDepth = other.getMaxDepth();
+            if (this$maxDepth == null ? other$maxDepth != null : !this$maxDepth.equals(other$maxDepth)) return false;
+            return true;
+        }
+
+        protected boolean canEqual(final Object other) {
+            return other instanceof ListFilesRequest;
+        }
+
+        public int hashCode() {
+            final int PRIME = 59;
+            int result = 1;
+            final Object $directory = this.getDirectory();
+            result = result * PRIME + ($directory == null ? 43 : $directory.hashCode());
+            final Object $maxDepth = this.getMaxDepth();
+            result = result * PRIME + ($maxDepth == null ? 43 : $maxDepth.hashCode());
+            return result;
+        }
+
+        public String toString() {
+            return "ListFilesTool.ListFilesRequest(directory=" + this.getDirectory() + ", maxDepth=" + this.getMaxDepth() + ")";
+        }
     }
 }
