@@ -68,7 +68,7 @@ kotlin {
 
             // Utilities
             implementation(libs.hutool.all)
-            compileOnly(libs.lombok)
+            implementation(libs.lombok)
             implementation(libs.jna)
             implementation(libs.lanterna)
         }
