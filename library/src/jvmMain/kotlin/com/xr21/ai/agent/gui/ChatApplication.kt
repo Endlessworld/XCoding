@@ -129,6 +129,9 @@ fun ChatScreen(
     var lastSessionId by remember { mutableStateOf<String?>(null) }
     var streamingContent by remember { mutableStateOf("") }
     var streamingMessageId by remember { mutableStateOf<String?>(null) }
+    var isStreaming by remember { mutableStateOf(false) }
+    var typingEffectContent by remember { mutableStateOf("") }
+    var typingEffectVisible by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -138,6 +141,17 @@ fun ChatScreen(
         isLoading = false
         isSending = false
         isProcessingMessage = false
+        
+        // 清理流式状态
+        if (isStreaming && streamingMessageId != null) {
+            val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
+            if (currentIndex >= 0) {
+                messages.removeAt(currentIndex)
+            }
+        }
+        isStreaming = false
+        streamingContent = ""
+        streamingMessageId = null
     }
 
     LaunchedEffect(Unit) {
@@ -183,6 +197,7 @@ fun ChatScreen(
                     isLoading = true
                     streamingContent = ""
                     streamingMessageId = null
+                    isStreaming = false
 
                     chatService.sendMessage(userInput, sessionId).collect { response ->
                         response.sessionId?.let { newSessionId ->
@@ -193,22 +208,49 @@ fun ChatScreen(
                         when (response.type) {
                             ResponseType.THINKING -> {}
                             ResponseType.STREAMING -> {
+                                // 初始化流式消息
                                 if (streamingMessageId == null) {
                                     streamingMessageId = response.messageId
-                                }
-                                streamingContent += response.content
-                            }
-
-                            ResponseType.ASSISTANT -> {
-                                if (streamingContent.isNotEmpty() && streamingMessageId != null) {
-                                    val aiMsg = UiChatMessage(
-                                        id = streamingMessageId!!,
-                                        content = streamingContent,
+                                    isStreaming = true
+                                    // 创建一个空的流式消息占位符
+                                    val placeholderMsg = UiChatMessage(
+                                        id = response.messageId,
+                                        content = "",
                                         type = UiMessageType.ASSISTANT,
                                         timestamp = LocalDateTime.now()
                                     )
-                                    messages.add(aiMsg)
+                                    messages.add(placeholderMsg)
+                                }
+                                
+                                // 累积流式内容
+                                streamingContent += response.content
+                                
+                                // 实时更新流式消息内容
+                                val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
+                                if (currentIndex >= 0) {
+                                    // 创建新的消息对象以确保状态更新被检测到
+                                    val updatedMsg = messages[currentIndex].copy(content = streamingContent)
+                                    messages[currentIndex] = updatedMsg
+                                    
+                                    // 自动滚动到最新内容
+                                    try {
+                                        listState.animateScrollToItem(messages.size - 1)
+                                    } catch (_: Throwable) {
+                                        // 忽略滚动异常
+                                    }
+                                }
+                            }
+
+                            ResponseType.ASSISTANT -> {
+                                // 流式传输完成，最终确认消息
+                                if (isStreaming && streamingMessageId != null) {
+                                    val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
+                                    if (currentIndex >= 0) {
+                                        val finalMsg = messages[currentIndex].copy(content = streamingContent.ifEmpty { response.content })
+                                        messages[currentIndex] = finalMsg
+                                    }
                                 } else {
+                                    // 非流式响应，直接添加消息
                                     val aiMsg = UiChatMessage(
                                         id = response.messageId,
                                         content = response.content,
@@ -217,9 +259,22 @@ fun ChatScreen(
                                     )
                                     messages.add(aiMsg)
                                 }
+                                
+                                // 重置流式状态
+                                isStreaming = false
+                                streamingContent = ""
+                                streamingMessageId = null
                             }
 
                             ResponseType.ERROR -> {
+                                // 如果正在流式传输，先清理流式状态
+                                if (isStreaming && streamingMessageId != null) {
+                                    val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
+                                    if (currentIndex >= 0) {
+                                        messages.removeAt(currentIndex)
+                                    }
+                                }
+                                
                                 val errorMsg = UiChatMessage(
                                     id = response.messageId,
                                     content = response.content,
@@ -227,31 +282,57 @@ fun ChatScreen(
                                     timestamp = LocalDateTime.now()
                                 )
                                 messages.add(errorMsg)
+                                
+                                // 重置流式状态
+                                isStreaming = false
+                                streamingContent = ""
+                                streamingMessageId = null
                             }
                         }
                     }
 
-                    if (streamingContent.isNotEmpty() && streamingMessageId != null) {
-                        val aiMsg = UiChatMessage(
-                            id = streamingMessageId!!,
-                            content = streamingContent,
-                            type = UiMessageType.ASSISTANT,
-                            timestamp = LocalDateTime.now()
-                        )
-                        messages.add(aiMsg)
-                        streamingContent = ""
-                        streamingMessageId = null
+                    // 确保流式传输完成后的最终状态
+                    if (isStreaming && streamingContent.isNotEmpty() && streamingMessageId != null) {
+                        val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
+                        if (currentIndex >= 0) {
+                            val finalMsg = messages[currentIndex].copy(content = streamingContent)
+                            messages[currentIndex] = finalMsg
+                        }
                     }
+                    
+                    // 重置所有流式状态
+                    isStreaming = false
+                    streamingContent = ""
+                    streamingMessageId = null
+                    
                 } catch (e: Exception) {
                     e.printStackTrace()
                     println("Error collecting response: ${e.message}")
+                    
+                    // 清理流式状态
+                    if (isStreaming && streamingMessageId != null) {
+                        val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
+                        if (currentIndex >= 0) {
+                            messages.removeAt(currentIndex)
+                        }
+                    }
+                    
+                    // 重置流式状态
+                    isStreaming = false
+                    streamingContent = ""
+                    streamingMessageId = null
+                    
                 } finally {
                     isLoading = false
                     isSending = false
                     isProcessingMessage = false
                     sessions = sessionManager.loadSessions()
                     if (messages.isNotEmpty()) {
-                        listState.animateScrollToItem(messages.size - 1)
+                        try {
+                            listState.animateScrollToItem(messages.size - 1)
+                        } catch (_: Throwable) {
+                            // 忽略滚动异常
+                        }
                     }
                 }
             }
@@ -328,7 +409,10 @@ fun ChatScreen(
                 ) {
                     items(messages, key = { msg -> msg.id }) { message ->
                         MessageBubble(
-                            message = message, onResend = { /* 重新发送 */ })
+                            message = message, 
+                            onResend = { /* 重新发送 */ },
+                            isStreaming = isStreaming && message.id == streamingMessageId
+                        )
                     }
                 }
 
