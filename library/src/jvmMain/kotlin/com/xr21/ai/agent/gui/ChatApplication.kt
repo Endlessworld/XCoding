@@ -3,6 +3,7 @@ package com.xr21.ai.agent.gui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -13,6 +14,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +38,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -127,17 +133,27 @@ fun ChatScreen(
 ) {
 
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
-    var messages by remember { mutableStateOf(listOf<UiChatMessage>()) }
+    var messages by remember { mutableStateOf(mutableStateListOf<UiChatMessage>()) }
     var isLoading by remember { mutableStateOf(false) }
     var isSending by remember { mutableStateOf(false) }  // 防止重复发送
     var sessions by remember { mutableStateOf(listOf<UiSessionInfo>()) }
     var currentJob by remember { mutableStateOf< kotlinx.coroutines.Job?>(null) }
     var isProcessingMessage by remember { mutableStateOf(false) }  // 跟踪是否正在处理消息
     var lastSessionId by remember { mutableStateOf<String?>(null) }  // 跟踪上一个sessionId，避免不必要的消息重新加载
+    // 临时变量：累积流式响应的内容
+    var streamingContent by remember { mutableStateOf("") }
+    var streamingMessageId by remember { mutableStateOf<String?>(null) }
 
     val listState = rememberLazyListState()
+    val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
+
+    // 启动时自动聚焦到输入框
+    LaunchedEffect(Unit) {
+        delay(100) // 等待 UI 渲染完成
+        focusRequester.requestFocus()
+    }
     val chatColors = getCurrentChatColors()
 
     // 取消当前请求
@@ -158,11 +174,12 @@ fun ChatScreen(
         if (sessionId != null) {
             // 只有当sessionId真正改变时才重新加载消息
             if (sessionId != lastSessionId) {
-                messages = sessionManager.loadMessages(sessionId)
+                messages.clear()
+                messages.addAll(sessionManager.loadMessages(sessionId))
                 lastSessionId = sessionId
             }
         } else {
-            messages = emptyList()
+            messages.clear()
             lastSessionId = null
         }
     }
@@ -228,38 +245,28 @@ fun ChatScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
                 ) {
-                    IconButton(
-                        onClick = { /* 附件 */ }, enabled = !isLoading
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = "添加附件",
-                            tint = if (isLoading) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
                     OutlinedTextField(
                         value = inputText,
-                        onValueChange = { inputText = it },
-                        modifier = Modifier.weight(1f).heightIn(min = 56.dp, max = 150.dp).onKeyEvent { event ->
+                        onValueChange = { newValue: TextFieldValue -> inputText = newValue },
+                        modifier = Modifier.weight(1f).heightIn(min = 56.dp, max = 150.dp).focusRequester(focusRequester).onKeyEvent { event ->
                             // Enter 发送消息（单独按 Enter 时发送，Ctrl+Enter 和 Shift+Enter 允许换行）
                             if (event.key == Key.Enter && !event.isCtrlPressed) {
                                 if (inputText.text.isNotBlank() && !isLoading && !isSending) {
+                                    // 先设置为 true，防止重复触发
+                                    isSending = true
+                                    isProcessingMessage = true
                                     // 使用 LocalChatService 发送消息
                                     val chatService = ChatService.getInstance()
                                     val userInput = inputText.text
 
                                     currentJob = scope.launch {
-                                        isSending = true
-                                        isProcessingMessage = true
-
                                         val userMsg = UiChatMessage(
                                             id = UUID.randomUUID().toString(),
                                             content = userInput,
                                             type = UiMessageType.USER,
                                             timestamp = LocalDateTime.now()
                                         )
-                                        messages = messages + userMsg
+                                        messages.add(userMsg)
                                         inputText = TextFieldValue("")
 
                                         // 立即滚动到用户消息
@@ -269,7 +276,13 @@ fun ChatScreen(
 
                                         // 调用 LocalChatService，传入 sessionId
                                         try {
+                                            // 重置流式响应状态
+                                            streamingContent = ""
+                                            streamingMessageId = null
+
                                             chatService.sendMessage(userInput, sessionId).collect { response ->
+                                                println(response)
+
                                                 // 如果创建了新会话，更新 sessionId 和 lastSessionId
                                                 response.sessionId?.let { newSessionId ->
                                                     onSessionIdUpdate(newSessionId)
@@ -282,42 +295,37 @@ fun ChatScreen(
                                                     }
 
                                                     ResponseType.STREAMING -> {
-                                                        // 查找是否已有该消息ID的消息
-                                                        val existingIndex =
-                                                            messages.indexOfFirst { it.id == response.messageId }
-                                                        if (existingIndex >= 0) {
-                                                            // 追加内容到现有消息
-                                                            val existingMsg = messages[existingIndex]
-                                                            val newContent = existingMsg.content + response.content
-                                                            messages = messages.toMutableList().apply {
-                                                                this[existingIndex] = existingMsg.copy(
-                                                                    content = newContent
-                                                                )
-                                                            }
+                                                        // 只累积内容到临时变量，不直接更新 messages
+                                                        if (streamingMessageId == null) {
+                                                            streamingMessageId = response.messageId
+                                                        }
+                                                        streamingContent += response.content
+                                                        println("  -> 累积内容: ${streamingContent.length} chars")
+                                                    }
+
+                                                    ResponseType.ASSISTANT -> {
+                                                        // 流式响应结束，将累积的内容添加到 messages
+                                                        if (streamingContent.isNotEmpty() && streamingMessageId != null) {
+                                                            val aiMsg = UiChatMessage(
+                                                                id = streamingMessageId!!,
+                                                                content = streamingContent,
+                                                                type = UiMessageType.ASSISTANT,
+                                                                timestamp = LocalDateTime.now()
+                                                            )
+                                                            messages.add(aiMsg)
                                                         } else {
-                                                            // 创建新消息
+                                                            // 没有累积内容，直接添加
                                                             val aiMsg = UiChatMessage(
                                                                 id = response.messageId,
                                                                 content = response.content,
                                                                 type = UiMessageType.ASSISTANT,
                                                                 timestamp = LocalDateTime.now()
                                                             )
-                                                            messages = messages + aiMsg
+                                                            messages.add(aiMsg)
                                                         }
-                                                        // 自动滚动到最新消息
-                                                        listState.animateScrollToItem(messages.size - 1)
-                                                    }
-
-                                                    ResponseType.ASSISTANT -> {
-                                                        val aiMsg = UiChatMessage(
-                                                            id = response.messageId,
-                                                            content = response.content,
-                                                            type = UiMessageType.ASSISTANT,
-                                                            timestamp = LocalDateTime.now()
-                                                        )
-                                                        messages = messages + aiMsg
-                                                        // 自动滚动到最新消息
-                                                        listState.animateScrollToItem(messages.size - 1)
+                                                        // 清空流式状态
+                                                        streamingContent = ""
+                                                        streamingMessageId = null
                                                     }
 
                                                     ResponseType.ERROR -> {
@@ -327,13 +335,23 @@ fun ChatScreen(
                                                             type = UiMessageType.ERROR,
                                                             timestamp = LocalDateTime.now()
                                                         )
-                                                        messages = messages + errorMsg
-                                                        // 自动滚动到最新消息
-                                                        listState.animateScrollToItem(messages.size - 1)
+                                                        messages.add(errorMsg)
                                                     }
 
                                                     else -> {}
                                                 }
+                                            }
+                                            // 确保流式内容被添加
+                                            if (streamingContent.isNotEmpty() && streamingMessageId != null) {
+                                                val aiMsg = UiChatMessage(
+                                                    id = streamingMessageId!!,
+                                                    content = streamingContent,
+                                                    type = UiMessageType.ASSISTANT,
+                                                    timestamp = LocalDateTime.now()
+                                                )
+                                                messages.add(aiMsg)
+                                                streamingContent = ""
+                                                streamingMessageId = null
                                             }
                                         } catch (e: Exception) {
                                             // 处理异常情况
@@ -344,6 +362,10 @@ fun ChatScreen(
                                             isSending = false
                                             isProcessingMessage = false
                                             sessions = sessionManager.loadSessions()
+                                            // 自动滚动到最新消息
+                                            if (messages.isNotEmpty()) {
+                                                listState.animateScrollToItem(messages.size - 1)
+                                            }
                                         }
                                     }
                                 }
@@ -375,20 +397,20 @@ fun ChatScreen(
                     FilledIconButton(
                         onClick = {
                             if (inputText.text.isNotBlank() && !isLoading && !isSending) {
+                                // 先设置为 true，防止重复触发
+                                isSending = true
+                                isProcessingMessage = true
                                 val chatService = ChatService.getInstance()
                                 val userInput = inputText.text
 
                                 currentJob = scope.launch {
-                                    isSending = true
-                                    isProcessingMessage = true
-
                                     val userMsg = UiChatMessage(
                                         id = UUID.randomUUID().toString(),
                                         content = userInput,
                                         type = UiMessageType.USER,
                                         timestamp = LocalDateTime.now()
                                     )
-                                    messages = messages + userMsg
+                                    messages.add(userMsg)
                                     inputText = TextFieldValue("")
 
                                     // 立即滚动到用户消息
@@ -398,6 +420,10 @@ fun ChatScreen(
 
                                     // 调用 LocalChatService，传入 sessionId
                                     try {
+                                        // 重置流式响应状态
+                                        streamingContent = ""
+                                        streamingMessageId = null
+
                                         chatService.sendMessage(userInput, sessionId).collect { response ->
                                             // 如果创建了新会话，更新 sessionId 和 lastSessionId
                                             response.sessionId?.let { newSessionId ->
@@ -410,42 +436,34 @@ fun ChatScreen(
                                                 }
 
                                                 ResponseType.STREAMING -> {
-                                                    // 打字机效果：逐个字符追加
-                                                    val existingIndex =
-                                                        messages.indexOfFirst { it.id == response.messageId }
-                                                    if (existingIndex >= 0) {
-                                                        // 追加内容到现有消息
-                                                        val existingMsg = messages[existingIndex]
-                                                        val newContent = existingMsg.content + response.content
-                                                        messages = messages.toMutableList().apply {
-                                                            this[existingIndex] = existingMsg.copy(
-                                                                content = newContent
-                                                            )
-                                                        }
+                                                    // 只累积内容到临时变量
+                                                    if (streamingMessageId == null) {
+                                                        streamingMessageId = response.messageId
+                                                    }
+                                                    streamingContent += response.content
+                                                }
+
+                                                ResponseType.ASSISTANT -> {
+                                                    // 流式响应结束，将累积的内容添加到 messages
+                                                    if (streamingContent.isNotEmpty() && streamingMessageId != null) {
+                                                        val aiMsg = UiChatMessage(
+                                                            id = streamingMessageId!!,
+                                                            content = streamingContent,
+                                                            type = UiMessageType.ASSISTANT,
+                                                            timestamp = LocalDateTime.now()
+                                                        )
+                                                        messages.add(aiMsg)
                                                     } else {
-                                                        // 创建新消息
                                                         val aiMsg = UiChatMessage(
                                                             id = response.messageId,
                                                             content = response.content,
                                                             type = UiMessageType.ASSISTANT,
                                                             timestamp = LocalDateTime.now()
                                                         )
-                                                        messages = messages + aiMsg
+                                                        messages.add(aiMsg)
                                                     }
-                                                    // 自动滚动到最新消息
-                                                    listState.animateScrollToItem(messages.size - 1)
-                                                }
-
-                                                ResponseType.ASSISTANT -> {
-                                                    val aiMsg = UiChatMessage(
-                                                        id = response.messageId,
-                                                        content = response.content,
-                                                        type = UiMessageType.ASSISTANT,
-                                                        timestamp = LocalDateTime.now()
-                                                    )
-                                                    messages = messages + aiMsg
-                                                    // 自动滚动到最新消息
-                                                    listState.animateScrollToItem(messages.size - 1)
+                                                    streamingContent = ""
+                                                    streamingMessageId = null
                                                 }
 
                                                 ResponseType.ERROR -> {
@@ -455,13 +473,23 @@ fun ChatScreen(
                                                         type = UiMessageType.ERROR,
                                                         timestamp = LocalDateTime.now()
                                                     )
-                                                    messages = messages + errorMsg
-                                                    // 自动滚动到最新消息
-                                                    listState.animateScrollToItem(messages.size - 1)
+                                                    messages.add(errorMsg)
                                                 }
 
                                                 else -> {}
                                             }
+                                        }
+                                        // 确保流式内容被添加
+                                        if (streamingContent.isNotEmpty() && streamingMessageId != null) {
+                                            val aiMsg = UiChatMessage(
+                                                id = streamingMessageId!!,
+                                                content = streamingContent,
+                                                type = UiMessageType.ASSISTANT,
+                                                timestamp = LocalDateTime.now()
+                                            )
+                                            messages.add(aiMsg)
+                                            streamingContent = ""
+                                            streamingMessageId = null
                                         }
                                     } catch (e: Exception) {
                                         // 处理异常情况
@@ -472,6 +500,10 @@ fun ChatScreen(
                                         isSending = false
                                         isProcessingMessage = false
                                         sessions = sessionManager.loadSessions()
+                                        // 自动滚动到最新消息
+                                        if (messages.isNotEmpty()) {
+                                            listState.animateScrollToItem(messages.size - 1)
+                                        }
                                     }
                                 }
                             }
@@ -512,7 +544,7 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(messages, key = { it.id }) { message ->
+                    items(messages, key = { msg -> msg.id }) { message ->
                         MessageBubble(
                             message = message, onResend = { /* 重新发送 */ })
                     }
