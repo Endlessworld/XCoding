@@ -48,7 +48,6 @@ kotlin {
             implementation(compose.desktop.currentOs)
             implementation(compose.material3)
             implementation("org.jetbrains.compose.material:material-icons-extended:1.6.10")
-
             // Spring Framework
             implementation(libs.spring.core)
             implementation(libs.spring.context)

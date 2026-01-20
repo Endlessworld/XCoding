@@ -92,9 +92,9 @@ public class ConversationSessionManager {
             log.info("对话会话保存目录: {}", savePath.toAbsolutePath());
 
             // 启动定期保存任务
-            if (autoSave) {
-                scheduler.scheduleAtFixedRate(this::saveAllSessions, saveInterval, saveInterval, TimeUnit.MILLISECONDS);
-            }
+//            if (autoSave) {
+//                scheduler.scheduleAtFixedRate(this::saveAllSessions, saveInterval, saveInterval, TimeUnit.MILLISECONDS);
+//            }
         } catch (IOException e) {
             log.error("初始化对话会话管理器失败: {}", e.getMessage());
         }
