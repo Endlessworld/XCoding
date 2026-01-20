@@ -189,7 +189,7 @@ fun ChatScreen(
                     messages.add(userMsg)
                     inputText = TextFieldValue("")
                     try {
-                        listState.animateScrollToItem(messages.size - 1)
+                        listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
                     } catch (_: Throwable) {
 
                     }
@@ -234,7 +234,7 @@ fun ChatScreen(
                                     
                                     // 自动滚动到最新内容
                                     try {
-                                        listState.animateScrollToItem(messages.size - 1)
+                                        listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
                                     } catch (_: Throwable) {
                                         // 忽略滚动异常
                                     }
@@ -329,7 +329,7 @@ fun ChatScreen(
                     sessions = sessionManager.loadSessions()
                     if (messages.isNotEmpty()) {
                         try {
-                            listState.animateScrollToItem(messages.size - 1)
+                            listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
                         } catch (_: Throwable) {
                             // 忽略滚动异常
                         }
@@ -409,7 +409,7 @@ fun ChatScreen(
                 ) {
                     items(messages, key = { msg -> msg.id }) { message ->
                         MessageBubble(
-                            message = message, 
+                            message = message,
                             onResend = { /* 重新发送 */ },
                             isStreaming = isStreaming && message.id == streamingMessageId
                         )
@@ -423,9 +423,10 @@ fun ChatScreen(
                 }
             }
 
-            LaunchedEffect(messages.size) {
+            LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
                 if (messages.isNotEmpty()) {
-                    listState.animateScrollToItem(messages.size - 1)
+                    // scrollOffset 设置为 Int.MAX_VALUE 确保滚动到底部
+                    listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
                 }
             }
         }
