@@ -8,16 +8,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -28,7 +25,6 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.xr21.ai.agent.gui.components.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.util.*
@@ -59,7 +55,8 @@ fun ChatApplication() {
         AppTheme(themeMode = currentTheme) {
             when (currentScreen) {
                 is Screen.Chat -> ChatScreen(
-                    sessionId = currentSessionId, sessionManager = sessionManager,
+                    sessionId = currentSessionId,
+                    sessionManager = sessionManager,
                     onNewSession = {
                         currentSessionId = sessionManager.createSession()
                     },
@@ -72,7 +69,8 @@ fun ChatApplication() {
                     onOpenSettings = {
                         currentScreen = Screen.Settings
                     },
-                    onSessionIdUpdate = updateSessionId)
+                    onSessionIdUpdate = updateSessionId
+                )
 
                 is Screen.SessionManager -> SessionManagerScreen(
                     sessionManager = sessionManager,
@@ -82,24 +80,20 @@ fun ChatApplication() {
                     },
                     onBack = {
                         currentScreen = Screen.Chat
-                    }, 
+                    },
                     onNewSession = {
                         currentSessionId = sessionManager.createSession()
                         currentScreen = Screen.Chat
-                    }
-                )
+                    })
 
                 is Screen.Settings -> SettingsScreen(
                     onBack = {
                         currentScreen = Screen.Chat
-                    }, 
-                    onThemeChange = { theme ->
+                    }, onThemeChange = { theme ->
                         currentTheme = theme
-                    }, 
-                    onClearHistory = {
+                    }, onClearHistory = {
                         clearAllSessions()
-                    }, 
-                    currentTheme = currentTheme
+                    }, currentTheme = currentTheme
                 )
             }
         }
@@ -117,11 +111,11 @@ sealed class Screen {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
-    sessionId: String?, 
+    sessionId: String?,
     sessionManager: SessionManager,
     onNewSession: () -> Unit,
-    onSessionSelected: (String) -> Unit, 
-    onOpenSessionManager: () -> Unit, 
+    onSessionSelected: (String) -> Unit,
+    onOpenSessionManager: () -> Unit,
     onOpenSettings: () -> Unit,
     onSessionIdUpdate: (String) -> Unit = {}
 ) {
@@ -171,19 +165,22 @@ fun ChatScreen(
             val userInput = inputText.text
 
             currentJob = scope.launch {
-                val userMsg = UiChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    content = userInput,
-                    type = UiMessageType.USER,
-                    timestamp = LocalDateTime.now()
-                )
-                messages.add(userMsg)
-                inputText = TextFieldValue("")
-                listState.animateScrollToItem(messages.size - 1)
-
-                isLoading = true
-
                 try {
+                    val userMsg = UiChatMessage(
+                        id = UUID.randomUUID().toString(),
+                        content = userInput,
+                        type = UiMessageType.USER,
+                        timestamp = LocalDateTime.now()
+                    )
+                    messages.add(userMsg)
+                    inputText = TextFieldValue("")
+                    try {
+                        listState.animateScrollToItem(messages.size - 1)
+                    } catch (_: Throwable) {
+
+                    }
+
+                    isLoading = true
                     streamingContent = ""
                     streamingMessageId = null
 
@@ -201,6 +198,7 @@ fun ChatScreen(
                                 }
                                 streamingContent += response.content
                             }
+
                             ResponseType.ASSISTANT -> {
                                 if (streamingContent.isNotEmpty() && streamingMessageId != null) {
                                     val aiMsg = UiChatMessage(
@@ -220,6 +218,7 @@ fun ChatScreen(
                                     messages.add(aiMsg)
                                 }
                             }
+
                             ResponseType.ERROR -> {
                                 val errorMsg = UiChatMessage(
                                     id = response.messageId,
@@ -231,7 +230,7 @@ fun ChatScreen(
                             }
                         }
                     }
-                    
+
                     if (streamingContent.isNotEmpty() && streamingMessageId != null) {
                         val aiMsg = UiChatMessage(
                             id = streamingMessageId!!,
@@ -244,6 +243,7 @@ fun ChatScreen(
                         streamingMessageId = null
                     }
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     println("Error collecting response: ${e.message}")
                 } finally {
                     isLoading = false
@@ -258,81 +258,66 @@ fun ChatScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+    Scaffold(topBar = {
+        TopAppBar(
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "AI Agents", style = TextStyle(
+                            fontWeight = FontWeight.Bold, fontSize = 20.sp
                         )
+                    )
+                    if (sessionId != null) {
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "AI Agents", 
-                            style = TextStyle(
-                                fontWeight = FontWeight.Bold, 
-                                fontSize = 20.sp
+                            text = "• $sessionId", style = TextStyle(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
                             )
                         )
-                        if (sessionId != null) {
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "• $sessionId", 
-                                style = TextStyle(
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, 
-                                    fontSize = 12.sp
-                                )
-                            )
-                        }
                     }
-                },
-                actions = {
-                    IconButton(onClick = onNewSession) {
-                        Icon(
-                            imageVector = Icons.Default.Add, 
-                            contentDescription = "新建会话"
-                        )
-                    }
-                    IconButton(onClick = onOpenSessionManager) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.List, 
-                            contentDescription = "会话管理"
-                        )
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            imageVector = Icons.Default.Settings, 
-                            contentDescription = "设置"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                }
+            }, actions = {
+                IconButton(onClick = onNewSession) {
+                    Icon(
+                        imageVector = Icons.Default.Add, contentDescription = "新建会话"
+                    )
+                }
+                IconButton(onClick = onOpenSessionManager) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "会话管理"
+                    )
+                }
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Default.Settings, contentDescription = "设置"
+                    )
+                }
+            }, colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface
             )
-        },
-        bottomBar = {
-            ChatInput(
-                inputText = inputText,
-                onInputChange = { inputText = it },
-                onSendMessage = handleSendMessage,
-                isLoading = isLoading,
-                isSending = isSending
-            )
-        }
-    ) { paddingValues ->
+        )
+    }, bottomBar = {
+        ChatInput(
+            inputText = inputText,
+            onInputChange = { inputText = it },
+            onSendMessage = handleSendMessage,
+            isLoading = isLoading,
+            isSending = isSending
+        )
+    }) { paddingValues ->
         Box(
-            modifier = Modifier.fillMaxSize()
-                .padding(paddingValues)
-                .background(MaterialTheme.colorScheme.background)
+            modifier = Modifier.fillMaxSize().padding(paddingValues).background(MaterialTheme.colorScheme.background)
         ) {
             if (messages.isEmpty()) {
                 EmptyState(
-                    onNewSession = onNewSession, 
-                    onOpenSessionManager = onOpenSessionManager
+                    onNewSession = onNewSession, onOpenSessionManager = onOpenSessionManager
                 )
             } else {
                 LazyColumn(
@@ -343,16 +328,13 @@ fun ChatScreen(
                 ) {
                     items(messages, key = { msg -> msg.id }) { message ->
                         MessageBubble(
-                            message = message, 
-                            onResend = { /* 重新发送 */ }
-                        )
+                            message = message, onResend = { /* 重新发送 */ })
                     }
                 }
 
                 if (isLoading) {
                     LoadingIndicator(
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        onStop = onCancelRequest
+                        modifier = Modifier.align(Alignment.BottomCenter), onStop = onCancelRequest
                     )
                 }
             }
@@ -371,10 +353,7 @@ fun ChatScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionManagerScreen(
-    sessionManager: SessionManager, 
-    onSessionSelected: (String) -> Unit, 
-    onBack: () -> Unit, 
-    onNewSession: () -> Unit
+    sessionManager: SessionManager, onSessionSelected: (String) -> Unit, onBack: () -> Unit, onNewSession: () -> Unit
 ) {
     var sessions by remember { mutableStateOf(listOf<UiSessionInfo>()) }
 
@@ -387,35 +366,27 @@ fun SessionManagerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "会话管理", 
-                        style = TextStyle(
-                            fontWeight = FontWeight.Bold, 
-                            fontSize = 20.sp
+                        text = "会话管理", style = TextStyle(
+                            fontWeight = FontWeight.Bold, fontSize = 20.sp
                         )
                     )
-                }, 
-                navigationIcon = {
+                }, navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack, 
-                            contentDescription = "返回"
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回"
                         )
                     }
-                }, 
-                actions = {
+                }, actions = {
                     IconButton(onClick = onNewSession) {
                         Icon(
-                            imageVector = Icons.Default.Add, 
-                            contentDescription = "新建会话"
+                            imageVector = Icons.Default.Add, contentDescription = "新建会话"
                         )
                     }
-                }, 
-                colors = TopAppBarDefaults.topAppBarColors(
+                }, colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
-        }
-    ) { paddingValues ->
+        }) { paddingValues ->
         SessionList(
             sessions = sessions,
             sessionManager = sessionManager,

@@ -77,8 +77,10 @@ fun ChatInput(
                             if (event.key == Key.Enter && !event.isCtrlPressed) {
                                 if (inputText.text.isNotBlank() && !isLoading && !isSending) {
                                     onSendMessage()
+                                    true
+                                } else {
+                                    false
                                 }
-                                true
                             } else {
                                 false
                             }
