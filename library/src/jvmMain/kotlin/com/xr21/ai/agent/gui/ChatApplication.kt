@@ -141,7 +141,6 @@ fun ChatScreen(
         isLoading = false
         isSending = false
         isProcessingMessage = false
-        
         // 清理流式状态
         if (isStreaming && streamingMessageId != null) {
             val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
@@ -221,17 +220,17 @@ fun ChatScreen(
                                     )
                                     messages.add(placeholderMsg)
                                 }
-                                
+
                                 // 累积流式内容
                                 streamingContent += response.content
-                                
+
                                 // 实时更新流式消息内容
                                 val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
                                 if (currentIndex >= 0) {
                                     // 创建新的消息对象以确保状态更新被检测到
                                     val updatedMsg = messages[currentIndex].copy(content = streamingContent)
                                     messages[currentIndex] = updatedMsg
-                                    
+
                                     // 自动滚动到最新内容
                                     try {
                                         listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
@@ -246,7 +245,8 @@ fun ChatScreen(
                                 if (isStreaming && streamingMessageId != null) {
                                     val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
                                     if (currentIndex >= 0) {
-                                        val finalMsg = messages[currentIndex].copy(content = streamingContent.ifEmpty { response.content })
+                                        val finalMsg =
+                                            messages[currentIndex].copy(content = streamingContent.ifEmpty { response.content })
                                         messages[currentIndex] = finalMsg
                                     }
                                 } else {
@@ -259,7 +259,7 @@ fun ChatScreen(
                                     )
                                     messages.add(aiMsg)
                                 }
-                                
+
                                 // 重置流式状态
                                 isStreaming = false
                                 streamingContent = ""
@@ -274,7 +274,7 @@ fun ChatScreen(
                                         messages.removeAt(currentIndex)
                                     }
                                 }
-                                
+
                                 val errorMsg = UiChatMessage(
                                     id = response.messageId,
                                     content = response.content,
@@ -282,7 +282,7 @@ fun ChatScreen(
                                     timestamp = LocalDateTime.now()
                                 )
                                 messages.add(errorMsg)
-                                
+
                                 // 重置流式状态
                                 isStreaming = false
                                 streamingContent = ""
@@ -299,16 +299,16 @@ fun ChatScreen(
                             messages[currentIndex] = finalMsg
                         }
                     }
-                    
+
                     // 重置所有流式状态
                     isStreaming = false
                     streamingContent = ""
                     streamingMessageId = null
-                    
+
                 } catch (e: Exception) {
                     e.printStackTrace()
                     println("Error collecting response: ${e.message}")
-                    
+
                     // 清理流式状态
                     if (isStreaming && streamingMessageId != null) {
                         val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
@@ -316,12 +316,12 @@ fun ChatScreen(
                             messages.removeAt(currentIndex)
                         }
                     }
-                    
+
                     // 重置流式状态
                     isStreaming = false
                     streamingContent = ""
                     streamingMessageId = null
-                    
+
                 } finally {
                     isLoading = false
                     isSending = false
@@ -408,10 +408,162 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(messages, key = { msg -> msg.id }) { message ->
+                        val messageIndex = messages.indexOf(message)
+
                         MessageBubble(
-                            message = message,
-                            onResend = { /* 重新发送 */ },
-                            isStreaming = isStreaming && message.id == streamingMessageId
+                            message = message, onDelete = {
+                                // 删除当前消息及之后的所有消息
+                                val deleteIndex = messageIndex
+                                val messagesToKeep = messages.subList(0, deleteIndex).toMutableList()
+                                messages.clear()
+                                messages.addAll(messagesToKeep)
+                                // 保存到会话
+                                sessionId?.let { sessionManager.saveMessages(it, messages) }
+                            }, onCopy = {
+                                // 复制功能由 MessageBubble 内部处理
+                            }, onRetry = {
+                                // 移除当前消息之后的所有消息
+                                val retryIndex = messageIndex
+                                val messagesToKeep = messages.subList(0, retryIndex).toMutableList()
+
+                                // 如果当前消息是用户消息，重新发送
+                                if (message.type == UiMessageType.USER) {
+                                    messages.clear()
+                                    messages.addAll(messagesToKeep)
+
+                                    // 重新发送消息
+                                    val userInput = message.content
+                                    inputText = TextFieldValue("")
+
+                                    currentJob = scope.launch {
+                                        isSending = true
+                                        isProcessingMessage = true
+                                        isLoading = true
+                                        streamingContent = ""
+                                        streamingMessageId = null
+                                        isStreaming = false
+
+                                        val userMsg = UiChatMessage(
+                                            id = UUID.randomUUID().toString(),
+                                            content = userInput,
+                                            type = UiMessageType.USER,
+                                            timestamp = LocalDateTime.now()
+                                        )
+                                        messages.add(userMsg)
+
+                                        try {
+                                            listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
+                                        } catch (_: Throwable) {
+                                        }
+
+                                        val chatService = ChatService.getInstance()
+
+                                        chatService.sendMessage(userInput, sessionId).collect { response ->
+                                            response.sessionId?.let { newSessionId ->
+                                                onSessionIdUpdate(newSessionId)
+                                                lastSessionId = newSessionId
+                                            }
+
+                                            when (response.type) {
+                                                ResponseType.THINKING -> {}
+                                                ResponseType.STREAMING -> {
+                                                    if (streamingMessageId == null) {
+                                                        streamingMessageId = response.messageId
+                                                        isStreaming = true
+                                                        val placeholderMsg = UiChatMessage(
+                                                            id = response.messageId,
+                                                            content = "",
+                                                            type = UiMessageType.ASSISTANT,
+                                                            timestamp = LocalDateTime.now()
+                                                        )
+                                                        messages.add(placeholderMsg)
+                                                    }
+                                                    streamingContent += response.content
+                                                    val currentIndex =
+                                                        messages.indexOfFirst { it.id == streamingMessageId }
+                                                    if (currentIndex >= 0) {
+                                                        val updatedMsg =
+                                                            messages[currentIndex].copy(content = streamingContent)
+                                                        messages[currentIndex] = updatedMsg
+                                                        try {
+                                                            listState.animateScrollToItem(
+                                                                messages.size - 1, Int.MAX_VALUE
+                                                            )
+                                                        } catch (_: Throwable) {
+                                                        }
+                                                    }
+                                                }
+
+                                                ResponseType.ASSISTANT -> {
+                                                    if (isStreaming && streamingMessageId != null) {
+                                                        val currentIndex =
+                                                            messages.indexOfFirst { it.id == streamingMessageId }
+                                                        if (currentIndex >= 0) {
+                                                            val finalMsg =
+                                                                messages[currentIndex].copy(content = streamingContent.ifEmpty { response.content })
+                                                            messages[currentIndex] = finalMsg
+                                                        }
+                                                    } else {
+                                                        val aiMsg = UiChatMessage(
+                                                            id = response.messageId,
+                                                            content = response.content,
+                                                            type = UiMessageType.ASSISTANT,
+                                                            timestamp = LocalDateTime.now()
+                                                        )
+                                                        messages.add(aiMsg)
+                                                    }
+                                                    isStreaming = false
+                                                    streamingContent = ""
+                                                    streamingMessageId = null
+                                                }
+
+                                                ResponseType.ERROR -> {
+                                                    if (isStreaming && streamingMessageId != null) {
+                                                        val currentIndex =
+                                                            messages.indexOfFirst { it.id == streamingMessageId }
+                                                        if (currentIndex >= 0) {
+                                                            messages.removeAt(currentIndex)
+                                                        }
+                                                    }
+                                                    val errorMsg = UiChatMessage(
+                                                        id = response.messageId,
+                                                        content = response.content,
+                                                        type = UiMessageType.ERROR,
+                                                        timestamp = LocalDateTime.now()
+                                                    )
+                                                    messages.add(errorMsg)
+                                                    isStreaming = false
+                                                    streamingContent = ""
+                                                    streamingMessageId = null
+                                                }
+                                            }
+                                        }
+
+                                        if (isStreaming && streamingContent.isNotEmpty() && streamingMessageId != null) {
+                                            val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
+                                            if (currentIndex >= 0) {
+                                                val finalMsg = messages[currentIndex].copy(content = streamingContent)
+                                                messages[currentIndex] = finalMsg
+                                            }
+                                        }
+                                        isStreaming = false
+                                        streamingContent = ""
+                                        streamingMessageId = null
+
+                                        isLoading = false
+                                        isSending = false
+                                        isProcessingMessage = false
+                                        sessions = sessionManager.loadSessions()
+
+                                        if (messages.isNotEmpty()) {
+                                            try {
+                                                listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
+                                            } catch (_: Throwable) {
+                                            }
+                                        }
+                                    }
+                                }
+                            }, isStreaming = isStreaming && message.id == streamingMessageId
                         )
                     }
                 }
