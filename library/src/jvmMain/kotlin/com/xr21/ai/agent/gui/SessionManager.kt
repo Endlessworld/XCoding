@@ -104,7 +104,7 @@ class SessionManager private constructor() {
      */
     fun createSession(): String {
         val sessionId = "session-${System.nanoTime()}"
-        val sessionDir = File(System.getProperty("user.home"), ".gi_working/conversations/$sessionId")
+        val sessionDir = File(System.getProperty("user.home"), ".agi_working/conversations/$sessionId")
         sessionDir.mkdirs()
 
         // 创建初始会话文件
@@ -134,20 +134,8 @@ class SessionManager private constructor() {
 
                 val sessionFile = File(sessionDir, "session.json")
 
-                // 读取现有会话
-                val existingMessages = if (sessionFile.exists()) {
-                    loadMessages(sessionId).toMutableList()
-                } else {
-                    mutableListOf()
-                }
-
-                // 添加新消息（避免重复）
-                val existingIds = existingMessages.map { it.id }.toSet()
-                val newMessages = messages.filter { it.id !in existingIds }
-                existingMessages.addAll(newMessages)
-
-                // 重建 JSON
-                val jsonMessages = existingMessages.map { msg ->
+                // 直接保存所有消息，覆盖原有内容
+                val jsonMessages = messages.map { msg ->
                     """
                     {
                         "id": "${msg.id}",
@@ -163,7 +151,7 @@ class SessionManager private constructor() {
                         "sessionId": "$sessionId",
                         "createdAt": "${LocalDateTime.now()}",
                         "lastUpdated": "${LocalDateTime.now()}",
-                        "messageCount": ${existingMessages.size},
+                        "messageCount": ${messages.size},
                         "messages": [
                 $jsonMessages
                         ]

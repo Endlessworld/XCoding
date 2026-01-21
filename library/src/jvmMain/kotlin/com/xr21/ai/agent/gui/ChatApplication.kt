@@ -265,6 +265,12 @@ fun ChatScreen(
             isLoading = false
             isSending = false
             isProcessingMessage = false
+            // 聊天结束，自动保存会话消息
+            lastSessionId?.let { sid ->
+                if (messages.isNotEmpty()) {
+                    sessionManager.saveMessages(sid, messages)
+                }
+            }
             sessions = sessionManager.loadSessions()
 
             if (messages.isNotEmpty()) {
