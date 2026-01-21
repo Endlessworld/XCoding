@@ -9,20 +9,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.*
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xr21.ai.agent.gui.UiChatMessage
 import com.xr21.ai.agent.gui.UiMessageType
+import com.xr21.ai.agent.gui.components.markdown.renderer.MarkdownContent
 import com.xr21.ai.agent.gui.getCurrentChatColors
 import java.time.format.DateTimeFormatter
 
@@ -94,15 +91,15 @@ fun MessageBubble(
                 modifier = Modifier.widthIn(max = 600.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp)
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
                 ) {
-                    MarkdownText(
-                        content = message.content,
-                        baseTextStyle = TextStyle(
-                            color = chatColors.textPrimary,
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp
-                        )
+                    MarkdownContent(
+                        markdown = message.content,
+                        modifier = Modifier.fillMaxWidth(),
+                        onLinkClick = { url -> /* 处理链接点击 */
+                            println("点击链接：$url")
+                        }
                     )
                 }
             }
@@ -130,207 +127,4 @@ fun MessageBubble(
             )
         }
     }
-}
-
-@Composable
-fun MarkdownText(
-    content: String,
-    modifier: Modifier = Modifier,
-    baseTextStyle: TextStyle = TextStyle.Default
-) {
-    val annotatedString = remember(content) {
-        parseMarkdown(content)
-    }
-
-    Text(
-        text = annotatedString,
-        modifier = modifier,
-        style = baseTextStyle
-    )
-}
-
-private fun parseMarkdown(text: String): AnnotatedString {
-    val builder = AnnotatedString.Builder()
-    var i = 0
-    val sb = StringBuilder(text)
-
-    while (i < sb.length) {
-        when {
-            // Code block
-            sb.substring(i).startsWith("```") -> {
-                val endIndex = sb.indexOf("```", i + 3)
-                if (endIndex != -1) {
-                    val codeWithLabel = sb.substring(i + 3, endIndex)
-                    val codeLines = codeWithLabel.split("\n")
-                    val code = if (codeLines.isNotEmpty() && !codeLines.first().contains(" ") && codeLines.first().isNotBlank()) {
-                        // 第一行是语言标签，去掉它
-                        codeLines.drop(1).joinToString("\n")
-                    } else {
-                        codeWithLabel
-                    }
-                    builder.pushStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color.Gray.copy(alpha = 0.2f)))
-                    builder.append(code)
-                    builder.pop()
-                    i = endIndex + 3
-                    continue
-                }
-            }
-            // Bold **text**
-            sb.substring(i).startsWith("**") -> {
-                val endIndex = sb.indexOf("**", i + 2)
-                if (endIndex != -1) {
-                    val boldText = sb.substring(i + 2, endIndex)
-                    builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                    builder.append(boldText)
-                    builder.pop()
-                    i = endIndex + 2
-                    continue
-                }
-            }
-            // Bold __text__
-            sb.substring(i).startsWith("__") -> {
-                val endIndex = sb.indexOf("__", i + 2)
-                if (endIndex != -1) {
-                    val boldText = sb.substring(i + 2, endIndex)
-                    builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                    builder.append(boldText)
-                    builder.pop()
-                    i = endIndex + 2
-                    continue
-                }
-            }
-            // Italic *text*
-            sb.substring(i).startsWith("*") -> {
-                val nextAsterisk = sb.indexOf("*", i + 1)
-                if (nextAsterisk != -1 && !sb.substring(i + 1, nextAsterisk).contains("*")) {
-                    val italicText = sb.substring(i + 1, nextAsterisk)
-                    builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                    builder.append(italicText)
-                    builder.pop()
-                    i = nextAsterisk + 1
-                    continue
-                }
-            }
-            // Italic _text_
-            sb.substring(i).startsWith("_") -> {
-                val nextUnderscore = sb.indexOf("_", i + 1)
-                if (nextUnderscore != -1 && !sb.substring(i + 1, nextUnderscore).contains("_")) {
-                    val italicText = sb.substring(i + 1, nextUnderscore)
-                    builder.pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                    builder.append(italicText)
-                    builder.pop()
-                    i = nextUnderscore + 1
-                    continue
-                }
-            }
-            // Inline code
-            sb.substring(i).startsWith("`") -> {
-                val endIndex = sb.indexOf("`", i + 1)
-                if (endIndex != -1) {
-                    val code = sb.substring(i + 1, endIndex)
-                    builder.pushStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = Color.Gray.copy(alpha = 0.2f)))
-                    builder.append(code)
-                    builder.pop()
-                    i = endIndex + 1
-                    continue
-                }
-            }
-            // Strikethrough ~~text~~
-            sb.substring(i).startsWith("~~") -> {
-                val endIndex = sb.indexOf("~~", i + 2)
-                if (endIndex != -1) {
-                    val strikethroughText = sb.substring(i + 2, endIndex)
-                    builder.pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-                    builder.append(strikethroughText)
-                    builder.pop()
-                    i = endIndex + 2
-                    continue
-                }
-            }
-            // Link [text](url)
-            sb.substring(i).startsWith("[") -> {
-                val closeBracket = sb.indexOf("]", i + 1)
-                if (closeBracket != -1) {
-                    val linkText = sb.substring(i + 1, closeBracket)
-                    val openParen = sb.indexOf("(", closeBracket + 1)
-                    if (openParen != -1) {
-                        val closeParen = sb.indexOf(")", openParen + 1)
-                        if (closeParen != -1) {
-                            builder.pushStyle(SpanStyle(color = Color.Blue))
-                            builder.append(linkText)
-                            builder.pop()
-                            i = closeParen + 1
-                            continue
-                        }
-                    }
-                }
-            }
-            // Heading #
-            sb.substring(i).startsWith("# ") -> {
-                builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp))
-                builder.append(sb.substring(i + 2).takeWhile { it != '\n' })
-                builder.pop()
-                i = sb.length
-                continue
-            }
-            sb.substring(i).startsWith("## ") -> {
-                builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 18.sp))
-                builder.append(sb.substring(i + 3).takeWhile { it != '\n' })
-                builder.pop()
-                i = sb.length
-                continue
-            }
-            sb.substring(i).startsWith("### ") -> {
-                builder.pushStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp))
-                builder.append(sb.substring(i + 4).takeWhile { it != '\n' })
-                builder.pop()
-                i = sb.length
-                continue
-            }
-            // Block quote >
-            sb.substring(i).startsWith("> ") -> {
-                builder.append("> ")
-                val contentStart = i + 2
-                val contentEnd = sb.indexOf("\n", contentStart).let { if (it == -1) sb.length else it }
-                builder.append(sb.substring(contentStart, contentEnd))
-                builder.append("\n")
-                i = contentEnd
-                continue
-            }
-            // List items - or *
-            sb.substring(i).startsWith("- ") || sb.substring(i).startsWith("* ") -> {
-                builder.append("• ")
-                val contentStart = i + 2
-                val contentEnd = sb.indexOf("\n", contentStart).let { if (it == -1) sb.length else it }
-                builder.append(sb.substring(contentStart, contentEnd))
-                builder.append("\n")
-                i = contentEnd
-                continue
-            }
-            // Ordered list
-            sb.substring(i).matches(Regex("^\\d+\\. ")) -> {
-                val dotIndex = sb.indexOf(". ", i)
-                if (dotIndex != -1) {
-                    builder.append("• ")
-                    val contentStart = dotIndex + 2
-                    val contentEnd = sb.indexOf("\n", contentStart).let { if (it == -1) sb.length else it }
-                    builder.append(sb.substring(contentStart, contentEnd))
-                    builder.append("\n")
-                    i = contentEnd
-                    continue
-                }
-            }
-            // Horizontal rule
-            sb.substring(i).startsWith("---") && (i == 0 || sb[i - 1] == '\n') -> {
-                builder.append("——")
-                builder.append("\n")
-                i += 3
-                continue
-            }
-        }
-        builder.append(sb[i])
-        i++
-    }
-
-    return builder.toAnnotatedString()
 }

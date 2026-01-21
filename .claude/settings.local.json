@@ -4,7 +4,10 @@
       "Bash(./gradlew run)",
       "Bash(./gradlew:*)",
       "Bash(java:*)",
-      "Bash(./gradlew.bat clean compileKotlinJvm:*)"
+      "Bash(./gradlew.bat clean compileKotlinJvm:*)",
+      "mcp__acp__Edit",
+      "Bash(powershell -Command:*)",
+      "mcp__acp__Write"
     ]
   }
 }

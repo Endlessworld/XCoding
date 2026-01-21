@@ -373,6 +373,7 @@ object NodeUtils {
     /**
      * 构建带样式的 AnnotatedString
      */
+    @Composable
     fun buildStyledText(node: Node?): AnnotatedString {
         // 获取主题用于构建样式
         val theme = LocalMarkdownTheme.current
