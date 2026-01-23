@@ -1,5 +1,6 @@
 package com.xr21.ai.agent.gui
 
+import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,7 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Preview
 fun ChatApplication() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Chat) }
     var currentSessionId by remember { mutableStateOf<String?>(null) }

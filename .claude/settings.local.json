@@ -7,7 +7,10 @@
       "Bash(./gradlew.bat clean compileKotlinJvm:*)",
       "mcp__acp__Edit",
       "Bash(powershell -Command:*)",
-      "mcp__acp__Write"
+      "mcp__acp__Write",
+      "Skill(skill-creator)",
+      "Skill(skill-creator:*)",
+      "Bash(python:*)"
     ]
   }
 }

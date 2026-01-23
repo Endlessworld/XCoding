@@ -1,3 +1,4 @@
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -79,15 +80,26 @@ kapt {
     correctErrorTypes = true
 }
 
-tasks.register<JavaExec>("run") {
-    group = "application"
-    mainClass.set("com.xr21.ai.agent.gui.ChatApplicationKt")
-    classpath = configurations["runtimeClasspath"] +
-        files("${layout.buildDirectory.get().asFile}/classes/kotlin/jvm/main") +
-        files("${layout.buildDirectory.get().asFile}/classes/java/main")
-    workingDir = projectDir
-}
+//tasks.register<JavaExec>("run") {
+//    group = "application"
+//    mainClass.set("com.xr21.ai.agent.gui.ChatApplicationKt")
+//    classpath = configurations["runtimeClasspath"] +
+//        files("${layout.buildDirectory.get().asFile}/classes/kotlin/jvm/main") +
+//        files("${layout.buildDirectory.get().asFile}/classes/java/main")
+//    workingDir = projectDir
+//}
 
+compose.desktop {
+    application {
+        mainClass = "com.xr21.ai.agent.gui.ChatApplicationKt"
+
+        nativeDistributions {
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb,TargetFormat.Exe)
+            packageName = "com.xr21.ai.agent.gui"
+            packageVersion = "1.0.0"
+        }
+    }
+}
 
 mavenPublishing {
     publishToMavenCentral()
