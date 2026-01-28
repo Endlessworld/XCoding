@@ -1,7 +1,6 @@
 package com.xr21.ai.agent.gui
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -66,7 +65,8 @@ data class ChatColors(
     val systemMessageColor: Color,
     val textPrimary: Color,
     val textSecondary: Color,
-    val borderColor: Color
+    val borderColor: Color,
+    val toolCallBackgroundColor: Color  // 工具调用背景色
 )
 
 /**
@@ -78,7 +78,8 @@ val LightChatColors = ChatColors(
     systemMessageColor = Color(0xFFF59E0B),
     textPrimary = Color(0xFF0F172A),
     textSecondary = Color(0xFF64748B),
-    borderColor = Color(0xFFE2E8F0)
+    borderColor = Color(0xFFE2E8F0),
+    toolCallBackgroundColor = Color(0xFF6366F1)
 )
 
 /**
@@ -90,7 +91,8 @@ val DarkChatColors = ChatColors(
     systemMessageColor = Color(0xFFF59E0B),
     textPrimary = Color(0xFFF8FAFC),
     textSecondary = Color(0xFF94A3B8),
-    borderColor = Color(0xFF475569)
+    borderColor = Color(0xFF475569),
+    toolCallBackgroundColor = Color(0xFF8B5CF6)
 )
 
 /**

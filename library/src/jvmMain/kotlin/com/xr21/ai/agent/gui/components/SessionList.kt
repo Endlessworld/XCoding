@@ -12,22 +12,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xr21.ai.agent.gui.SessionManager
+import com.xr21.ai.agent.gui.FileSessionManager
 import com.xr21.ai.agent.gui.UiSessionInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionList(
-    sessions: List<UiSessionInfo>,
-    sessionManager: SessionManager,
+    sessions: List<UiSessionInfo>, sessionManager: FileSessionManager,
     onSessionSelected: (String) -> Unit,
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showDeleteDialog by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     if (sessions.isEmpty()) {
         Box(
@@ -95,7 +96,9 @@ fun SessionList(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        sessionManager.deleteSession(sessionId)
+                        coroutineScope.launch(Dispatchers.IO) {
+                            sessionManager.deleteSession(sessionId)
+                        }
                         showDeleteDialog = null
                     },
                     colors = ButtonDefaults.textButtonColors(

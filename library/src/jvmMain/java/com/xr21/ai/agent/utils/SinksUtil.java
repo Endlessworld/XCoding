@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.xr21.ai.agent.entity.AgentOutput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.http.codec.ServerSentEvent;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -63,8 +64,8 @@ public class SinksUtil {
         }).subscribe();
     }
 
-    public static Flux<ServerSentEvent<AgentOutput<Object>>> sinksOutput(Flux<NodeOutput> outputFlux) {
-        Sinks.Many<ServerSentEvent<AgentOutput<Object>>> sink = Sinks.many().unicast().onBackpressureBuffer();
+    public static Flux<AgentOutput<Object>> sinksOutput(Flux<NodeOutput> outputFlux) {
+        Sinks.Many<AgentOutput<Object>> sink = Sinks.many().unicast().onBackpressureBuffer();
         processStream(outputFlux, sink);
         return sink.asFlux()
                 .doOnCancel(() -> logger.info("Client disconnected from stream"))
@@ -72,10 +73,10 @@ public class SinksUtil {
                 .doOnComplete(() -> logger.info("Streaming output completed"));
     }
 
-    public static void processStream(Flux<NodeOutput> outputFlux, Sinks.Many<ServerSentEvent<AgentOutput<Object>>> sink) {
+    public static void processStream(Flux<NodeOutput> outputFlux, Sinks.Many<AgentOutput<Object>> sink) {
         outputFlux.doOnNext(output -> {
 //            logger.info("output = {}", output);
-            sink.tryEmitNext(ServerSentEvent.builder(buildContent(output)).build());
+            sink.tryEmitNext(buildContent(output));
         }).doOnComplete(() -> {
             // 正常完成
             sink.tryEmitComplete();
@@ -103,6 +104,11 @@ public class SinksUtil {
             builder.chunk(streamingOutput.chunk());
             builder.tokenUsage(streamingOutput.tokenUsage());
             builder.subGraph(streamingOutput.isSubGraph());
+            if(streamingOutput.message() instanceof AssistantMessage message){
+                if(message.hasToolCalls()){
+                    System.err.println(message.getToolCalls());
+                }
+            }
         }
         if (output instanceof InterruptionMetadata interruptionMetadata) {
             builder.metadata(interruptionMetadata.metadata().orElse(new HashMap<>()));

@@ -1,75 +1,68 @@
 package com.xr21.ai.agent.gui
 
-import kotlinx.coroutines.CoroutineScope
+import com.alibaba.cloud.ai.graph.RunnableConfig
+import com.alibaba.cloud.ai.graph.checkpoint.Checkpoint
+import com.xr21.ai.agent.LocalAgent
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import org.springframework.ai.chat.messages.Message
 import java.io.File
 import java.time.LocalDateTime
-import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * UI 层会话管理封装
+ * 使用 FileSystemSaver 的检查点功能实现会话管理
  */
-class SessionManager private constructor() {
+class FileSessionManager private constructor() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    init {
-        // 确保会话目录存在
-        val conversationDir = File(System.getProperty("user.home"), ".agi_working/conversations")
-        if (!conversationDir.exists()) {
-            conversationDir.mkdirs()
-        }
-    }
+    private val checkpointCache = ConcurrentHashMap<String, Checkpoint>()
 
     companion object {
         @Volatile
-        private var instance: SessionManager? = null
+        private var instance: FileSessionManager? = null
 
-        fun getInstance(): SessionManager {
-
+        fun getInstance(): FileSessionManager {
             return instance ?: synchronized(this) {
-
-                instance ?: SessionManager().also { instance = it }
+                instance ?: FileSessionManager().also { instance = it }
             }
         }
     }
-
+    // Kotlin
+    fun loadSessionsBlocking(): List<UiSessionInfo> = runBlocking {
+        loadSessions()
+    }
     /**
      * 加载所有会话列表
      */
-    fun loadSessions(): List<UiSessionInfo> {
-        return try {
-            val conversationDir = File(System.getProperty("user.home"), ".agi_working/conversations")
-            if (!conversationDir.exists()) return emptyList()
+    suspend fun loadSessions(): List<UiSessionInfo> = withContext(Dispatchers.IO) {
+        try {
+            val saverFolder = File(LocalAgent.fileSystemSaverFolder)
+            if (!saverFolder.exists() || !saverFolder.isDirectory) {
+                return@withContext emptyList()
+            }
 
             val sessions = mutableListOf<UiSessionInfo>()
+            val threadIdPattern = Regex("^thread-(.+)\\.saver$")
 
-            conversationDir.listFiles { file -> file.isDirectory }?.forEach { dir ->
-                val sessionFile = File(dir, "session.json")
-                if (sessionFile.exists()) {
-                    try {
-                        val content = sessionFile.readText()
-                        // 简单解析 JSON 提取信息
-                        val sessionId = dir.name
-                        val briefDesc = extractBriefDescription(content)
-                        val messageCount = extractMessageCount(content)
-                        val lastUpdated = extractLastUpdated(content)
-
-                        sessions.add(
-                            UiSessionInfo(
-                                sessionId = sessionId,
-                                filePath = sessionFile.absolutePath,
-                                messageCount = messageCount,
-                                createdAt = LocalDateTime.now().toString(),
-                                lastUpdated = lastUpdated,
-                                briefDescription = briefDesc
-                            )
-                        )
-                    } catch (e: Exception) {
-                        // 忽略解析错误的文件
+            saverFolder.listFiles { file ->
+                file.isFile && file.name.endsWith(".saver")
+            }?.forEach { file ->
+                try {
+                    val matchResult = threadIdPattern.find(file.name)
+                    if (matchResult != null) {
+                        val threadId = matchResult.groupValues[1]
+                        val runnableConfig = RunnableConfig.builder().threadId(threadId).build()
+                        val checkpoint = LocalAgent.fileSystemSaver.get(runnableConfig)
+                        checkpoint.ifPresent {
+                            val messages = extractMessagesFromCheckpoint(checkpoint.get())
+                            val sessionInfo = createSessionInfo(threadId, messages, file.absolutePath)
+                            sessions.add(sessionInfo)
+                        }
                     }
+                } catch (e: Exception) {
+                    // 忽略解析错误的文件
                 }
             }
 
@@ -80,19 +73,23 @@ class SessionManager private constructor() {
             emptyList()
         }
     }
+    // Kotlin
+    fun loadMessagesBlocking(sessionId: String): List<Message> = runBlocking {
+        loadMessages(sessionId)
+    }
 
     /**
      * 根据 ID 加载会话消息
      */
-    fun loadMessages(sessionId: String): List<UiChatMessage> {
-        return try {
-            val sessionDir = File(System.getProperty("user.home"), ".agi_working/conversations/$sessionId")
-            val sessionFile = File(sessionDir, "session.json")
-
-            if (!sessionFile.exists()) return emptyList()
-
-            val content = sessionFile.readText()
-            parseMessagesFromJson(content)
+    suspend fun loadMessages(sessionId: String): List<Message> = withContext(Dispatchers.IO) {
+        try {
+            val runnableConfig = RunnableConfig.builder().threadId(sessionId).build()
+            val checkpoint = LocalAgent.fileSystemSaver.get(runnableConfig)
+            if (!checkpoint.isEmpty) {
+                extractMessagesFromCheckpoint(checkpoint.get())
+            } else {
+                emptyList()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -102,147 +99,81 @@ class SessionManager private constructor() {
     /**
      * 创建新会话
      */
-    fun createSession(): String {
+    suspend fun createSession(): String = withContext(Dispatchers.IO) {
         val sessionId = "session-${System.nanoTime()}"
-        val sessionDir = File(System.getProperty("user.home"), ".agi_working/conversations/$sessionId")
-        sessionDir.mkdirs()
-
-        // 创建初始会话文件
-        val sessionFile = File(sessionDir, "session.json")
-        val initialContent = """
-            {
-                "sessionId": "$sessionId",
-                "createdAt": "${LocalDateTime.now()}",
-                "lastUpdated": "${LocalDateTime.now()}",
-                "messageCount": 0,
-                "messages": []
-            }
-        """.trimIndent()
-        sessionFile.writeText(initialContent)
-
-        return sessionId
+        sessionId
     }
 
     /**
-     * 保存消息到会话
+     * 保存消息到会话（通过 FileSystemSaver 检查点）
      */
-    fun saveMessages(sessionId: String, messages: List<UiChatMessage>) {
-        scope.launch {
-            try {
-                val sessionDir = File(System.getProperty("user.home"), ".agi_working/conversations/$sessionId")
-                if (!sessionDir.exists()) sessionDir.mkdirs()
+    suspend fun saveMessages(sessionId: String, messages: List<Message>) = withContext(Dispatchers.IO) {
 
-                val sessionFile = File(sessionDir, "session.json")
-
-                // 直接保存所有消息，覆盖原有内容
-                val jsonMessages = messages.map { msg ->
-                    """
-                    {
-                        "id": "${msg.id}",
-                        "content": "${msg.content.replace("\"", "\\\"")}",
-                        "type": "${msg.type.name}",
-                        "timestamp": "${msg.timestamp}"
-                    }
-                    """.trimIndent()
-                }.joinToString(",\n")
-
-                val jsonContent = """
-                    {
-                        "sessionId": "$sessionId",
-                        "createdAt": "${LocalDateTime.now()}",
-                        "lastUpdated": "${LocalDateTime.now()}",
-                        "messageCount": ${messages.size},
-                        "messages": [
-                $jsonMessages
-                        ]
-                    }
-                """.trimIndent()
-
-                sessionFile.writeText(jsonContent)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
     /**
      * 删除会话
      */
-    fun deleteSession(sessionId: String): Boolean {
-        return try {
-            val sessionDir = File(System.getProperty("user.home"), ".agi_working/conversations/$sessionId")
-            if (sessionDir.exists()) {
-                sessionDir.deleteRecursively()
-                true
-            } else {
-                false
-            }
+    suspend fun deleteSession(sessionId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val runnableConfig = RunnableConfig.builder().threadId(sessionId).build()
+            LocalAgent.fileSystemSaver.deleteFile(runnableConfig)
+            true
         } catch (e: Exception) {
             e.printStackTrace()
             false
         }
     }
 
-    // 辅助函数：提取第一条用户消息作为描述
-    private fun extractBriefDescription(content: String): String {
-        val userMessageMatch = Regex(""""type":\s*"USER"""")
-            .find(content)
-        if (userMessageMatch != null) {
-            val beforeMatch = content.substring(0, userMessageMatch.range.first)
-            val contentMatch = Regex(""""content":\s*"([^"]*)"""").find(beforeMatch)
-            if (contentMatch != null) {
-                return contentMatch.groupValues[1].take(50)
-            }
-        }
-        return "新会话"
+    /**
+     * 从检查点提取消息列表，直接返回原始 Message 对象
+     */
+    private fun extractMessagesFromCheckpoint(checkpoint: Checkpoint): List<Message> {
+        val state = checkpoint.state
+        val messagesList = state["messages"] as? List<*> ?: return emptyList()
+
+        return messagesList.filterIsInstance<Message>()
     }
 
-    private fun extractMessageCount(content: String): Int {
-        val match = Regex(""""messageCount":\s*(\d+)""").find(content)
-        return match?.groupValues?.get(1)?.toIntOrNull() ?: 0
-    }
+    /**
+     * 创建会话信息对象
+     */
+    private fun createSessionInfo(threadId: String, messages: List<Message>, filePath: String): UiSessionInfo {
+        val firstUserMessage =
+            messages.firstOrNull { it.messageType == org.springframework.ai.chat.messages.MessageType.USER }?.text
+        val briefDescription = firstUserMessage?.take(50) ?: "新会话"
+        val lastUpdated =
+            messages.lastOrNull()?.metadata?.get("timestamp")?.toString() ?: LocalDateTime.now().toString()
 
-    private fun extractLastUpdated(content: String): String {
-        val match = Regex(""""lastUpdated":\s*"([^"]*)"""").find(content)
-        return match?.groupValues?.get(1) ?: LocalDateTime.now().toString()
-    }
-
-    private fun parseMessagesFromJson(content: String): List<UiChatMessage> {
-        val messages = mutableListOf<UiChatMessage>()
-
-        val messageRegex = Regex(
-            """\{[^}]*"id":\s*"([^"]*)"[^}]*"content":\s*"([^"]*)"[^}]*"type":\s*"([^"]*)"[^}]*"timestamp":\s*"([^"]*)"[^}]*\},
-            |""".trimMargin(),
-            RegexOption.MULTILINE
+        return UiSessionInfo(
+            sessionId = threadId,
+            filePath = filePath,
+            messageCount = messages.size,
+            createdAt = LocalDateTime.now().toString(),
+            lastUpdated = lastUpdated,
+            briefDescription = briefDescription
         )
+    }
 
-        // 简化解析
-        val idMatches = Regex(""""id":\s*"([^"]*)"""").findAll(content)
-        val contentMatches = Regex(""""content":\s*"([^"]*)"""").findAll(content)
-        val typeMatches = Regex(""""type":\s*"([^"]*)"""").findAll(content)
-        val timeMatches = Regex(""""timestamp":\s*"([^"]*)"""").findAll(content)
-
-        val ids = idMatches.map { it.groupValues[1] }.toList()
-        val contents = contentMatches.map { it.groupValues[1].replace("\\\"", "\"") }.toList()
-        val types = typeMatches.map { it.groupValues[1] }.toList()
-        val times = timeMatches.map { it.groupValues[1] }.toList()
-
-        val minSize = minOf(ids.size, contents.size, types.size, times.size)
-        for (i in 0 until minSize) {
-            val type = try { UiMessageType.valueOf(types[i]) } catch (e: Exception) { UiMessageType.ASSISTANT }
-            val timestamp = try { LocalDateTime.parse(times[i]) } catch (e: Exception) { LocalDateTime.now() }
-
-            messages.add(
-                UiChatMessage(
-                    id = ids[i],
-                    content = contents[i],
-                    type = type,
-                    timestamp = timestamp
-                )
-            )
+    /**
+     * 清除所有会话历史
+     */
+    suspend fun clearAllSessions(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val saverFolder = File(LocalAgent.fileSystemSaverFolder)
+            if (saverFolder.exists()) {
+                saverFolder.listFiles()?.forEach { file ->
+                    if (file.name.endsWith(".saver")) {
+                        file.delete()
+                    }
+                }
+            }
+            checkpointCache.clear()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
-
-        return messages
     }
 }
 
@@ -259,24 +190,7 @@ data class UiSessionInfo(
 )
 
 /**
- * UI 消息模型
- */
-data class UiChatMessage(
-    val id: String = UUID.randomUUID().toString(),
-    val content: String,
-    val type: UiMessageType,
-    val timestamp: LocalDateTime = LocalDateTime.now()
-)
-
-/**
- * 消息类型
- */
-enum class UiMessageType {
-    USER, ASSISTANT, SYSTEM, TOOL_CALL, TOOL_RESPONSE, ERROR
-}
-
-/**
- * 清除所有会话历史
+ * 清除所有会话历史（全局函数，保持向后兼容）
  */
 fun clearAllSessions(): Boolean {
     return try {

@@ -25,9 +25,15 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.gui.components.*
+import com.xr21.ai.agent.gui.model.ConversationMessage
+import com.xr21.ai.agent.gui.model.MessageAggregator
+import com.xr21.ai.agent.gui.model.StreamingMessageProcessor
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
+import kotlinx.coroutines.withContext
+import org.springframework.ai.chat.messages.UserMessage
 import java.util.*
 
 // ==================== 应用入口 ====================
@@ -40,7 +46,7 @@ fun ChatApplication() {
     var currentSessionId by remember { mutableStateOf<String?>(null) }
     var currentTheme by remember { mutableStateOf(ThemeMode.SYSTEM) }
 
-    val sessionManager = remember { SessionManager.getInstance() }
+    val sessionManager = remember { FileSessionManager.getInstance() }
 
     // 更新会话ID的回调
     val updateSessionId: (String) -> Unit = { newSessionId ->
@@ -51,6 +57,8 @@ fun ChatApplication() {
         position = WindowPosition.Aligned(Alignment.Center), width = 1200.dp, height = 800.dp
     )
 
+    val coroutineScope = rememberCoroutineScope()
+
     Window(
         onCloseRequest = { /* 退出 */ }, title = "AI Agents - 智能助手", state = windowState
     ) {
@@ -60,7 +68,9 @@ fun ChatApplication() {
                     sessionId = currentSessionId,
                     sessionManager = sessionManager,
                     onNewSession = {
-                        currentSessionId = sessionManager.createSession()
+                        coroutineScope.launch(Dispatchers.IO) {
+                            currentSessionId = sessionManager.createSession()
+                        }
                     },
                     onSessionSelected = { sessionId ->
                         currentSessionId = sessionId
@@ -84,7 +94,9 @@ fun ChatApplication() {
                         currentScreen = Screen.Chat
                     },
                     onNewSession = {
-                        currentSessionId = sessionManager.createSession()
+                        coroutineScope.launch(Dispatchers.IO) {
+                            currentSessionId = sessionManager.createSession()
+                        }
                         currentScreen = Screen.Chat
                     })
 
@@ -94,7 +106,9 @@ fun ChatApplication() {
                     }, onThemeChange = { theme ->
                         currentTheme = theme
                     }, onClearHistory = {
-                        clearAllSessions()
+                        coroutineScope.launch(Dispatchers.IO) {
+                            sessionManager.clearAllSessions()
+                        }
                     }, currentTheme = currentTheme
                 )
             }
@@ -114,7 +128,7 @@ sealed class Screen {
 @Composable
 fun ChatScreen(
     sessionId: String?,
-    sessionManager: SessionManager,
+    sessionManager: FileSessionManager,
     onNewSession: () -> Unit,
     onSessionSelected: (String) -> Unit,
     onOpenSessionManager: () -> Unit,
@@ -122,158 +136,84 @@ fun ChatScreen(
     onSessionIdUpdate: (String) -> Unit = {}
 ) {
     var inputText by remember { mutableStateOf(TextFieldValue("")) }
-    var messages by remember { mutableStateOf(mutableStateListOf<UiChatMessage>()) }
+    var messages by remember { mutableStateOf(mutableStateListOf<ConversationMessage>()) }
     var isLoading by remember { mutableStateOf(false) }
     var isSending by remember { mutableStateOf(false) }
     var sessions by remember { mutableStateOf(listOf<UiSessionInfo>()) }
     var currentJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var isProcessingMessage by remember { mutableStateOf(false) }
     var lastSessionId by remember { mutableStateOf<String?>(null) }
-    var streamingContent by remember { mutableStateOf("") }
-    var streamingMessageId by remember { mutableStateOf<String?>(null) }
     var isStreaming by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val chatService = remember { ChatService.getInstance() }
+    rememberCoroutineScope()
+
+    // 流式消息处理器
+    val streamingProcessor = remember { StreamingMessageProcessor.getInstance() }
+    // 消息聚合器（用于加载会话时）
+    val messageAggregator = remember { MessageAggregator.getInstance() }
 
     val onCancelRequest = {
         currentJob?.cancel()
         isLoading = false
         isSending = false
-        isProcessingMessage = false
-        // 清理流式状态
-        if (isStreaming && streamingMessageId != null) {
-            val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
-            if (currentIndex >= 0) {
-                messages.removeAt(currentIndex)
-            }
-        }
         isStreaming = false
-        streamingContent = ""
-        streamingMessageId = null
+        streamingProcessor.reset()
     }
 
-    // 通用发送消息函数
+    // 通用发送消息函数 - 使用新版 ConversationMessage 模型
     fun sendMessage(userInput: String) {
         currentJob = scope.launch {
             isSending = true
-            isProcessingMessage = true
             isLoading = true
-            streamingContent = ""
-            streamingMessageId = null
             isStreaming = false
+            streamingProcessor.reset()
 
-            val userMsg = UiChatMessage(
+            // 添加用户消息
+            val userMessage = ConversationMessage.User(
                 id = UUID.randomUUID().toString(),
+                timestamp = System.currentTimeMillis(),
                 content = userInput,
-                type = UiMessageType.USER,
-                timestamp = LocalDateTime.now()
+                rawMessages = listOf(UserMessage(userInput))
             )
-            messages.add(userMsg)
+            messages.add(userMessage)
             inputText = TextFieldValue("")
 
             try {
                 listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
             } catch (_: Throwable) {}
 
-            chatService.sendMessage(userInput, sessionId).collect { response ->
-                response.sessionId?.let { newSessionId ->
-                    onSessionIdUpdate(newSessionId)
-                    lastSessionId = newSessionId
+            // 使用流式消息处理器处理输出
+            chatService.sendMessage(userInput, sessionId).collect { output: AgentOutput<*> ->
+                val updates = streamingProcessor.processAgentOutput(output, messages)
+                updates.forEach { updatedMsg ->
+                    val existingIndex = messages.indexOfFirst { it.id == updatedMsg.id }
+                    if (existingIndex >= 0) {
+                        messages[existingIndex] = updatedMsg
+                    } else {
+                        messages.add(updatedMsg)
+                    }
                 }
 
-                when (response.type) {
-                    ResponseType.THINKING -> {}
-                    ResponseType.STREAMING -> {
-                        if (streamingMessageId == null) {
-                            streamingMessageId = response.messageId
-                            isStreaming = true
-                            val placeholderMsg = UiChatMessage(
-                                id = response.messageId,
-                                content = "",
-                                type = UiMessageType.ASSISTANT,
-                                timestamp = LocalDateTime.now()
-                            )
-                            messages.add(placeholderMsg)
-                        }
-                        streamingContent += response.content
-                        val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
-                        if (currentIndex >= 0) {
-                            val updatedMsg = messages[currentIndex].copy(content = streamingContent)
-                            messages[currentIndex] = updatedMsg
-                            try {
-                                listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
-                            } catch (_: Throwable) {}
-                        }
-                    }
+                // 检查是否正在流式输出
+                isStreaming = streamingProcessor.getCurrentStreamingMessage() != null
 
-                    ResponseType.ASSISTANT -> {
-                        if (isStreaming && streamingMessageId != null) {
-                            val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
-                            if (currentIndex >= 0) {
-                                val finalMsg = messages[currentIndex].copy(
-                                    content = streamingContent.ifEmpty { response.content }
-                                )
-                                messages[currentIndex] = finalMsg
-                            }
-                        } else {
-                            val aiMsg = UiChatMessage(
-                                id = response.messageId,
-                                content = response.content,
-                                type = UiMessageType.ASSISTANT,
-                                timestamp = LocalDateTime.now()
-                            )
-                            messages.add(aiMsg)
-                        }
-                        isStreaming = false
-                        streamingContent = ""
-                        streamingMessageId = null
-                    }
-
-                    ResponseType.ERROR -> {
-                        if (isStreaming && streamingMessageId != null) {
-                            val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
-                            if (currentIndex >= 0) {
-                                messages.removeAt(currentIndex)
-                            }
-                        }
-                        val errorMsg = UiChatMessage(
-                            id = response.messageId,
-                            content = response.content,
-                            type = UiMessageType.ERROR,
-                            timestamp = LocalDateTime.now()
-                        )
-                        messages.add(errorMsg)
-                        isStreaming = false
-                        streamingContent = ""
-                        streamingMessageId = null
-                    }
+                try {
+                    listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
+                } catch (_: Throwable) {
                 }
             }
 
-            // 确保流式传输完成后的最终状态
-            if (isStreaming && streamingContent.isNotEmpty() && streamingMessageId != null) {
-                val currentIndex = messages.indexOfFirst { it.id == streamingMessageId }
-                if (currentIndex >= 0) {
-                    val finalMsg = messages[currentIndex].copy(content = streamingContent)
-                    messages[currentIndex] = finalMsg
-                }
-            }
+            // 流式结束，重置状态
             isStreaming = false
-            streamingContent = ""
-            streamingMessageId = null
-
             isLoading = false
             isSending = false
-            isProcessingMessage = false
-            // 聊天结束，自动保存会话消息
-            lastSessionId?.let { sid ->
-                if (messages.isNotEmpty()) {
-                    sessionManager.saveMessages(sid, messages)
-                }
+
+            // 重新加载会话列表
+            sessions = withContext(Dispatchers.IO) {
+                sessionManager.loadSessions()
             }
-            sessions = sessionManager.loadSessions()
 
             if (messages.isNotEmpty()) {
                 try {
@@ -284,14 +224,20 @@ fun ChatScreen(
     }
 
     LaunchedEffect(Unit) {
-        sessions = sessionManager.loadSessions()
+        sessions = withContext(Dispatchers.IO) {
+            sessionManager.loadSessions()
+        }
     }
 
     LaunchedEffect(sessionId) {
         if (sessionId != null) {
             if (sessionId != lastSessionId) {
                 messages.clear()
-                messages.addAll(sessionManager.loadMessages(sessionId))
+                val rawMessages = withContext(Dispatchers.IO) {
+                    sessionManager.loadMessages(sessionId)
+                }
+                // 使用聚合器将原始消息转换为 ConversationMessage
+                messages.addAll(messageAggregator.aggregate(rawMessages))
                 lastSessionId = sessionId
             }
         } else {
@@ -378,41 +324,46 @@ fun ChatScreen(
                     items(messages, key = { msg -> msg.id }) { message ->
                         val messageIndex = messages.indexOf(message)
 
-                        MessageBubble(
+                        ConversationMessageBubble(
                             message = message,
                             onDelete = {
                                 // 删除当前消息及之后的所有消息
                                 val messagesToKeep = messages.subList(0, messageIndex).toMutableList()
                                 messages.clear()
                                 messages.addAll(messagesToKeep)
-                                sessionId?.let { sessionManager.saveMessages(it, messages) }
+                                // 注意：保存逻辑需要调整，因为现在保存的是 ConversationMessage
                             },
                             onCopy = {
-                                // 复制功能由 MessageBubble 内部处理
+                                // 复制功能由 ConversationMessageBubble 内部处理
                             },
                             onRetry = {
-                                if (message.type == UiMessageType.USER) {
-                                    // 用户消息：移除当前消息之后的所有消息，重新发送当前用户消息
-                                    val messagesToKeep = messages.subList(0, messageIndex).toMutableList()
-                                    messages.clear()
-                                    messages.addAll(messagesToKeep)
-                                    sendMessage(message.content)
-                                } else {
-                                    // 回复消息：移除当前消息及之后的所有消息，然后移除最后一条用户消息，重新发送
-                                    val messagesToKeep = messages.subList(0, messageIndex).toMutableList()
-                                    messages.clear()
-                                    messages.addAll(messagesToKeep)
+                                when (message) {
+                                    is ConversationMessage.User -> {
+                                        // 用户消息：移除当前消息之后的所有消息，重新发送当前用户消息
+                                        val messagesToKeep = messages.subList(0, messageIndex).toMutableList()
+                                        messages.clear()
+                                        messages.addAll(messagesToKeep)
+                                        sendMessage(message.content)
+                                    }
 
-                                    // 找到并移除最后一条用户消息
-                                    val lastUserIndex = messages.indexOfLast { it.type == UiMessageType.USER }
-                                    if (lastUserIndex >= 0) {
-                                        val userInput = messages[lastUserIndex].content
-                                        messages.removeAt(lastUserIndex)
-                                        sendMessage(userInput)
+                                    is ConversationMessage.Assistant -> {
+                                        // 回复消息：移除当前消息及之后的所有消息，然后移除最后一条用户消息，重新发送
+                                        val messagesToKeep = messages.subList(0, messageIndex).toMutableList()
+                                        messages.clear()
+                                        messages.addAll(messagesToKeep)
+
+                                        // 找到并移除最后一条用户消息
+                                        val lastUserIndex = messages.indexOfLast { it is ConversationMessage.User }
+                                        if (lastUserIndex >= 0) {
+                                            val userInput =
+                                                (messages[lastUserIndex] as? ConversationMessage.User)?.content ?: ""
+                                            messages.removeAt(lastUserIndex)
+                                            sendMessage(userInput)
+                                        }
                                     }
                                 }
                             },
-                            isStreaming = isStreaming && message.id == streamingMessageId
+                            isStreaming = isStreaming && message.id == streamingProcessor.getCurrentStreamingMessage()?.id
                         )
                     }
                 }
@@ -424,7 +375,7 @@ fun ChatScreen(
                 }
             }
 
-            LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
+            LaunchedEffect(messages.size, messages.lastOrNull()?.id) {
                 if (messages.isNotEmpty()) {
                     listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
                 }
@@ -438,15 +389,18 @@ fun ChatScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionManagerScreen(
-    sessionManager: SessionManager,
+    sessionManager: FileSessionManager,
     onSessionSelected: (String) -> Unit,
     onBack: () -> Unit,
     onNewSession: () -> Unit
 ) {
     var sessions by remember { mutableStateOf(listOf<UiSessionInfo>()) }
+    rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        sessions = sessionManager.loadSessions()
+        sessions = withContext(Dispatchers.IO) {
+            sessionManager.loadSessions()
+        }
     }
 
     Scaffold(

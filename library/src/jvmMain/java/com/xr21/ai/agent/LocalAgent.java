@@ -1,7 +1,6 @@
 package com.xr21.ai.agent;
 
 import com.alibaba.cloud.ai.graph.NodeOutput;
-import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
 import com.alibaba.cloud.ai.graph.agent.Agent;
@@ -14,13 +13,13 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.agent.tools.ShellTool;
-import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
+import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.entity.AgentOutput;
+import com.xr21.ai.agent.gui.FileSessionManager;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
-import com.xr21.ai.agent.session.ConversationSessionManager;
 import com.xr21.ai.agent.tools.DefaultTokenCounter;
 import com.xr21.ai.agent.tools.FeedBackTool;
 import com.xr21.ai.agent.tools.WebSearchTool;
@@ -33,15 +32,13 @@ import io.modelcontextprotocol.client.transport.StdioClientTransport;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import lombok.SneakyThrows;
 import org.slf4j.Logger;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.lang.NonNull;
-import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -51,17 +48,20 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class LocalAgent {
 
-    protected static final List<ChatModel> fallbackModels = new ArrayList<>();
-    public static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents";
+    public static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents-multiplatform";
+
+    public static final String fileSystemSaverFolder = System.getProperty("user.home") + File.separator + ".agi_working" + File.separator + "SystemSaver";
+    public static final FileSystemSaver fileSystemSaver = FileSystemSaver.builder()
+            .targetFolder(Path.of(fileSystemSaverFolder))
+            .build();
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(LocalAgent.class);
     private ChatModel chatModel;
-    protected ConversationSessionManager sessionManager;
+    protected FileSessionManager sessionManager = FileSessionManager.Companion.getInstance();
 
     public static void main(String[] args) {
         LocalAgent localAgent = new LocalAgent();
         localAgent.initializeChatModel();
         var agent = localAgent.buildAgent();
-        localAgent.startInteractiveSession(agent);
     }
 
     /**
@@ -325,11 +325,11 @@ public class LocalAgent {
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
                 .description("请确认信息收集工具执行")
                 .build());
-        ReactAgent writerAgent = ReactAgent.builder()
-                .name("writer_agent")
+        ReactAgent agent = ReactAgent.builder()
+                .name("agent")
                 .model(chatModel)
                 .tools(tools)
-                .saver(new MemorySaver())
+                .saver(fileSystemSaver)
                 .hooks(HumanInTheLoopHook.builder().approvalOn(approvalOn).build())
 //                .hooks(ShellToolAgentHook.builder()
 //                        .shellToolName("execute_shell_command")
@@ -348,7 +348,8 @@ public class LocalAgent {
                         直接使用grep搜索文件内容
                         """.formatted(WORKSPACE_ROOT, LocalDateTime.now().toString()))
                 .interceptors(interceptors)
-                .outputKey("writer_output")
+                .outputKey("agent_output")
+                .returnReasoningContents(true)
                 .build();
 //        ReactAgent checkAgent = ReactAgent.builder()
 //                .name("check_agent")
@@ -379,7 +380,7 @@ public class LocalAgent {
 //                .model(chatModel)
 //                .tools(List.of(AgentTool.create(writerAgent), AgentTool.create(checkAgent), AgentTool.create(fallbackAgent)))
 //                .build();
-        return writerAgent;
+        return agent;
     }
 
     private String getSystemPrompt() {
@@ -398,7 +399,7 @@ public class LocalAgent {
                 - **功能**: 本地文件操作助手,可以将创作的内容写入本地文件
                 - **适用场景**:
                   * 可以通过工具操作本地文件，例如创建，编辑，查找，读取，目录探索、文件
-                  * 控制台命令执行 完成各种本地任务 (工作目录 D:/local-github/chinaunicom-standard-ai-agents)
+                  * 控制台命令执行 完成各种本地任务
                 - **输出**: writer_output
                 ### check_agent
                 - **功能**： 负责检查当前用户任务是否已经完成
@@ -419,7 +420,7 @@ public class LocalAgent {
                 """;
     }
 
-    public Flux<ServerSentEvent<AgentOutput<Object>>> toFlux(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
+    public Flux<AgentOutput<Object>> toFlux(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
         var builder = RunnableConfig.builder().threadId(threadId);
         if (feedbackMetadata != null) {
             builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, feedbackMetadata);
@@ -474,13 +475,12 @@ public class LocalAgent {
     @SneakyThrows
     private String selectOrCreateSession(Scanner scanner) {
         // 获取所有会话列表
-        var sessionInfoList = sessionManager.getSessionInfoList();
+        var sessionInfoList = sessionManager.loadSessionsBlocking();
         String sessionId;
 
         if (sessionInfoList.isEmpty()) {
             // 没有会话记录，直接创建新会话
             sessionId = "local-agent-session-" + System.currentTimeMillis();
-            sessionManager.getOrCreateSession(sessionId);
             System.out.println("\n[系统提示] 未找到历史会话，将创建新会话");
         } else {
             // 列出所有会话供用户选择
@@ -527,20 +527,13 @@ public class LocalAgent {
             if (selectedIndex == 0 || selectedIndex > sessionInfoList.size()) {
                 // 创建新会话
                 sessionId = "local-agent-session-" + System.currentTimeMillis();
-                sessionManager.getOrCreateSession(sessionId);
+
                 System.out.println("\n[系统提示] 将创建新会话");
             } else {
                 // 加载选中的会话
                 var selectedSession = sessionInfoList.get(selectedIndex - 1);
                 sessionId = selectedSession.getSessionId();
-                boolean loaded = sessionManager.loadSessionById(sessionId);
-                if (loaded) {
-                    System.out.printf("\n[系统提示] 已加载会话: %s (%d 条消息)%n", sessionId, selectedSession.getMessageCount());
-                } else {
-                    System.out.println("\n[系统提示] 会话加载失败，将创建新会话");
-                    sessionId = "local-agent-session-" + System.currentTimeMillis();
-                    sessionManager.getOrCreateSession(sessionId);
-                }
+
             }
         }
 
@@ -548,143 +541,136 @@ public class LocalAgent {
         return sessionId;
     }
 
-    @SneakyThrows
-    private void startInteractiveSession(Agent agent) {
-        String threadId = "local-agent-session-" + System.currentTimeMillis();
-        Scanner scanner = new Scanner(System.in);
-
-        // 初始化会话管理器
-        sessionManager = new ConversationSessionManager();
-        sessionManager.init();
-
-        // 加载或创建会话
-        String sessionId = sessionManager.getOrCreateSession(threadId);
-        System.out.println("会话ID: " + sessionId);
-
-        System.out.println("""
-                ========== 本地文件操作智能体已启动 ==========
-                输入 'exit' 或 'quit' 退出
-                输入 'history' 查看对话历史
-                输入 'clear' 清空对话历史
-                输入 '/help' 查看所有命令
-                示例 @src\\test\\resources\\提示词-小说创作助手.md 帮我写个东方玄幻修仙小说，修炼体系参照凡人修仙传 主角自定义、爽文风格
-                示例 帮我查找并修复分段导入接口的bug
-                示例 详细解释ConversationPlanFlowFactory实现原理具体到每个节点
-                示例 优化LocalAgent代码
-                示例 智能体发布增加增加版本重复校验
-                =============================================
-                """);
-
-        AtomicReference<InterruptionMetadata> interruptionMetadata = new AtomicReference<>();
-        Map<String, Object> stateUpdate = new HashMap<>();
-        StringBuilder assistantResponseBuilder = new StringBuilder();
-
-        while (true) {
-            try {
-                System.out.print("\n您: ");
-                String userInput = scanner.nextLine().trim();
-                // 处理特殊命令
-                if (handleSpecialCommands(userInput, null, agent, sessionId)) {
-                    continue;
-                }
-
-                // 记录用户消息
-                sessionManager.addUserMessage(sessionId, userInput);
-
-                // 处理对话
-                System.out.println("\n助手: ");
-                assistantResponseBuilder.setLength(0); // 清空助手响应构建器
-                String finalSessionId = sessionId;
-                toFlux(agent, userInput, sessionId, interruptionMetadata.get(), stateUpdate).doOnNext(output -> {
-                    if (output.data().getChunk() != null) {
-                        String chunk = output.data().getChunk();
-                        System.out.print(chunk);
-                        System.out.flush();
-                        assistantResponseBuilder.append(chunk);
-                    }
-
-                    // 处理工具反馈
-                    if (!CollectionUtils.isEmpty(output.data().getToolFeedbacks())) {
-                        for (InterruptionMetadata.ToolFeedback toolFeedback : output.data().getToolFeedbacks()) {
-                            String feedbackMsg = String.format("\n[系统提示] %s: %s", toolFeedback.getName(), toolFeedback.getDescription());
-                            System.err.println(feedbackMsg);
-                            InterruptionMetadata.Builder newBuilder = InterruptionMetadata.builder()
-                                    .nodeId(output.data().getNode())
-                                    .state(new OverAllState(output.data().getData()));
-                            InterruptionMetadata.ToolFeedback approvedFeedback = InterruptionMetadata.ToolFeedback.builder(toolFeedback)
-                                    .description(toolFeedback.getDescription())
-                                    .result(InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED)
-                                    .build();
-                            newBuilder.addToolFeedback(approvedFeedback);
-                            interruptionMetadata.set(newBuilder.build());
-                            // 记录系统消息
-                            sessionManager.addSystemMessage(finalSessionId, feedbackMsg.trim());
-                        }
-                    }
-
-                    // 处理工具调用
-                    if (output.data().getMessage() instanceof AssistantMessage message) {
-                        if (!CollectionUtils.isEmpty(message.getToolCalls())) {
-                            for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
-                                System.err.print("\n[工具调用]:" + toolCall.name());
-                                try {
-                                    String arguments = toolCall.arguments();
-                                    String displayArgs = (arguments != null && !arguments.trim()
-                                            .isEmpty()) ? arguments : "无参数";
-                                    System.err.print(" 参数: " + displayArgs + "\n");
-                                    // 记录工具调用
-                                    Map<String, Object> argumentsMap = new HashMap<>();
-                                    if (arguments != null && !arguments.trim().isEmpty()) {
-                                        try {
-                                            argumentsMap = Json.to(arguments, Map.class);
-                                        } catch (Exception jsonException) {
-                                            log.warn("解析工具调用参数失败: {}", jsonException.getMessage());
-                                            // 使用原始字符串作为参数
-                                            argumentsMap.put("raw_arguments", arguments);
-                                        }
-                                    }
-                                    sessionManager.addToolCallMessage(finalSessionId, toolCall.name(), argumentsMap, toolCall.id());
-                                } catch (Exception e) {
-                                    System.err.print(" 参数: [参数处理失败]");
-                                }
-                            }
-                        }
-                    }
-                    // 处理工具调用响应
-                    if (output.data().getMessage() instanceof ToolResponseMessage message) {
-                        if (!CollectionUtils.isEmpty(message.getResponses())) {
-                            for (var response : message.getResponses()) {
-                                String responseStr = response.responseData() != null ? response.responseData() : "执行成功";
-                                System.err.print(" ✅ 执行成功！\n");
-                                System.err.flush();
-                                // 记录工具响应
-                                sessionManager.addToolResponseMessage(finalSessionId, response.name(), responseStr, true);
-                            }
-                        }
-                    }
-                }).doOnComplete(() -> {
-                    // 保存助手响应
-                    if (assistantResponseBuilder.length() > 0) {
-                        sessionManager.addAssistantMessage(finalSessionId, assistantResponseBuilder.toString());
-                    }
-                    System.out.println("[本轮对话结束]");
-                    System.out.println("[会话已自动保存]");
-                }).doOnError(error -> {
-                    String errorMsg = "\n[发生错误]: " + error.getMessage();
-                    System.err.println(errorMsg);
-                    // 记录错误消息
-                    sessionManager.addErrorMessage(finalSessionId, error.getMessage());
-                }).blockLast();
-            } catch (Exception e) {
-                String errorMsg = "\n[处理过程中发生未捕获的异常]: " + e.getMessage();
-                System.err.println(errorMsg);
-                // 记录错误消息
-                sessionManager.addErrorMessage(sessionId, e.getMessage());
-                // 继续循环，允许用户继续输入
-                stateUpdate.put("err", e);
-            }
-        }
-    }
+//    @SneakyThrows
+//    private void startInteractiveSession(Agent agent) {
+//        String threadId = "local-agent-session-" + System.currentTimeMillis();
+//        Scanner scanner = new Scanner(System.in);
+//
+//        // 加载或创建会话
+//
+//        System.out.println("""
+//                ========== 本地文件操作智能体已启动 ==========
+//                输入 'exit' 或 'quit' 退出
+//                输入 'history' 查看对话历史
+//                输入 'clear' 清空对话历史
+//                输入 '/help' 查看所有命令
+//                示例 @src\\test\\resources\\提示词-小说创作助手.md 帮我写个东方玄幻修仙小说，修炼体系参照凡人修仙传 主角自定义、爽文风格
+//                示例 帮我查找并修复分段导入接口的bug
+//                示例 详细解释ConversationPlanFlowFactory实现原理具体到每个节点
+//                示例 优化LocalAgent代码
+//                示例 智能体发布增加增加版本重复校验
+//                =============================================
+//                """);
+//
+//        AtomicReference<InterruptionMetadata> interruptionMetadata = new AtomicReference<>();
+//        Map<String, Object> stateUpdate = new HashMap<>();
+//        StringBuilder assistantResponseBuilder = new StringBuilder();
+//
+//        while (true) {
+//            try {
+//                System.out.print("\n您: ");
+//                String userInput = scanner.nextLine().trim();
+//                // 处理特殊命令
+//                if (handleSpecialCommands(userInput, null, agent, sessionId)) {
+//                    continue;
+//                }
+//
+//                // 记录用户消息
+//
+//                // 处理对话
+//                System.out.println("\n助手: ");
+//                assistantResponseBuilder.setLength(0); // 清空助手响应构建器
+//
+//                toFlux(agent, userInput, sessionId, interruptionMetadata.get(), stateUpdate).doOnNext(output -> {
+//                    if (output.data().getChunk() != null) {
+//                        String chunk = output.data().getChunk();
+//                        System.out.print(chunk);
+//                        System.out.flush();
+//                        assistantResponseBuilder.append(chunk);
+//                    }
+//
+//                    // 处理工具反馈
+//                    if (!CollectionUtils.isEmpty(output.data().getToolFeedbacks())) {
+//                        for (InterruptionMetadata.ToolFeedback toolFeedback : output.data().getToolFeedbacks()) {
+//                            String feedbackMsg = String.format("\n[系统提示] %s: %s", toolFeedback.getName(), toolFeedback.getDescription());
+//                            System.err.println(feedbackMsg);
+//                            InterruptionMetadata.Builder newBuilder = InterruptionMetadata.builder()
+//                                    .nodeId(output.data().getNode())
+//                                    .state(new OverAllState(output.data().getData()));
+//                            InterruptionMetadata.ToolFeedback approvedFeedback = InterruptionMetadata.ToolFeedback.builder(toolFeedback)
+//                                    .description(toolFeedback.getDescription())
+//                                    .result(InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED)
+//                                    .build();
+//                            newBuilder.addToolFeedback(approvedFeedback);
+//                            interruptionMetadata.set(newBuilder.build());
+//                            // 记录系统消息
+//                            sessionManager.addSystemMessage(finalSessionId, feedbackMsg.trim());
+//                        }
+//                    }
+//
+//                    // 处理工具调用
+//                    if (output.data().getMessage() instanceof AssistantMessage message) {
+//                        if (!CollectionUtils.isEmpty(message.getToolCalls())) {
+//                            for (AssistantMessage.ToolCall toolCall : message.getToolCalls()) {
+//                                System.err.print("\n[工具调用]:" + toolCall.name());
+//                                try {
+//                                    String arguments = toolCall.arguments();
+//                                    String displayArgs = (arguments != null && !arguments.trim()
+//                                            .isEmpty()) ? arguments : "无参数";
+//                                    System.err.print(" 参数: " + displayArgs + "\n");
+//                                    // 记录工具调用
+//                                    Map<String, Object> argumentsMap = new HashMap<>();
+//                                    if (arguments != null && !arguments.trim().isEmpty()) {
+//                                        try {
+//                                            argumentsMap = Json.to(arguments, Map.class);
+//                                        } catch (Exception jsonException) {
+//                                            log.warn("解析工具调用参数失败: {}", jsonException.getMessage());
+//                                            // 使用原始字符串作为参数
+//                                            argumentsMap.put("raw_arguments", arguments);
+//                                        }
+//                                    }
+//                                    sessionManager.addToolCallMessage(finalSessionId, toolCall.name(), argumentsMap, toolCall.id());
+//                                } catch (Exception e) {
+//                                    System.err.print(" 参数: [参数处理失败]");
+//                                }
+//                            }
+//                        }
+//                    }
+//                    // 处理工具调用响应
+//                    if (output.data().getMessage() instanceof ToolResponseMessage message) {
+//                        if (!CollectionUtils.isEmpty(message.getResponses())) {
+//                            for (var response : message.getResponses()) {
+//                                String responseStr = response.responseData() != null ? response.responseData() : "执行成功";
+//                                System.err.print(" ✅ 执行成功！\n");
+//                                System.err.flush();
+//                                // 记录工具响应
+//                                sessionManager.addToolResponseMessage(finalSessionId, response.name(), responseStr, true);
+//                            }
+//                        }
+//                    }
+//                }).doOnComplete(() -> {
+//                    // 保存助手响应
+//                    if (assistantResponseBuilder.length() > 0) {
+//                        sessionManager.addAssistantMessage(finalSessionId, assistantResponseBuilder.toString());
+//                    }
+//                    System.out.println("[本轮对话结束]");
+//                    System.out.println("[会话已自动保存]");
+//                }).doOnError(error -> {
+//                    String errorMsg = "\n[发生错误]: " + error.getMessage();
+//                    System.err.println(errorMsg);
+//                    // 记录错误消息
+//                    sessionManager.addErrorMessage(finalSessionId, error.getMessage());
+//                }).blockLast();
+//            } catch (Exception e) {
+//                String errorMsg = "\n[处理过程中发生未捕获的异常]: " + e.getMessage();
+//                System.err.println(errorMsg);
+//                // 记录错误消息
+//                sessionManager.addErrorMessage(sessionId, e.getMessage());
+//                // 继续循环，允许用户继续输入
+//                stateUpdate.put("err", e);
+//            }
+//        }
+//    }
 
 }
 

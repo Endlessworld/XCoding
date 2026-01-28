@@ -10,7 +10,8 @@
       "mcp__acp__Write",
       "Skill(skill-creator)",
       "Skill(skill-creator:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(.\\\\gradlew:*)"
     ]
   }
 }
