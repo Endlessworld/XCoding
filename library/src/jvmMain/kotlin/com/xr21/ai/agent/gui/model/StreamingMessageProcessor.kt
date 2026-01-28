@@ -3,6 +3,7 @@ package com.xr21.ai.agent.gui.model
 import com.xr21.ai.agent.entity.AgentOutput
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.Message
+import org.springframework.ai.chat.messages.MessageType
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import java.util.*
 
@@ -70,7 +71,7 @@ class StreamingMessageProcessor {
                 handleToolResponse(message, currentMessages, updates)
             }
 
-            // 情况2: AssistantMessage
+            // 情况2: AssistantMessage（可能包含 toolCalls）
             message is AssistantMessage -> {
                 handleAssistantMessage(
                     message = message,
@@ -123,6 +124,7 @@ class StreamingMessageProcessor {
 
     /**
      * 处理 AssistantMessage（可能包含 toolCalls）
+     * 如果当前有流式消息，将新的 AssistantMessage 添加到同一个 ConversationMessage 中
      */
     private fun handleAssistantMessage(
         message: AssistantMessage,
@@ -142,61 +144,127 @@ class StreamingMessageProcessor {
         if (existingIndex >= 0) {
             // 更新现有消息
             val existing = currentMessages[existingIndex] as ConversationMessage.Assistant
-
-            // 更新文本内容
-            val newRawMessages = existing.rawMessages.toMutableList()
-            val lastAssistantIndex = newRawMessages.indexOfLast { it is AssistantMessage }
-            if (lastAssistantIndex >= 0) {
-                // 更新最后一个 AssistantMessage 的文本
-                val lastAssistant = newRawMessages[lastAssistantIndex] as AssistantMessage
-                val updatedAssistant = if (isFinal) {
-                    AssistantMessage.builder().toolCalls(lastAssistant.toolCalls).content(content)
-                        .media(lastAssistant.media).properties(lastAssistant.metadata).build()
-                } else {
-                    AssistantMessage.builder().toolCalls(lastAssistant.toolCalls)
-                        .content((lastAssistant.text ?: "") + chunk).media(lastAssistant.media)
-                        .properties(lastAssistant.metadata).build()
-                }
-                newRawMessages[lastAssistantIndex] = updatedAssistant
-            }
-
-            // 添加工具调用（如果有）
-            if (message.toolCalls.isNotEmpty()) {
-                newRawMessages.add(message)
-            }
-
-            // 添加待处理的工具响应
-            if (pendingToolResponses.isNotEmpty()) {
-                newRawMessages.addAll(pendingToolResponses)
-            }
-
-            val updatedMsg = existing.copy(rawMessages = newRawMessages)
-            currentMessages[existingIndex] = updatedMsg
-            updates.add(updatedMsg)
-
-            if (isFinal) {
-                pendingToolResponses.clear()
-            }
+            updateExistingAssistantMessage(existing, message, content, isFinal, currentMessages, updates)
         } else {
-            // 创建新消息
-            val rawList = mutableListOf<Message>(message)
-            if (pendingToolResponses.isNotEmpty()) {
-                rawList.addAll(pendingToolResponses)
-            }
+            // 检查是否有当前流式消息，有则添加到同一个消息中
+            val streamingMsg = currentStreamingMessage
+            if (streamingMsg != null) {
+                // 将新的 AssistantMessage 添加到现有流式消息中
+                val newRawMessages = streamingMsg.rawMessages.toMutableList()
 
-            val assistantMsg = ConversationMessage.Assistant(
-                id = messageId,
-                timestamp = System.currentTimeMillis(),
-                rawMessages = rawList
-            )
-            currentMessages.add(assistantMsg)
-            updates.add(assistantMsg)
+                // 如果流式消息中没有 AssistantMessage，先更新第一条消息的文本
+                val lastAssistantIndex = newRawMessages.indexOfLast { it is AssistantMessage }
+                if (lastAssistantIndex >= 0) {
+                    val lastAssistant = newRawMessages[lastAssistantIndex] as AssistantMessage
+                    val updatedAssistant = AssistantMessage.builder()
+                        .toolCalls(lastAssistant.toolCalls)
+                        .content((lastAssistant.text ?: "") + content)
+                        .media(lastAssistant.media)
+                        .properties(lastAssistant.metadata)
+                        .build()
+                    newRawMessages[lastAssistantIndex] = updatedAssistant
+                }
 
-            if (isFinal) {
-                pendingToolResponses.clear()
+                // 添加新的 AssistantMessage
+                newRawMessages.add(message)
+
+                // 添加待处理的工具响应
+                if (pendingToolResponses.isNotEmpty()) {
+                    newRawMessages.addAll(pendingToolResponses)
+                }
+
+                val updatedMsg = streamingMsg.copy(rawMessages = newRawMessages)
+                val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
+                if (index >= 0) {
+                    currentMessages[index] = updatedMsg
+                    updates.add(updatedMsg)
+                }
+
+                if (isFinal) {
+                    pendingToolResponses.clear()
+                } else {
+                    currentStreamingMessage = updatedMsg
+                }
             } else {
-                currentStreamingMessage = assistantMsg
+                // 创建新消息
+                val rawList = mutableListOf<Message>(message)
+                if (pendingToolResponses.isNotEmpty()) {
+                    rawList.addAll(pendingToolResponses)
+                }
+
+                val assistantMsg = ConversationMessage.Assistant(
+                    id = messageId,
+                    timestamp = System.currentTimeMillis(),
+                    rawMessages = rawList
+                )
+                currentMessages.add(assistantMsg)
+                updates.add(assistantMsg)
+
+                if (isFinal) {
+                    pendingToolResponses.clear()
+                } else {
+                    currentStreamingMessage = assistantMsg
+                }
             }
+        }
+    }
+
+    /**
+     * 更新现有的 AssistantMessage
+     */
+    private fun updateExistingAssistantMessage(
+        existing: ConversationMessage.Assistant,
+        message: AssistantMessage,
+        content: String,
+        isFinal: Boolean,
+        currentMessages: MutableList<ConversationMessage>,
+        updates: MutableList<ConversationMessage>
+    ) {
+        val newRawMessages = existing.rawMessages.toMutableList()
+        val lastAssistantIndex = newRawMessages.indexOfLast { it is AssistantMessage }
+
+        if (lastAssistantIndex >= 0) {
+            // 更新最后一个 AssistantMessage 的文本
+            val lastAssistant = newRawMessages[lastAssistantIndex] as AssistantMessage
+            val updatedAssistant = if (isFinal) {
+                AssistantMessage.builder()
+                    .toolCalls(lastAssistant.toolCalls)
+                    .content(content)
+                    .media(lastAssistant.media)
+                    .properties(lastAssistant.metadata)
+                    .build()
+            } else {
+                AssistantMessage.builder()
+                    .toolCalls(lastAssistant.toolCalls)
+                    .content((lastAssistant.text ?: "") + content)
+                    .media(lastAssistant.media)
+                    .properties(lastAssistant.metadata)
+                    .build()
+            }
+            newRawMessages[lastAssistantIndex] = updatedAssistant
+        }
+
+        // 添加工具调用（如果有）
+        if (message.toolCalls.isNotEmpty()) {
+            newRawMessages.add(message)
+        }
+
+        // 添加待处理的工具响应
+        if (pendingToolResponses.isNotEmpty()) {
+            newRawMessages.addAll(pendingToolResponses)
+        }
+
+        val updatedMsg = existing.copy(rawMessages = newRawMessages)
+        val index = currentMessages.indexOfFirst { it.id == existing.id }
+        if (index >= 0) {
+            currentMessages[index] = updatedMsg
+            updates.add(updatedMsg)
+        }
+
+        if (isFinal) {
+            pendingToolResponses.clear()
+        } else {
+            currentStreamingMessage = updatedMsg
         }
     }
 
@@ -218,12 +286,25 @@ class StreamingMessageProcessor {
 
             if (lastAssistantIndex >= 0) {
                 val lastAssistant = newRawMessages[lastAssistantIndex] as AssistantMessage
-                val updatedAssistant = AssistantMessage.builder().toolCalls(lastAssistant.toolCalls)
-                    .content((lastAssistant.text ?: "") + chunk).media(lastAssistant.media)
-                    .properties(lastAssistant.metadata).build()
+                val updatedAssistant = AssistantMessage.builder()
+                    .toolCalls(lastAssistant.toolCalls)
+                    .content((lastAssistant.text ?: "") + chunk)
+                    .media(lastAssistant.media)
+                    .properties(lastAssistant.metadata)
+                    .build()
 
                 newRawMessages[lastAssistantIndex] = updatedAssistant
 
+                val updatedMsg = streamingMsg.copy(rawMessages = newRawMessages)
+                val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
+                if (index >= 0) {
+                    currentMessages[index] = updatedMsg
+                    updates.add(updatedMsg)
+                }
+            } else {
+                // 如果没有 AssistantMessage，创建一个
+                val newAssistant = AssistantMessage(chunk)
+                newRawMessages.add(newAssistant)
                 val updatedMsg = streamingMsg.copy(rawMessages = newRawMessages)
                 val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
                 if (index >= 0) {
