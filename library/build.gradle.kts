@@ -92,11 +92,18 @@ kapt {
 compose.desktop {
     application {
         mainClass = "com.xr21.ai.agent.gui.ChatApplicationKt"
-
+        jvmArgs += listOf(
+            "--add-opens=java.base/java.net.http=ALL-UNNAMED",
+            "--add-opens=java.base/java.net=ALL-UNNAMED"
+        )
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb,TargetFormat.Exe)
-            packageName = "com.xr21.ai.agent.gui"
+            includeAllModules =true
+            packageName = "AgiWorking"
             packageVersion = "1.0.0"
+            description = "Compose Multiplatform App"
+            copyright = "© 2024 Endless. All rights reserved."
+            vendor = "Endless vendor"
         }
     }
 }
