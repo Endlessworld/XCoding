@@ -8,6 +8,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.metadata.Usage;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -207,10 +208,22 @@ public class AgentOutput<T> {
 
         @JsonProperty("metadata")
         public AgentOutputBuilder<T> metadata(Map<String, Object> metadata) {
-            this.metadata = metadata;
+            if ( this.metadata != null) {
+                this.metadata.putAll(metadata);
+            }else{
+                this.metadata = new HashMap<>(metadata);
+            }
             return this;
         }
 
+        @JsonProperty("metadata")
+        public AgentOutputBuilder<T> metadata(String key, Object value) {
+            if (metadata == null) {
+                metadata = new HashMap<>();
+            }
+            metadata.put(key, value);
+            return this;
+        }
         @JsonProperty("agent")
         public AgentOutputBuilder<T> agent(String agent) {
             this.agent = agent;

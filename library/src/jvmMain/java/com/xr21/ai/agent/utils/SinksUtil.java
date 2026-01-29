@@ -100,6 +100,10 @@ public class SinksUtil {
         jsonMap.put("timestamp", System.currentTimeMillis());
         if (output instanceof StreamingOutput<?> streamingOutput) {
             builder.message(streamingOutput.message());
+            if (streamingOutput.message() != null) {
+                builder.metadata(streamingOutput.message().getMetadata());
+                builder.metadata("timestamp",System.currentTimeMillis());
+            }
             builder.originData(streamingOutput.getOriginData());
             builder.chunk(streamingOutput.chunk());
             builder.tokenUsage(streamingOutput.tokenUsage());

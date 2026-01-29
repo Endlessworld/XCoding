@@ -32,14 +32,20 @@ import org.springframework.ai.chat.messages.AssistantMessage
  * 【优化】支持在 Markdown 文本流中即时渲染工具调用信息
  * 使用独立组件设计，支持丰富的动画效果和样式定制
  * 【优化】使用更紧凑的布局，自然嵌入消息中间
+ * 【优化】根据是否有响应显示不同状态：
+ * - 无响应时显示"执行中"
+ * - 有响应时显示"执行完成"
  */
 @Composable
 fun InlineToolCall(
     toolCall: AssistantMessage.ToolCall,
     modifier: Modifier = Modifier,
     isStreaming: Boolean = false,
+    responseData: String? = null,
+    isError: Boolean = false,
     onExpandChange: (Boolean) -> Unit = {}
 ) {
+    val hasResponse = responseData != null
     var expanded by remember { mutableStateOf(false) }
     var visible by remember { mutableStateOf(false) }
 
@@ -51,7 +57,20 @@ fun InlineToolCall(
 
     val chatColors = getCurrentChatColors()
     val toolConfig = getToolConfig(toolCall.name)
-    
+
+    // 根据状态显示不同文本
+    val statusText = when {
+        isStreaming -> "执行中..."
+        hasResponse -> if (isError) "❌ 执行失败" else "✅ 执行完成"
+        else -> "🚀 发起调用"
+    }
+
+    val statusColor = when {
+        isStreaming -> toolConfig.color
+        hasResponse -> if (isError) Color(0xFFE53935) else Color(0xFF43A047)
+        else -> toolConfig.color.copy(alpha = 0.8f)
+    }
+
     AnimatedVisibility(
         visible = visible,
         label = "inline_tool_call_${toolCall.id}",
@@ -77,16 +96,16 @@ fun InlineToolCall(
                     width = 1.dp,
                     brush = Brush.horizontalGradient(
                         colors = listOf(
-                            toolConfig.color.copy(alpha = 0.3f),
-                            toolConfig.color.copy(alpha = 0.1f),
-                            toolConfig.color.copy(alpha = 0.3f)
+                            statusColor.copy(alpha = 0.4f),
+                            statusColor.copy(alpha = 0.15f),
+                            statusColor.copy(alpha = 0.4f)
                         )
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ),
             shape = RoundedCornerShape(8.dp),
             colors = CardDefaults.cardColors(
-                containerColor = chatColors.toolCallBackgroundColor.copy(alpha = 0.4f)
+                containerColor = statusColor.copy(alpha = if (hasResponse || isError) 0.15f else 0.35f)
             )
         ) {
             Column(
@@ -96,7 +115,7 @@ fun InlineToolCall(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { 
+                        .clickable {
                             expanded = !expanded
                             onExpandChange(expanded)
                         },
@@ -110,11 +129,11 @@ fun InlineToolCall(
                         // 工具图标带动画
                         ToolIcon(
                             icon = toolConfig.icon,
-                            color = toolConfig.color,
-                            isStreaming = isStreaming,
+                            color = statusColor,
+                            isStreaming = isStreaming && !hasResponse,
                             compact = true
                         )
-                        
+
                         Column {
                             Text(
                                 text = toolConfig.displayName,
@@ -133,17 +152,19 @@ fun InlineToolCall(
                             )
                         }
                     }
-                    
-                    // 展开/收起指示器
-                    Icon(
-                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (expanded) "收起" else "展开",
-                        tint = chatColors.textSecondary,
-                        modifier = Modifier.size(18.dp)
+
+                    // 状态标签
+                    Text(
+                        text = statusText,
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontSize = 10.sp,
+                            color = statusColor,
+                            fontWeight = FontWeight.Medium
+                        )
                     )
                 }
-                
-                // 动画展开的参数详情
+
+                // 动画展开的参数详情和响应内容
                 AnimatedVisibility(
                     visible = expanded,
                     label = "tool_params_${toolCall.id}",
@@ -157,64 +178,116 @@ fun InlineToolCall(
                 ) {
                     Column(
                         modifier = Modifier.padding(top = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // 参数标题
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        // 参数详情
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.List,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = toolConfig.color
-                            )
-                            Text(
-                                text = "参数详情",
-                                style = androidx.compose.ui.text.TextStyle(
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 10.sp,
-                                    color = toolConfig.color
-                                )
-                            )
-                        }
-                        
-                        // 参数列表
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(6.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            // 参数标题
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                val parameters = parseToolArguments(toolCall.arguments)
-                                parameters.forEach { (key, value) ->
-                                    ParameterItem(key = key, value = value)
+                                Icon(
+                                    imageVector = Icons.Default.List,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = statusColor
+                                )
+                                Text(
+                                    text = "参数详情",
+                                    style = androidx.compose.ui.text.TextStyle(
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 10.sp,
+                                        color = statusColor
+                                    )
+                                )
+                            }
+
+                            // 参数列表
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(6.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    val parameters = parseToolArguments(toolCall.arguments)
+                                    parameters.forEach { (key, value) ->
+                                        ParameterItem(key = key, value = value)
+                                    }
+
+                                    if (parameters.isEmpty()) {
+                                        Text(
+                                            text = "无参数",
+                                            style = androidx.compose.ui.text.TextStyle(
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 响应内容（如果有）
+                        if (hasResponse) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Terminal,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint = if (isError) Color(0xFFE53935) else Color(0xFF43A047)
+                                    )
+                                    Text(
+                                        text = "执行结果",
+                                        style = androidx.compose.ui.text.TextStyle(
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 10.sp,
+                                            color = if (isError) Color(0xFFE53935) else Color(0xFF43A047)
+                                        )
+                                    )
                                 }
 
-                                if (parameters.isEmpty()) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                ) {
                                     Text(
-                                        text = "无参数",
+                                        text = responseData?.ifBlank { "(无输出)" } ?: "",
                                         style = androidx.compose.ui.text.TextStyle(
-                                            fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        )
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                        ),
+                                        modifier = Modifier.padding(8.dp),
+                                        maxLines = 10,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
                         }
                     }
                 }
-                
-                // 流式状态指示
-                if (isStreaming) {
+
+                // 流式状态指示（仅在执行中时显示）
+                if (isStreaming && !hasResponse) {
                     Spacer(modifier = Modifier.height(6.dp))
-                    StreamingIndicator(color = toolConfig.color)
+                    StreamingIndicator(color = statusColor)
                 }
             }
         }

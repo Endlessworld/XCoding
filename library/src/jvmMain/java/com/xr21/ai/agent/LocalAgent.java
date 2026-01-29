@@ -20,9 +20,8 @@ import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.gui.FileSessionManager;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
-import com.xr21.ai.agent.tools.DefaultTokenCounter;
-import com.xr21.ai.agent.tools.FeedBackTool;
 import com.xr21.ai.agent.tools.WebSearchTool;
+import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.SinksUtil;
 import io.modelcontextprotocol.client.McpClient;
@@ -103,7 +102,7 @@ public class LocalAgent {
                 .stream()
                 .filter(toolCallback -> includes.contains(toolCallback.getToolDefinition().name()))
                 .toList());
-        tools.add(FeedBackTool.build("feed_back_tool", new FeedBackTool()));
+//        tools.add(FeedBackTool.build("feed_back_tool", new FeedBackTool()));
         tools.add(WebSearchTool.createWebSearchToolCallback());
         return tools;
     }

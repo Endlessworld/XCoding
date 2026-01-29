@@ -3,7 +3,6 @@ package com.xr21.ai.agent.gui.model
 import com.xr21.ai.agent.entity.AgentOutput
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.Message
-import org.springframework.ai.chat.messages.MessageType
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import java.util.*
 
@@ -33,7 +32,7 @@ class StreamingMessageProcessor {
         val message = output.message
         val chunk = output.chunk ?: ""
         val isFinal = metadata["final"] == true
-        val isThinking = metadata["thinking"] == true
+        val isThinking = metadata["reasoningContent"]?.toString()?.isNotEmpty() == true
         val hasError = metadata["error"] == true
 
         // 处理 Thinking 状态
@@ -41,7 +40,7 @@ class StreamingMessageProcessor {
             val sessionId = metadata["session_id"]?.toString()
             val thinkingMsg = ConversationMessage.Assistant(
                 id = if (!sessionId.isNullOrBlank()) sessionId else UUID.randomUUID().toString(),
-                timestamp = System.currentTimeMillis(),
+                timestamp = output.timestamp,
                 rawMessages = emptyList()
             )
             currentMessages.add(thinkingMsg)
@@ -55,7 +54,7 @@ class StreamingMessageProcessor {
             val errorContent = chunk.ifBlank { message?.text ?: "发生错误" }
             val errorMsg = ConversationMessage.Assistant(
                 id = UUID.randomUUID().toString(),
-                timestamp = System.currentTimeMillis(),
+                timestamp = output.timestamp,
                 rawMessages = listOf(AssistantMessage(errorContent))
             )
             currentMessages.add(errorMsg)
@@ -78,13 +77,14 @@ class StreamingMessageProcessor {
                     chunk = chunk,
                     isFinal = isFinal,
                     currentMessages = currentMessages,
-                    updates = updates
+                    updates = updates,
+                    output = output
                 )
             }
 
             // 情况3: 只有 chunk，没有完整的 message（流式输出中）
             chunk.isNotBlank() && message == null -> {
-                handleStreamingChunk(chunk, isFinal, currentMessages, updates)
+                handleStreamingChunk(chunk, isFinal, currentMessages, updates, output)
             }
         }
 
@@ -131,7 +131,8 @@ class StreamingMessageProcessor {
         chunk: String,
         isFinal: Boolean,
         currentMessages: MutableList<ConversationMessage>,
-        updates: MutableList<ConversationMessage>
+        updates: MutableList<ConversationMessage>,
+        output: AgentOutput<*>
     ) {
         val messageId = message.metadata["message_id"]?.toString() ?: UUID.randomUUID().toString()
         val content = message.text ?: chunk
@@ -194,7 +195,7 @@ class StreamingMessageProcessor {
 
                 val assistantMsg = ConversationMessage.Assistant(
                     id = messageId,
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = output.timestamp,
                     rawMessages = rawList
                 )
                 currentMessages.add(assistantMsg)
@@ -275,7 +276,8 @@ class StreamingMessageProcessor {
         chunk: String,
         isFinal: Boolean,
         currentMessages: MutableList<ConversationMessage>,
-        updates: MutableList<ConversationMessage>
+        updates: MutableList<ConversationMessage>,
+        output: AgentOutput<*>
     ) {
         val streamingMsg = currentStreamingMessage
 
@@ -320,7 +322,7 @@ class StreamingMessageProcessor {
             // 创建新流式消息
             val newMsg = ConversationMessage.Assistant(
                 id = UUID.randomUUID().toString(),
-                timestamp = System.currentTimeMillis(),
+                timestamp = output.timestamp,
                 rawMessages = listOf(AssistantMessage(chunk))
             )
             currentMessages.add(newMsg)

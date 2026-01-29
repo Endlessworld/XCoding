@@ -11,12 +11,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
 
 import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
 
-public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, ToolContext, String> {
+public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = """
             从文件系统读取文件或目录。如果是目录，则会递归读取该目录及其所有子目录下的文件。
             你可以使用这个工具直接访问任何文件或目录、且一次性可以读取多个文件或目录。
@@ -47,31 +49,34 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
                 .build();
     }
 
-    public String apply(ReadFileRequest request, ToolContext toolContext) {
+    public Map<String, Object> apply(ReadFileRequest request, ToolContext toolContext) {
+        Map<String, Object> result = new HashMap<>();
+        
         if (request.getFilePaths() == null || request.getFilePaths().isEmpty()) {
-            return "Error: No file or directory paths provided";
+            result.put("error", "No file or directory paths provided");
+            return result;
         }
 
-        StringBuilder result = new StringBuilder();
+        StringBuilder content = new StringBuilder();
         for (String pathStr : request.getFilePaths()) {
             try {
                 Path path = Paths.get(pathStr).normalize();
                 if (!Files.exists(path)) {
-                    result.append("Error: Path not found - ").append(pathStr).append("\n\n");
+                    content.append("Path not found - ").append(pathStr).append("\n\n");
                     continue;
                 }
 
                 if (Files.isDirectory(path)) {
-                    processDirectory(path, result, request.offset, request.limit);
+                    processDirectory(path, content, request.offset, request.limit);
                 } else {
-                    processFile(path, result, request.offset, request.limit);
+                    processFile(path, content, request.offset, request.limit);
                 }
             } catch (IOException e) {
-                result.append("Error reading path ").append(pathStr).append(": ").append(e.getMessage()).append("\n\n");
+                content.append("reading path failed").append(pathStr).append(": ").append(e.getMessage()).append("\n\n");
             } catch (SecurityException e) {
-                result.append("Permission denied when accessing path: ").append(pathStr).append("\n\n");
+                content.append("Permission denied when accessing path: ").append(pathStr).append("\n\n");
             } catch (Exception e) {
-                result.append("Unexpected error processing path ")
+                content.append("Unexpected error processing path ")
                         .append(pathStr)
                         .append(": ")
                         .append(e.getMessage())
@@ -79,7 +84,8 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
             }
         }
 
-        return result.toString().trim();
+        result.put("content", content.toString().trim());
+        return result;
     }
 
     private void processDirectory(Path dir, StringBuilder result, Integer offset, Integer limit) throws IOException {

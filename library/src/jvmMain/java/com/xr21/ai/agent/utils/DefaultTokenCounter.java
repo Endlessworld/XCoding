@@ -1,4 +1,4 @@
-package com.xr21.ai.agent.tools;
+package com.xr21.ai.agent.utils;
 
 import com.alibaba.cloud.ai.graph.agent.hook.TokenCounter;
 import org.springframework.ai.chat.messages.AssistantMessage;

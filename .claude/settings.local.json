@@ -11,7 +11,8 @@
       "Skill(skill-creator)",
       "Skill(skill-creator:*)",
       "Bash(python:*)",
-      "Bash(.\\\\gradlew:*)"
+      "Bash(.\\\\gradlew:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

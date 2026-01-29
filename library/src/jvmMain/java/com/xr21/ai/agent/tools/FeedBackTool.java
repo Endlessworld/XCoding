@@ -22,10 +22,12 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.function.BiFunction;
 
-public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolContext, String> {
+public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolContext, Map<String, Object>> {
 
     private static final Scanner SCANNER = new Scanner(System.in);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -68,7 +70,8 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
 
     @SneakyThrows
     @Override
-    public String apply(AskRequest request, ToolContext toolContext) {
+    public Map<String, Object> apply(AskRequest request, ToolContext toolContext) {
+        Map<String, Object> result = new HashMap<>();
         System.out.println("\n[系统提示] " + request.getPrompt());
 
         // 如果需要用户确认
@@ -76,23 +79,29 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
             System.out.print("是否确认执行? (y/n): ");
             String confirmation = SCANNER.nextLine().trim().toLowerCase();
             if (!confirmation.equals("y") && !confirmation.equals("yes")) {
-                return "用户取消了操作";
+                result.put("message", "用户取消了操作");
+                result.put("confirmed", false);
+                return result;
             }
+            result.put("confirmed", true);
         }
 
         // 如果需要用户输入
         if (request.isRequireInput()) {
             System.out.print("请输入: ");
             String userInput = SCANNER.nextLine().trim();
-            return "用户输入: " + userInput;
+            result.put("userInput", userInput);
+            return result;
         }
 
         // 如果只是显示信息
         if (request.getMessage() != null && !request.getMessage().isEmpty()) {
-            return "已显示消息给用户: " + request.getMessage();
+            result.put("message", "已显示消息给用户: " + request.getMessage());
+            return result;
         }
 
-        return "操作完成";
+        result.put("message", "操作完成");
+        return result;
     }
 
     public static class AskRequest {
@@ -127,21 +136,13 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
             return this.prompt;
         }
 
-        public String getMessage() {
-            return this.message;
-        }
-
-        public boolean isRequireConfirmation() {
-            return this.requireConfirmation;
-        }
-
-        public boolean isRequireInput() {
-            return this.requireInput;
-        }
-
         @JsonProperty("prompt")
         public void setPrompt(String prompt) {
             this.prompt = prompt;
+        }
+
+        public String getMessage() {
+            return this.message;
         }
 
         @JsonProperty("message")
@@ -149,9 +150,17 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
             this.message = message;
         }
 
+        public boolean isRequireConfirmation() {
+            return this.requireConfirmation;
+        }
+
         @JsonProperty("require_confirmation")
         public void setRequireConfirmation(boolean requireConfirmation) {
             this.requireConfirmation = requireConfirmation;
+        }
+
+        public boolean isRequireInput() {
+            return this.requireInput;
         }
 
         @JsonProperty("require_input")

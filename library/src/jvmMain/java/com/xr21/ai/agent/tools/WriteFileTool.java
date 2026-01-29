@@ -21,7 +21,7 @@ import java.util.function.BiFunction;
 
 import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
 
-public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest, ToolContext, Map<String, String>> {
+public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = """
             写入文件系统中的新文件。
             Usage:
@@ -39,11 +39,13 @@ public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest,
                 .build();
     }
 
-    public Map<String, String> apply(WriteFileRequest request, ToolContext toolContext) {
+    public Map<String, Object> apply(WriteFileRequest request, ToolContext toolContext) {
+        Map<String, Object> result = new HashMap<>();
         try {
             Path path = Paths.get(request.filePath);
             if (Files.exists(path)) {
-                return Map.of("Error created file: ", "File already exists: " + request.filePath + ". Use edit_file to modify existing files.");
+                result.put("error", "File already exists: " + request.filePath + ". Use edit_file to modify existing files.");
+                return result;
             } else {
                 Path parent = path.getParent();
                 if (parent != null && !Files.exists(parent)) {
@@ -51,12 +53,12 @@ public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest,
                 }
 
                 Files.writeString(path, request.content);
-                Map<String, String> result = new HashMap<>();
-                return Map.of("Successfully created file: ", request.filePath);
-
+                result.put("message", "Successfully created file: " + request.filePath);
+                return result;
             }
         } catch (IOException e) {
-            return Map.of("Error writing file: ", e.getMessage());
+            result.put("error", "Error writing file: " + e.getMessage());
+            return result;
         }
     }
 

@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import org.springframework.ai.chat.messages.Message
 import java.io.File
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -28,6 +29,11 @@ class FileSessionManager private constructor() {
                 instance ?: FileSessionManager().also { instance = it }
             }
         }
+
+        /**
+         * 本地时间格式（显示到秒）
+         */
+        private val LOCAL_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     }
     // Kotlin
     fun loadSessionsBlocking(): List<UiSessionInfo> = runBlocking {
@@ -101,6 +107,8 @@ class FileSessionManager private constructor() {
      */
     suspend fun createSession(): String = withContext(Dispatchers.IO) {
         val sessionId = "session-${System.nanoTime()}"
+
+
         sessionId
     }
 
@@ -131,7 +139,6 @@ class FileSessionManager private constructor() {
     private fun extractMessagesFromCheckpoint(checkpoint: Checkpoint): List<Message> {
         val state = checkpoint.state
         val messagesList = state["messages"] as? List<*> ?: return emptyList()
-
         return messagesList.filterIsInstance<Message>()
     }
 
@@ -142,16 +149,38 @@ class FileSessionManager private constructor() {
         val firstUserMessage =
             messages.firstOrNull { it.messageType == org.springframework.ai.chat.messages.MessageType.USER }?.text
         val briefDescription = firstUserMessage?.take(50) ?: "新会话"
-        val lastUpdated =
-            messages.lastOrNull()?.metadata?.get("timestamp")?.toString() ?: LocalDateTime.now().toString()
+
+        // 解析时间戳并格式化为本地时间格式
+        val lastUpdated: String
+        val timestamp: Long
+        val lastMessageTimestamp = messages.lastOrNull()?.metadata?.get("timestamp")?.toString()
+        val parsedTimestamp = try {
+            if (lastMessageTimestamp != null) {
+                // 尝试解析时间戳（毫秒或秒）
+                lastMessageTimestamp.toLongOrNull()?.let {
+                    if (it > 1_000_000_000_000) it else it * 1000 // 转换为毫秒
+                } ?: System.currentTimeMillis()
+            } else {
+                System.currentTimeMillis()
+            }
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+        timestamp = parsedTimestamp
+
+        lastUpdated = LocalDateTime.ofInstant(
+            java.time.Instant.ofEpochMilli(timestamp),
+            java.time.ZoneId.systemDefault()
+        ).format(LOCAL_TIME_FORMATTER)
 
         return UiSessionInfo(
             sessionId = threadId,
             filePath = filePath,
             messageCount = messages.size,
-            createdAt = LocalDateTime.now().toString(),
+            createdAt = LocalDateTime.now().format(LOCAL_TIME_FORMATTER),
             lastUpdated = lastUpdated,
-            briefDescription = briefDescription
+            briefDescription = briefDescription,
+            timestamp = timestamp
         )
     }
 
@@ -186,7 +215,11 @@ data class UiSessionInfo(
     val messageCount: Int,
     val createdAt: String,
     val lastUpdated: String,
-    val briefDescription: String
+    val briefDescription: String,
+    /**
+     * 原始时间戳（毫秒），用于排序
+     */
+    val timestamp: Long = System.currentTimeMillis()
 )
 
 /**

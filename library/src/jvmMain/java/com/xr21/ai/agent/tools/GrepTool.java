@@ -14,13 +14,14 @@ import org.springframework.ai.tool.function.FunctionToolCallback;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
 import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
 
-public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, Map<String, String>> {
+public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = "Search for a pattern in files.\n\nUsage:\n- The pattern parameter is the text to search for (literal string, not regex)\n- The path parameter filters which directory to search in\n- The glob parameter accepts a glob pattern to filter which files to search\n\nExamples:\n- Search all files: `grep(pattern=\"TODO\")`\n- The search is case-sensitive by default.\n";
 
     public static ToolCallback createGrepToolCallback(String description) {
@@ -30,10 +31,11 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
                 .build();
     }
 
-    public Map<String, String> apply(GrepRequest request, ToolContext toolContext) {
+    public Map<String, Object> apply(GrepRequest request, ToolContext toolContext) {
+        Map<String, Object> result = new HashMap<>();
         try {
             Path searchPath = request.path != null ? Paths.get(request.path) : Paths.get(WORKSPACE_ROOT);
-            List<String> results = new ArrayList();
+            List<String> matches = new ArrayList();
             PathMatcher globMatcher = request.glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + request.glob) : null;
             Files.walk(searchPath)
@@ -52,9 +54,7 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
                                         case "count" -> var10000 = path + ": matched";
                                         default -> var10000 = path.toString();
                                     }
-
-                                    String result = var10000;
-                                    results.add(result);
+                                    matches.add(var10000);
                                     if ("files_with_matches".equals(request.outputMode)) {
                                         break;
                                     }
@@ -64,14 +64,16 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
                         }
 
                     });
-            if (results.isEmpty()) {
-                return Map.of("No matches found for pattern: ", request.pattern);
+            if (matches.isEmpty()) {
+                result.put("matches", "No matches found for pattern: " + request.pattern);
             } else {
-                return Map.of("pattern: ", String.join("\n", results));
+                result.put("matches", String.join("\n", matches));
             }
+            return result;
 
         } catch (IOException e) {
-            return Map.of("Error searching files: ", e.getMessage());
+            result.put("error", "Error searching files: " + e.getMessage());
+            return result;
         }
     }
 

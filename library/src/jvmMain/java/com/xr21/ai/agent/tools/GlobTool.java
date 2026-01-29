@@ -8,13 +8,14 @@ import org.springframework.ai.tool.function.FunctionToolCallback;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
 import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
 
-public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, Map<String, String>> {
+public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = "Find files matching a glob pattern.\n\nUsage:\n- Supports standard glob patterns: `*` (any characters), `**` (any directories), `?` (single character)\n- Returns a list of absolute file paths that match the pattern\n\nExamples:\n- `**/*.java` - Find all Java files\n- `*.txt` - Find all text files in root\n- `/src/**/*.xml` - Find all XML files under /src\n";
 
     public static ToolCallback createGlobToolCallback(String description) {
@@ -24,7 +25,8 @@ public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, M
                 .build();
     }
 
-    public Map<String, String> apply(@ToolParam(description = "The glob pattern to match files") GlobPattern globPattern, ToolContext toolContext) {
+    public Map<String, Object> apply(@ToolParam(description = "The glob pattern to match files") GlobPattern globPattern, ToolContext toolContext) {
+        Map<String, Object> result = new HashMap<>();
         try {
             String pattern = globPattern.getPattern();
             Path basePathObj = Paths.get(WORKSPACE_ROOT);
@@ -34,9 +36,16 @@ public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, M
                 Path relativePath = basePathObj.relativize(path);
                 return matcher.matches(relativePath) || matcher.matches(path);
             }).forEach((path) -> matchedFiles.add(path.toString()));
-            return Map.of("files", matchedFiles.isEmpty() ? "No files found matching pattern: " + pattern : String.join("\n", matchedFiles));
+            
+            if (matchedFiles.isEmpty()) {
+                result.put("files", "No files found matching pattern: " + pattern);
+            } else {
+                result.put("files", String.join("\n", matchedFiles));
+            }
+            return result;
         } catch (IOException e) {
-            return Map.of("Error", "searching for files: " + e.getMessage());
+            result.put("error", "Error searching for files: " + e.getMessage());
+            return result;
         }
     }
 

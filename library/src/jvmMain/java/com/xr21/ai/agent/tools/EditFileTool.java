@@ -33,9 +33,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
         Map<String, Object> result = new HashMap<>();
         Path path = Paths.get(request.filePath);
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-            result.put("success", false);
-            result.put("message", "File not found");
-            result.put("filePath", request.filePath);
+            result.put("error", "File not found: " + request.filePath);
             return result;
         }
 
@@ -43,9 +41,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
         try {
             content = Files.readString(path, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            result.put("success", false);
-            result.put("message", "Error reading file: " + e.getMessage());
-            result.put("error", e.toString());
+            result.put("error", "Error reading file: " + e.getMessage());
             return result;
         }
 
@@ -56,8 +52,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
         // 如果归一化后仍找不到，尝试直接匹配原始内容（兼容未归一化写法）
         boolean found = normalizedContent.contains(normalizedOld);
         if (!found && !content.contains(request.oldString)) {
-            result.put("success", false);
-            result.put("message", "String not found in file");
+            result.put("error", "String not found in file: " + request.oldString);
             result.put("stringSearched", request.oldString);
             return result;
         }
@@ -70,8 +65,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
             Pattern normalizedPattern = Pattern.compile(Pattern.quote(normalizedOld), Pattern.DOTALL | Pattern.UNICODE_CHARACTER_CLASS);
             Matcher normalizedMatcher = normalizedPattern.matcher(normalizedContent);
             if (!normalizedMatcher.find()) {
-                result.put("success", false);
-                result.put("message", "String not found in file (even after normalization)");
+                result.put("error", "String not found in file (even after normalization): " + request.oldString);
                 result.put("stringSearched", request.oldString);
                 return result;
             } else {
@@ -92,10 +86,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
 
         // 如果不允许全局替换且出现多次，返回提示
         if (!request.replaceAll && count > 1) {
-            result.put("success", false);
-            result.put("message", "String appears multiple times in file");
-            result.put("occurrences", count);
-            result.put("suggestion", "Please provide more context or use replace_all=true");
+            result.put("error", "String appears multiple times in file. Use replace_all=true or provide more context. Occurrences: " + count);
             return result;
         }
 
@@ -127,14 +118,11 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
                 }
             }
         } catch (IOException e) {
-            result.put("success", false);
-            result.put("message", "Error writing file: " + e.getMessage());
-            result.put("error", e.toString());
+            result.put("error", "Error writing file: " + e.getMessage());
             return result;
         }
 
         int replacements = request.replaceAll ? count : 1;
-        result.put("success", true);
         result.put("message", "File edited successfully");
         result.put("filePath", request.filePath);
         result.put("replacements", replacements);

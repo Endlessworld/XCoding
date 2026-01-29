@@ -4,6 +4,7 @@ import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.Message
 import org.springframework.ai.chat.messages.MessageType
 import org.springframework.ai.chat.messages.ToolResponseMessage
+import java.util.UUID
 
 /**
  * UI层统一消息模型
@@ -56,6 +57,22 @@ sealed class ConversationMessage {
          */
         val toolResponses: List<ToolResponseMessage>
             get() = rawMessages.filterIsInstance<ToolResponseMessage>()
+
+        /**
+         * 检查指定工具调用ID是否有响应
+         */
+        fun hasToolResponseFor(toolCallId: String): Boolean {
+            return rawMessages.filterIsInstance<ToolResponseMessage>()
+                .any { response -> response.responses.any { it.id() == toolCallId } }
+        }
+
+        /**
+         * 获取指定工具调用的响应
+         */
+        fun getToolResponseFor(toolCallId: String): ToolResponseMessage? {
+            return rawMessages.filterIsInstance<ToolResponseMessage>()
+                .find { response -> response.responses.any { it.id() == toolCallId } }
+        }
 
         /**
          * 构建混合内容项列表，用于渲染
@@ -114,12 +131,25 @@ sealed class ConversationMessage {
      * 混合内容项类型
      */
     sealed class MixedContentItem {
-        data class Text(val content: String) : MixedContentItem()
-        data class ToolCall(val toolCall: AssistantMessage.ToolCall) : MixedContentItem()
+        /**
+         * 获取稳定的唯一标识符，用于重组时保持状态一致性
+         */
+        abstract val stableId: String
+
+        data class Text(val content: String) : MixedContentItem() {
+            override val stableId: String = "text_${content.hashCode()}"
+        }
+
+        data class ToolCall(val toolCall: AssistantMessage.ToolCall) : MixedContentItem() {
+            override val stableId: String = "tool_call_${toolCall.id}"
+        }
+
         data class ToolResponse(
             val responseMessage: ToolResponseMessage,
             val toolCallId: String
-        ) : MixedContentItem()
+        ) : MixedContentItem() {
+            override val stableId: String = "tool_response_${toolCallId}"
+        }
     }
 
     companion object {
@@ -127,7 +157,7 @@ sealed class ConversationMessage {
          * 从 Message 创建 ConversationMessage
          */
         fun fromMessage(message: Message): ConversationMessage {
-            val id = message.metadata["message_id"]?.toString() ?: message.javaClass.simpleName
+            val id = message.metadata["message_id"]?.toString() ?: UUID.randomUUID().toString()
             val timestamp = message.metadata["timestamp"]?.toString()?.toLongOrNull() ?: System.currentTimeMillis()
 
             return when (message.messageType) {

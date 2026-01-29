@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -20,7 +21,7 @@ import java.util.stream.Stream;
 
 import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
 
-public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest, ToolContext, Map<String, String>> {
+public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest, ToolContext, Map<String, Object>> {
 
     public static final String GITIGNORE_FILE = WORKSPACE_ROOT + File.pathSeparator + ".gitignore";
     public static final String DESCRIPTION = "Lists all files in the filesystem, filtering by directory and .gitignore rules.\n\nUsage:\n- The path parameter must be an absolute path, not a relative path\n- The list_files tool will return a list of all files in the specified directory.\n- Files and directories listed in .gitignore will be excluded.\n- This is very useful for exploring the file system and finding the right file to read or edit.\n- You should almost ALWAYS use this tool before using the Read or Edit tools.\n";
@@ -39,22 +40,17 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
         }
 
         try (Stream<String> lines = Files.lines(gitignorePath)) {
-            return lines
-                    .map(String::trim)
-                    .filter(line -> !line.isEmpty() && !line.startsWith("#"))
-                    .map(pattern -> {
-                        // Convert .gitignore patterns to regex
-                        String regex = pattern
-                                .replace(".", "\\Q.\\E")
-                                .replace("*", "[^/]*")
-                                .replace("?", "[^/]")
-                                .replace("**/", ".*");
-                        if (pattern.endsWith("/")) {
-                            regex = ".*" + regex + ".*";
-                        }
-                        return Pattern.compile(regex);
-                    })
-                    .toList();
+            return lines.map(String::trim).filter(line -> !line.isEmpty() && !line.startsWith("#")).map(pattern -> {
+                // Convert .gitignore patterns to regex
+                String regex = pattern.replace(".", "\\Q.\\E")
+                        .replace("*", "[^/]*")
+                        .replace("?", "[^/]")
+                        .replace("**/", ".*");
+                if (pattern.endsWith("/")) {
+                    regex = ".*" + regex + ".*";
+                }
+                return Pattern.compile(regex);
+            }).toList();
         } catch (IOException e) {
             return List.of();
         }
@@ -77,8 +73,7 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
 
             // 检查当前路径是否匹配任何忽略模式
             for (Pattern pattern : ignorePatterns) {
-                if (pattern.matcher(currentPathStr).matches() ||
-                        pattern.matcher(currentPathStr + "/").matches()) {
+                if (pattern.matcher(currentPathStr).matches() || pattern.matcher(currentPathStr + "/").matches()) {
                     return true;
                 }
             }
@@ -86,19 +81,18 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
 
         // 检查完整路径
         return ignorePatterns.stream()
-                .anyMatch(pattern ->
-                        pattern.matcher(pathStr).matches() ||
-                                pattern.matcher(pathStr + "/").matches() ||
-                                pattern.matcher("/" + pathStr).matches() ||
-                                pattern.matcher("/" + pathStr + "/").matches()
-                );
+                .anyMatch(pattern -> pattern.matcher(pathStr).matches() || pattern.matcher(pathStr + "/")
+                        .matches() || pattern.matcher("/" + pathStr).matches() || pattern.matcher("/" + pathStr + "/")
+                        .matches());
     }
 
     @Override
-    public Map<String, String> apply(ListFilesRequest request, ToolContext toolContext) {
+    public Map<String, Object> apply(ListFilesRequest request, ToolContext toolContext) {
+        Map<String, Object> result = new HashMap<>();
         Path basePath = Paths.get(request.getDirectory()).toAbsolutePath();
         if (!Files.exists(basePath) || !Files.isDirectory(basePath)) {
-            return Map.of("Error", "Directory not found: " + basePath);
+            result.put("error", "Directory not found: " + basePath);
+            return result;
         }
 
         try {
@@ -112,11 +106,15 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
                     .map(Path::toString)
                     .forEach(filePaths::add);
 
-            return filePaths.isEmpty()
-                    ? Map.of("Info", "No files found in directory: " + basePath)
-                    : Map.of("filePaths", String.join("\r\n", filePaths));
+            if (filePaths.isEmpty()) {
+                result.put("filePaths", "No files found in directory: " + basePath);
+            } else {
+                result.put("filePaths", String.join("\r\n", filePaths));
+            }
+            return result;
         } catch (IOException e) {
-            return Map.of("Error", "Failed to traverse directory: " + e.getMessage());
+            result.put("error", "Failed to traverse directory: " + e.getMessage());
+            return result;
         }
     }
 
@@ -140,13 +138,13 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
             return this.directory;
         }
 
-        public Integer getMaxDepth() {
-            return this.maxDepth;
-        }
-
         @JsonProperty(required = true, value = "directory")
         public void setDirectory(String directory) {
             this.directory = directory;
+        }
+
+        public Integer getMaxDepth() {
+            return this.maxDepth;
         }
 
         @JsonProperty("maxDepth")

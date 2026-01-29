@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
-public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, ToolContext, List<Map<String, Object>>> {
+public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = "从搜索引擎检索网络信息";
     private static final String BASE_URL = "https://api.bochaai.com/v1/web-search";
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(WebSearchTool.class);
@@ -40,7 +40,7 @@ public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, To
             // 从数据库获取配置信息 如果后面引入mybaits这里优化下
             log.info("baseUrl {},apiKey {}", BASE_URL, apiKey);
             if (!StringUtils.hasText(apiKey)) {
-                return Map.of("msg", "apiKey 配置为空,请提醒用户配置检索apikey!");
+                return Map.of("error", "apiKey 配置为空,请提醒用户配置检索apikey!");
             }
             RestClient restClient = RestClient.builder()
                     .baseUrl(BASE_URL)
@@ -57,7 +57,9 @@ public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, To
         }
     }
 
-    public List<Map<String, Object>> apply(SearchRequest request, ToolContext toolContext) {
+    public Map<String, Object> apply(SearchRequest request, ToolContext toolContext) {
+        Map<String, Object> result = new HashMap<>();
+        
         List<Map<String, Object>> body = new ArrayList<>();
         for (String query : request.queryList) {
             var params = new Params(query, request.freshness, request.summary, request.count);
@@ -84,7 +86,8 @@ public class WebSearchTool implements BiFunction<WebSearchTool.SearchRequest, To
                 })
                 .toList();
         log.info("WebSearch result {}", data);
-        return data;
+        result.put("results", data);
+        return result;
     }
 
     public record Params(String query, String freshness, Boolean summary, Integer count) {

@@ -187,7 +187,7 @@ public class ContextCacheTool implements BiFunction<ContextCacheTool.RefRequest,
             }
 
             if (!StringUtils.hasText(ref)) {
-                result.put("invalid_ref", "错误：无效的指针地址");
+                result.put(ref, "错误：无效的指针地址");
                 continue;
             }
 
