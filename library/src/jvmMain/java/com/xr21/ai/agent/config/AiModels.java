@@ -11,15 +11,18 @@ public enum AiModels {
     MINIMAX_M2_1("MiniMax-M2.1", 0.65, 50000, System.getenv("AI_MINIMAX_BASE_URL"), System.getenv("AI_MINIMAX_API_KEY")),//
     MINIMAX_M2_1_LIGHTNING("MiniMax-M2.1-lightning", 0.65, 50000, System.getenv("AI_MINIMAX_BASE_URL"), System.getenv("AI_MINIMAX_API_KEY")),//
     MIMO_V2_FLASH("mimo-v2-flash", 0.65, 3000, System.getenv("AI_XIAOMI_BASE_URL"), System.getenv("AI_XIAOMI_API_KEY")),//
-    DEEPSEEK_FUNCTION_CALL("deepseek-function_call", 0.65, 3000, "http://211.95.48.170:1025", "api_key");
+    DEEPSEEK_FUNCTION_CALL("deepseek-function_call", 0.65, 3000, "AI_SH_UNICOM_BASE_URL", "AI_SH_UNICOM_API_KEY"),//
+    QWEN3_CODER_NEXT("qwen/qwen3-coder-next", 0.75, 3000, System.getenv("AI_OPEN_ROUTER_BASE_URL"), System.getenv("AI_OPEN_ROUTER_API_KEY")),
+    STEP_3_5_FLASH("stepfun/step-3.5-flash:free", 0.75, null, System.getenv("AI_OPEN_ROUTER_BASE_URL"), System.getenv("AI_OPEN_ROUTER_API_KEY"));//
+
 
     private final String modelName;
     private final double temperature;
-    private final int maxTokens;
+    private final Integer maxTokens;
     private final String baseUrl;
     private final String apiKey;
 
-    AiModels(String modelName, double temperature, int maxTokens, String baseUrl, String apiKey) {
+    AiModels(String modelName, double temperature, Integer maxTokens, String baseUrl, String apiKey) {
         this.modelName = modelName;
         this.temperature = temperature;
         this.maxTokens = maxTokens;

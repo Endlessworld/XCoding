@@ -12,7 +12,10 @@
       "Skill(skill-creator:*)",
       "Bash(python:*)",
       "Bash(.\\\\gradlew:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(Get-ChildItem:*)",
+      "Bash(Select-String:*)",
+      "Bash(Test-Path:*)"
     ]
   }
 }

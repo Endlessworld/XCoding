@@ -22,8 +22,9 @@ class LocalChatService {
     // 存储每个会话的 SharedFlow，支持多订阅者
     private val sessionFlows = ConcurrentHashMap<String, MutableSharedFlow<AgentOutput<*>>>()
 
-    // 存储每个会话的状态
-    private val sessionStatus = ConcurrentHashMap<String, SessionStreamingState>()
+    // 存储每个会话的状态（使用 StateFlow 支持状态监听）
+    private val sessionStatusFlow = MutableStateFlow<Map<String, SessionStreamingState>>(emptyMap())
+    val streamingState: StateFlow<Map<String, SessionStreamingState>> = sessionStatusFlow.asStateFlow()
 
     // 存储每个会话的处理协程，用于取消
     private val processingJobs = ConcurrentHashMap<String, Job>()
@@ -60,19 +61,19 @@ class LocalChatService {
         }
 
         // 更新会话状态
-        sessionStatus[currentThreadId] = SessionStreamingState(
+        val current = sessionStatusFlow.value[currentThreadId]
+        val newState = SessionStreamingState(
             sessionId = currentThreadId,
             isStreaming = true,
             userInput = userInput,
             hasStarted = true
         )
+        sessionStatusFlow.value = sessionStatusFlow.value + (currentThreadId to newState)
 
         // 在服务作用域中启动处理协程（不取消收集者）
         val job = processingJobs.getOrPut(currentThreadId) {
             serviceScope.launch {
                 val responseBuilder = StringBuilder()
-                val messageId = UUID.randomUUID().toString()
-
                 try {
                     // 发送 THINKING 状态
                     val thinkingOutput = createThinkingOutput(newSessionCreated, currentThreadId)
@@ -93,7 +94,7 @@ class LocalChatService {
                             val cancelledOutput = AgentOutput.builder<Any>()
                                 .chunk(responseBuilder.toString())
                                 .message(AssistantMessage.builder().content(responseBuilder.toString()).build())
-                                .metadata(mapOf("message_id" to messageId, "final" to true, "cancelled" to true))
+                                .metadata(mapOf( "final" to true, "cancelled" to true))
                                 .build()
                             sharedFlow.emit(cancelledOutput)
                         } catch (e: Throwable) {
@@ -106,7 +107,7 @@ class LocalChatService {
                         val errorOutput = AgentOutput.builder<Any>()
                             .chunk("发生错误: ${e.message}")
                             .message(AssistantMessage.builder().content("发生错误: ${e.message}").build())
-                            .metadata(mapOf("message_id" to UUID.randomUUID().toString(), "error" to true))
+                            .metadata(mapOf("id" to UUID.randomUUID().toString(), "error" to true))
                             .build()
                         sharedFlow.emit(errorOutput)
                     } catch (e: Throwable) {
@@ -114,8 +115,9 @@ class LocalChatService {
                     }
                 } finally {
                     // 更新状态为已完成
-                    sessionStatus[currentThreadId]?.let {
-                        sessionStatus[currentThreadId] = it.copy(isStreaming = false)
+                    val currentState = sessionStatusFlow.value[currentThreadId]
+                    if (currentState != null) {
+                        sessionStatusFlow.value = sessionStatusFlow.value + (currentThreadId to currentState.copy(isStreaming = false))
                     }
                     processingJobs.remove(currentThreadId)
                 }
@@ -151,14 +153,14 @@ class LocalChatService {
      * 检查会话是否正在流式传输
      */
     fun isSessionStreaming(sessionId: String): Boolean {
-        return sessionStatus[sessionId]?.isStreaming == true
+        return sessionStatusFlow.value[sessionId]?.isStreaming == true
     }
 
     /**
      * 获取会话流式状态
      */
     fun getSessionStreamingState(sessionId: String): SessionStreamingState? {
-        return sessionStatus[sessionId]
+        return sessionStatusFlow.value[sessionId]
     }
 
     /**
@@ -168,7 +170,7 @@ class LocalChatService {
         processingJobs[sessionId]?.cancel()
         processingJobs.remove(sessionId)
         sessionFlows.remove(sessionId)
-        sessionStatus.remove(sessionId)
+        sessionStatusFlow.value = sessionStatusFlow.value - sessionId
     }
 
     /**
@@ -208,6 +210,11 @@ class LocalChatService {
             error.printStackTrace()
             close(error)
         }, {
+            // 流结束时发送最终输出标记
+            val finalOutput = AgentOutput.builder<Any>()
+                .metadata(mapOf("final" to true, "finishReason" to "COMPLETED"))
+                .build()
+            onOutput(finalOutput)
             close()
         })
         awaitClose {

@@ -36,7 +36,7 @@ fun LoadingIndicator(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "AI 正在思考...",
+                    text = "...",
                     style = TextStyle(
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp

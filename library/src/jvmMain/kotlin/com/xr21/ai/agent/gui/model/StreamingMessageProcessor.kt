@@ -19,6 +19,18 @@ class StreamingMessageProcessor {
     private var currentStreamingMessage: ConversationMessage.Assistant? = null
     private var pendingToolResponses: MutableList<ToolResponseMessage> = mutableListOf()
 
+    // 用于消息去重的集合
+    private val processedMessageIds = mutableSetOf<String>()
+
+    /**
+     * 重置处理器状态（包括去重集合）
+     */
+    fun reset() {
+        currentStreamingMessage = null
+        pendingToolResponses.clear()
+        processedMessageIds.clear()
+    }
+
     /**
      * 处理 AgentOutput 流中的一帧
      * 返回更新后的 ConversationMessage 列表（增量更新）
@@ -35,18 +47,25 @@ class StreamingMessageProcessor {
         val isThinking = metadata["reasoningContent"]?.toString()?.isNotEmpty() == true
         val hasError = metadata["error"] == true
 
-        // 处理 Thinking 状态
+        // 生成唯一的消息ID用于去重
+        // 直接使用原始消息内容，不进行编码修复
+        val messageId = when {
+            message?.metadata?.get("id") != null -> message.metadata["id"].toString()
+            metadata["id"] != null -> metadata["id"].toString()
+            output.timestamp > 0 -> "ts_${output.timestamp}"
+            else -> "chunk_${chunk.hashCode()}_${System.currentTimeMillis()}"
+        }
+
+        // 对于非流式消息，检查是否已处理过，但对于流式响应（包含 chunk 或增量内容），允许更新
+        if (!isFinal && message != null && processedMessageIds.contains(messageId) && chunk.isBlank()) {
+            return emptyList()
+        }
+        processedMessageIds.add(messageId)
+
+        // 处理 thinking 输出（正在思考...）
         if (isThinking) {
-            val sessionId = metadata["session_id"]?.toString()
-            val thinkingMsg = ConversationMessage.Assistant(
-                id = if (!sessionId.isNullOrBlank()) sessionId else UUID.randomUUID().toString(),
-                timestamp = output.timestamp,
-                rawMessages = emptyList()
-            )
-            currentMessages.add(thinkingMsg)
-            updates.add(thinkingMsg)
-            currentStreamingMessage = thinkingMsg
-            return updates
+            // thinking 输出不渲染到界面上，但需要记录已处理以避免重复
+            return emptyList()
         }
 
         // 处理错误
@@ -67,11 +86,16 @@ class StreamingMessageProcessor {
         when {
             // 情况1: ToolResponseMessage
             message is ToolResponseMessage -> {
+                println("=== Handling ToolResponseMessage ===")
                 handleToolResponse(message, currentMessages, updates)
             }
 
             // 情况2: AssistantMessage（可能包含 toolCalls）
             message is AssistantMessage -> {
+                println("=== Handling AssistantMessage ===")
+                println("  message.text: ${message.text}")
+                println("  message.toolCalls: ${message.toolCalls}")
+                println("  chunk: $chunk")
                 handleAssistantMessage(
                     message = message,
                     chunk = chunk,
@@ -84,7 +108,16 @@ class StreamingMessageProcessor {
 
             // 情况3: 只有 chunk，没有完整的 message（流式输出中）
             chunk.isNotBlank() && message == null -> {
+                println("=== Handling Streaming Chunk ===")
+                println("  chunk: $chunk")
                 handleStreamingChunk(chunk, isFinal, currentMessages, updates, output)
+            }
+
+            // 情况4: 无内容的输出
+            else -> {
+                println("=== Handling Empty Output ===")
+                println("  chunk: $chunk")
+                println("  message: $message")
             }
         }
 
@@ -124,7 +157,7 @@ class StreamingMessageProcessor {
 
     /**
      * 处理 AssistantMessage（可能包含 toolCalls）
-     * 如果当前有流式消息，将新的 AssistantMessage 添加到同一个 ConversationMessage 中
+     * 如果当前有流式消息，将新的 AssistantMessage 内容合并到同一个 ConversationMessage 中
      */
     private fun handleAssistantMessage(
         message: AssistantMessage,
@@ -134,58 +167,67 @@ class StreamingMessageProcessor {
         updates: MutableList<ConversationMessage>,
         output: AgentOutput<*>
     ) {
-        val messageId = message.metadata["message_id"]?.toString() ?: UUID.randomUUID().toString()
+        val messageId = message.metadata["id"]?.toString() ?: UUID.randomUUID().toString()
         val content = message.text ?: chunk
 
-        // 检查是否已有正在流式输出的消息
-        val existingIndex = currentMessages.indexOfFirst {
-            it is ConversationMessage.Assistant && it.id == messageId
+        // 检查内容是否为空或只包含不可见字符
+        val hasVisibleContent = content.trim().isNotEmpty() || message.toolCalls.isNotEmpty()
+
+        if (!hasVisibleContent) {
+            println("=== Ignoring AssistantMessage with empty content ===")
+            return
         }
 
-        if (existingIndex >= 0) {
-            // 更新现有消息
-            val existing = currentMessages[existingIndex] as ConversationMessage.Assistant
-            updateExistingAssistantMessage(existing, message, content, isFinal, currentMessages, updates)
-        } else {
-            // 检查是否有当前流式消息，有则添加到同一个消息中
-            val streamingMsg = currentStreamingMessage
-            if (streamingMsg != null) {
-                // 将新的 AssistantMessage 添加到现有流式消息中
-                val newRawMessages = streamingMsg.rawMessages.toMutableList()
+        // 检查是否有当前正在流式输出的消息 - 优先复用
+        val streamingMsg = currentStreamingMessage
+        if (streamingMsg != null) {
+            // 更新现有流式消息
+            val newRawMessages = streamingMsg.rawMessages.toMutableList()
 
-                // 如果流式消息中没有 AssistantMessage，先更新第一条消息的文本
-                val lastAssistantIndex = newRawMessages.indexOfLast { it is AssistantMessage }
-                if (lastAssistantIndex >= 0) {
-                    val lastAssistant = newRawMessages[lastAssistantIndex] as AssistantMessage
-                    val updatedAssistant = AssistantMessage.builder()
-                        .toolCalls(lastAssistant.toolCalls)
-                        .content((lastAssistant.text ?: "") + content)
-                        .media(lastAssistant.media)
-                        .properties(lastAssistant.metadata)
-                        .build()
-                    newRawMessages[lastAssistantIndex] = updatedAssistant
-                }
-
-                // 添加新的 AssistantMessage
+            val lastAssistantIndex = newRawMessages.indexOfLast { it is AssistantMessage }
+            if (lastAssistantIndex >= 0) {
+                // 更新最后一个 AssistantMessage 的文本
+                val lastAssistant = newRawMessages[lastAssistantIndex] as AssistantMessage
+                val updatedAssistant = AssistantMessage.builder()
+                    .toolCalls(lastAssistant.toolCalls + message.toolCalls)
+                    .content((lastAssistant.text ?: "") + content)
+                    .media(lastAssistant.media)
+                    .properties(lastAssistant.metadata)
+                    .build()
+                newRawMessages[lastAssistantIndex] = updatedAssistant
+            } else {
+                // 如果没有 AssistantMessage，直接添加
                 newRawMessages.add(message)
+            }
 
-                // 添加待处理的工具响应
-                if (pendingToolResponses.isNotEmpty()) {
-                    newRawMessages.addAll(pendingToolResponses)
-                }
+            // 添加待处理的工具响应
+            if (pendingToolResponses.isNotEmpty()) {
+                newRawMessages.addAll(pendingToolResponses)
+            }
 
-                val updatedMsg = streamingMsg.copy(rawMessages = newRawMessages)
-                val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
-                if (index >= 0) {
-                    currentMessages[index] = updatedMsg
-                    updates.add(updatedMsg)
-                }
+            val updatedMsg = streamingMsg.copy(rawMessages = newRawMessages)
+            val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
+            if (index >= 0) {
+                currentMessages[index] = updatedMsg
+                updates.add(updatedMsg)
+            }
 
-                if (isFinal) {
-                    pendingToolResponses.clear()
-                } else {
-                    currentStreamingMessage = updatedMsg
-                }
+            if (isFinal) {
+                pendingToolResponses.clear()
+                currentStreamingMessage = null
+            } else {
+                currentStreamingMessage = updatedMsg
+            }
+        } else {
+            // 检查是否已有具有相同 ID 的消息
+            val existingIndex = currentMessages.indexOfFirst {
+                it is ConversationMessage.Assistant && it.id == messageId
+            }
+
+            if (existingIndex >= 0) {
+                // 更新现有消息
+                val existing = currentMessages[existingIndex] as ConversationMessage.Assistant
+                updateExistingAssistantMessage(existing, message, content, isFinal, currentMessages, updates)
             } else {
                 // 创建新消息
                 val rawList = mutableListOf<Message>(message)
@@ -337,16 +379,17 @@ class StreamingMessageProcessor {
     }
 
     /**
-     * 重置处理器状态（在取消或错误时调用）
-     */
-    fun reset() {
-        currentStreamingMessage = null
-        pendingToolResponses.clear()
-    }
-
-    /**
      * 获取当前流式消息
      */
+    /**
+     * 修复字符编码问题
+     */
+    private fun fixEncoding(text: String): String {
+        // 如果字符串包含乱码字符，直接返回原始字符串，避免进一步处理
+        // 这个方法目前不做任何处理，只是为了保持代码结构
+        return text
+    }
+
     fun getCurrentStreamingMessage(): ConversationMessage.Assistant? = currentStreamingMessage
 
     companion object {

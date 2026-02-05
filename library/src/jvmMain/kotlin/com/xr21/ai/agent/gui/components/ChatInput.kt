@@ -41,6 +41,7 @@ fun ChatInput(
     inputText: TextFieldValue,
     onInputChange: (TextFieldValue) -> Unit,
     onSendMessage: () -> Unit,
+    onStop: (() -> Unit)? = null,
     isLoading: Boolean,
     isSending: Boolean,
     modifier: Modifier = Modifier
@@ -270,7 +271,7 @@ fun ChatInput(
 
                         Spacer(modifier = Modifier.width(4.dp))
 
-                        // 发送按钮
+                        // 发送/停止按钮
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
@@ -281,15 +282,26 @@ fun ChatInput(
                                 .shadow(0.dp, CircleShape)
                                 .clip(CircleShape)
                                 .background(
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = sendButtonAlpha),
-                                            MaterialTheme.colorScheme.secondary.copy(alpha = sendButtonAlpha * 0.9f)
+                                    if (isLoading || isSending) {
+                                        // 停止按钮颜色
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
+                                                MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                            )
                                         )
-                                    )
+                                    } else {
+                                        // 发送按钮颜色
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                MaterialTheme.colorScheme.primary.copy(alpha = sendButtonAlpha),
+                                                MaterialTheme.colorScheme.secondary.copy(alpha = sendButtonAlpha * 0.9f)
+                                            )
+                                        )
+                                    }
                                 )
                                 .then(
-                                    if (hasText && !isLoading) {
+                                    if ((hasText && !isLoading) || (isLoading && onStop != null)) {
                                         Modifier.border(
                                             width = 1.dp,
                                             brush = Brush.linearGradient(
@@ -307,19 +319,26 @@ fun ChatInput(
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,
-                                    enabled = hasText && !isLoading && !isSending
+                                    enabled = (hasText && !isLoading && !isSending) || (isLoading && onStop != null)
                                 ) {
-                                    onSendMessage()
+                                    if (isLoading || isSending) {
+                                        onStop?.invoke()
+                                    } else {
+                                        onSendMessage()
+                                    }
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             if (isLoading || isSending) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
+                                // 显示停止按钮
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "停止",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White
                                 )
                             } else {
+                                // 显示发送按钮
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Send,
                                     contentDescription = "发送",

@@ -29,7 +29,6 @@ import com.xr21.ai.agent.gui.components.LoadingIndicator
 import com.xr21.ai.agent.gui.model.ConversationMessage
 import com.xr21.ai.agent.gui.model.MessageAggregator
 import com.xr21.ai.agent.gui.model.StreamingMessageProcessor
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -80,11 +79,13 @@ fun SessionDetailScreen(
     val subscriptionJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val enterCount = remember { mutableStateOf(0L) }
     val messagesReady = remember { mutableStateOf(false) }
+    val processedOutputs = remember { mutableSetOf<String>() }
 
     // 加载会话消息并标记就绪
     LaunchedEffect(sessionId) {
         if (sessionId != lastSessionId) {
             messages.clear()
+            processedOutputs.clear() // 清空去重集合，确保新会话的消息不会受影响
             val rawMessages = withContext(Dispatchers.IO) {
                 sessionManager.loadMessages(sessionId)
             }
@@ -96,13 +97,21 @@ fun SessionDetailScreen(
     }
 
     // 进入时立即订阅共享流（使用 enterCount 确保每次进入都触发）
-    LaunchedEffect(sessionId, enterCount.value, messagesReady.value) {
+    LaunchedEffect(sessionId, messagesReady.value) {
         if (!messagesReady.value) return@LaunchedEffect
 
-        enterCount.value++
 
         // 注册会话
         sessionStateTracker.registerSession(sessionId)
+
+        // 检查会话是否正在流式传输，如果不是，则不订阅
+        val sessionState = chatService.getSessionStreamingState(sessionId)
+        if (sessionState != null && !sessionState.isStreaming) {
+            // 流已经结束，不需要再订阅
+            isLoading.value = false
+            isStreaming.value = false
+            return@LaunchedEffect
+        }
 
         // 等待流就绪（最多等待 2 秒）
         var mutableFlow: MutableSharedFlow<AgentOutput<*>>? = null
@@ -121,7 +130,10 @@ fun SessionDetailScreen(
             isLoading.value = true
             isStreaming.value = true
 
-            // 获取会话创建时间（用户消息的 timestamp），只接受之后的输出
+            // 重置 streamingProcessor，避免从首页带来的残留状态
+            streamingProcessor.reset()
+
+            // 获取会话开始时间（用户消息的 timestamp）
             val sessionStartTime = messages
                 .filterIsInstance<ConversationMessage.User>()
                 .maxOfOrNull { it.timestamp } ?: 0L
@@ -129,11 +141,45 @@ fun SessionDetailScreen(
             // 订阅 SharedFlow
             subscriptionJob.value?.cancel()
             subscriptionJob.value = scope.launch {
+                println("=== Starting to collect from SharedFlow ===")
                 mutableFlow.collect { output ->
-                    // 只处理会话开始后的输出，确保消息顺序
-                    if (output.timestamp >= sessionStartTime) {
+                    println("=== Received output ===")
+                    println("  chunk: ${output.chunk}")
+                    println("  message: ${output.message}")
+                    println("  metadata: ${output.metadata}")
+                    println("  timestamp: ${output.timestamp}")
+
+                    // 检查是否是当前会话的输出
+                    val isThinking = output.metadata?.containsKey("reasoningContent") == true
+                    val isCurrentSessionThinking = if (isThinking) {
+                        val outputSessionId = output.metadata?.get("session_id")?.toString()
+                        outputSessionId.isNullOrEmpty() || outputSessionId == sessionId
+                    } else {
+                        true
+                    }
+
+                    // 对于 thinking 输出，只验证 session_id；对于其他输出，验证 timestamp
+                    val shouldProcess = if (isThinking) {
+                        isCurrentSessionThinking
+                    } else {
+                        output.timestamp >= sessionStartTime
+                    }
+
+                    if (shouldProcess) {
+                        println("=== Processing output ===")
+                        println("  messages before update: ${messages.size} items")
+
                         val updates = streamingProcessor.processAgentOutput(output, messages)
+                        println("  updates: ${updates.size} items")
+
                         updates.forEach { updatedMsg ->
+                            println("  Update type: ${if (messages.any { it.id == updatedMsg.id }) "Update" else "Add"}")
+                            println("  Update id: ${updatedMsg.id}")
+                            if (updatedMsg is ConversationMessage.Assistant) {
+                                println("  Update text: ${updatedMsg.text}")
+                                println("  Update raw messages count: ${updatedMsg.rawMessages.size}")
+                            }
+
                             val existingIndex = messages.indexOfFirst { it.id == updatedMsg.id }
                             if (existingIndex >= 0) {
                                 messages[existingIndex] = updatedMsg
@@ -142,12 +188,25 @@ fun SessionDetailScreen(
                             }
                         }
 
+                        println("  messages after update: ${messages.size} items")
+                        messages.forEachIndexed { index, msg ->
+                            println("  $index: ${msg.javaClass.simpleName}")
+                            if (msg is ConversationMessage.Assistant) {
+                                println("    text: ${msg.text}")
+                            }
+                        }
+
                         // 检查是否流结束
                         val finishReason = output.metadata?.get("finishReason") as? String
-                        if (finishReason == "STOP" || finishReason == "COMPLETED") {
+                        val isFinal = output.metadata?.get("final") == true
+                        val hasError = output.metadata?.get("error") == true
+
+                        if (finishReason == "STOP" || finishReason == "COMPLETED" || isFinal || hasError) {
                             isStreaming.value = false
                             isLoading.value = false
                             sessionStateTracker.updateSessionStatus(sessionId, SessionStatus.COMPLETED)
+                        } else {
+                            isStreaming.value = streamingProcessor.getCurrentStreamingMessage() != null
                         }
 
                         try {
@@ -169,13 +228,17 @@ fun SessionDetailScreen(
     }
 
     // 监听流式状态变化
-    LaunchedEffect(chatService.getSessionStreamingState(sessionId)?.isStreaming) {
-        val state = chatService.getSessionStreamingState(sessionId)
+    val streamingState by chatService.streamingState.collectAsState()
+    LaunchedEffect(streamingState[sessionId]?.isStreaming) {
+        val state = streamingState[sessionId]
         // 如果流已结束但 UI 还在流式，重置
         if (state != null && !state.isStreaming && isStreaming.value) {
             delay(100)
             isStreaming.value = false
             isLoading.value = false
+            if (isSubscribingToExistingStream.value) {
+                isSubscribingToExistingStream.value = false
+            }
         }
     }
 
@@ -197,6 +260,9 @@ fun SessionDetailScreen(
     // 发送消息函数
     fun sendMessage(userInput: String) {
         isSubscribingToExistingStream.value = false
+        // 取消可能存在的 SharedFlow 订阅，避免双重消费
+        subscriptionJob.value?.cancel()
+        subscriptionJob.value = null
 
         currentJob = scope.launch {
             isSending = true
@@ -222,32 +288,51 @@ fun SessionDetailScreen(
             }
 
             // 发送消息并处理流式响应
-            chatService.sendMessage(userInput, sessionId).collect { output: AgentOutput<*> ->
-                val updates = streamingProcessor.processAgentOutput(output, messages)
-                updates.forEach { updatedMsg ->
-                    val existingIndex = messages.indexOfFirst { it.id == updatedMsg.id }
-                    if (existingIndex >= 0) {
-                        messages[existingIndex] = updatedMsg
+            try {
+                chatService.sendMessage(userInput, sessionId).collect { output: AgentOutput<*> ->
+                    val updates = streamingProcessor.processAgentOutput(output, messages)
+                    updates.forEach { updatedMsg ->
+                        val existingIndex = messages.indexOfFirst { it.id == updatedMsg.id }
+                        if (existingIndex >= 0) {
+                            messages[existingIndex] = updatedMsg
+                        } else {
+                            messages.add(updatedMsg)
+                        }
+                    }
+
+                    // 检查流式状态
+                    val isFinal = output.metadata?.get("final") == true
+                    val finishReason = output.metadata?.get("finishReason") as? String
+                    val hasError = output.metadata?.get("error") == true
+
+                    if (isFinal || finishReason == "STOP" || finishReason == "COMPLETED" || hasError) {
+                        isStreaming.value = false
+                        isLoading.value = false
+                        sessionStateTracker.updateSessionStatus(sessionId, SessionStatus.COMPLETED)
                     } else {
-                        messages.add(updatedMsg)
+                        isStreaming.value = streamingProcessor.getCurrentStreamingMessage() != null
+                    }
+
+                    try {
+                        listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
+                    } catch (_: Throwable) {
                     }
                 }
-
-                isStreaming.value = streamingProcessor.getCurrentStreamingMessage() != null
-
-                try {
-                    listState.animateScrollToItem(messages.size - 1, Int.MAX_VALUE)
-                } catch (_: Throwable) {
-                }
+            } catch (e: Exception) {
+                // 处理异常
+                isStreaming.value = false
+                isLoading.value = false
+                isSending = false
+                streamingProcessor.reset()
+                sessionStateTracker.updateSessionStatus(sessionId, SessionStatus.COMPLETED)
+            } finally {
+                // 流式结束，重置状态
+                isStreaming.value = false
+                isLoading.value = false
+                isSending = false
+                streamingProcessor.reset()
+                sessionStateTracker.updateSessionStatus(sessionId, SessionStatus.COMPLETED)
             }
-
-            // 流式结束，重置状态
-            isStreaming.value = false
-            isLoading.value = false
-            isSending = false
-
-            // 更新会话状态为已完成
-            sessionStateTracker.updateSessionStatus(sessionId, SessionStatus.COMPLETED)
 
             if (messages.isNotEmpty()) {
                 try {
@@ -422,6 +507,7 @@ fun SessionDetailScreen(
                 inputText = inputText,
                 onInputChange = { inputText = it },
                 onSendMessage = handleSendMessage,
+                onStop = onCancelRequest,
                 isLoading = isLoading.value || sessionState == SessionStatus.RUNNING,
                 isSending = isSending
             )
@@ -500,12 +586,6 @@ fun SessionDetailScreen(
                     }
                 }
 
-                if (isLoading.value || sessionState == SessionStatus.RUNNING) {
-                    LoadingIndicator(
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        onStop = onCancelRequest
-                    )
-                }
             }
 
             // 自动滚动到最新消息

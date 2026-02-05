@@ -88,7 +88,7 @@ class MessageAggregator {
             }
         }
 
-        val assistantId = assistantMessage.metadata["message_id"]?.toString()
+        val assistantId = assistantMessage.metadata["id"]?.toString()
             ?: UUID.randomUUID().toString()
         val timestamp = assistantMessage.metadata["timestamp"]?.toString()?.toLongOrNull()
             ?: System.currentTimeMillis()

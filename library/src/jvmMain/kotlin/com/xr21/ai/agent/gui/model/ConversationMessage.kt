@@ -157,7 +157,7 @@ sealed class ConversationMessage {
          * 从 Message 创建 ConversationMessage
          */
         fun fromMessage(message: Message): ConversationMessage {
-            val id = message.metadata["message_id"]?.toString() ?: UUID.randomUUID().toString()
+            val id = message.metadata["id"]?.toString() ?: UUID.randomUUID().toString()
             val timestamp = message.metadata["timestamp"]?.toString()?.toLongOrNull() ?: System.currentTimeMillis()
 
             return when (message.messageType) {
