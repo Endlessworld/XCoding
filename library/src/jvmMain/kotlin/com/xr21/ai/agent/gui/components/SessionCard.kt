@@ -7,17 +7,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,7 +31,7 @@ import com.xr21.ai.agent.gui.SessionStatus
 import com.xr21.ai.agent.gui.UiSessionInfo
 import com.xr21.ai.agent.gui.getCurrentChatColors
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun SessionCard(
     session: UiSessionInfo,
@@ -37,6 +41,9 @@ fun SessionCard(
     modifier: Modifier = Modifier
 ) {
     val chatColors = getCurrentChatColors()
+
+    // 鼠标悬停状态
+    val isHovered = remember { mutableStateOf(false) }
 
     // 运行中状态动画
     val infiniteTransition = rememberInfiniteTransition(label = "running")
@@ -48,24 +55,33 @@ fun SessionCard(
 
     // 磨砂玻璃会话卡片 - 精致紫调
     Card(
-        modifier = modifier.fillMaxWidth().shadow(
+        modifier = modifier.fillMaxWidth()
+            .shadow(
                 elevation = 12.dp,
                 shape = RoundedCornerShape(18.dp),
                 ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                 spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-            ).clickable(onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(
+            )
+            .clickable(onClick = onClick)
+            .onMouseEnter { isHovered.value = true }
+            .onMouseLeave { isHovered.value = false },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
             containerColor = Color.Transparent
         )
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(
                     Brush.verticalGradient(
                         colors = listOf(
                             chatColors.glassGradientStart,
                             chatColors.glassGradientEnd.copy(alpha = 0.85f)
                         )
                     )
-                ).border(
+                )
+                .border(
                     width = if (sessionStatus == SessionStatus.RUNNING) 2.dp else 1.dp,
                     brush = Brush.verticalGradient(
                         colors = if (sessionStatus == SessionStatus.RUNNING) {
@@ -79,126 +95,50 @@ fun SessionCard(
                                 chatColors.borderColor.copy(alpha = 0.15f)
                             )
                         }
-                    ), shape = RoundedCornerShape(18.dp)
+                    ),
+                    shape = RoundedCornerShape(18.dp)
                 )
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top
+            Box(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(16.dp)
             ) {
-                // 会话图标 - 带渐变效果和状态指示 - 精致紫调
-                Box(
-                    modifier = Modifier.size(52.dp).shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(16.dp),
-                            ambientColor = if (sessionStatus == SessionStatus.RUNNING) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                            } else {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                            },
-                            spotColor = if (sessionStatus == SessionStatus.RUNNING) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                            } else {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                            }
-                        ).clip(RoundedCornerShape(16.dp)).background(
-                            Brush.linearGradient(
-                                colors = if (sessionStatus == SessionStatus.RUNNING) {
-                                    listOf(
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                                    )
-                                } else {
-                                    listOf(
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-                                    )
-                                }
-                            )
-                        ), contentAlignment = Alignment.Center
+                // 顶部区域
+                Column(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // 运行中指示器
-                    if (sessionStatus == SessionStatus.RUNNING) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    // 标题行 - 固定高度确保卡片高度一致
+                    // 标题和消息数量区域
                     Row(
-                        modifier = Modifier.fillMaxWidth().height(28.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        // 标题
+                        Text(
+                            text = session.briefDescription.ifEmpty { "新会话" },
+                            style = TextStyle(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = session.briefDescription.ifEmpty { "新会话" },
-                                style = TextStyle(
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                .padding(end = 12.dp)
+                        )
 
-                            // 状态标签（运行中时显示）- 精致紫调
-                            if (sessionStatus == SessionStatus.RUNNING) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(
-                                            Brush.horizontalGradient(
-                                                colors = listOf(
-                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
-                                                )
-                                            )
-                                        ).padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier.size(6.dp).background(
-                                                    MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)
-                                                )
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "运行中", style = TextStyle(
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // 消息计数标签 - 磨砂玻璃风格 - 精致紫调
+                        // 消息数量 - 右上角
                         Box(
-                            modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(
+                            modifier = Modifier.clip(RoundedCornerShape(14.dp))
+                                .background(
                                     Brush.horizontalGradient(
                                         colors = listOf(
                                             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                                             MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
                                         )
                                     )
-                                ).padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = "${session.messageCount} 条", style = TextStyle(
@@ -212,41 +152,115 @@ fun SessionCard(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // 描述文字区域 - 固定高度确保卡片高度一致
+                    // 描述文字区域
                     Text(
-                        text = session.briefDescription.ifEmpty { "新会话" }, style = TextStyle(
+                        text = session.briefDescription.ifEmpty { "新会话" },
+                        style = TextStyle(
                             color = chatColors.textSecondary, fontSize = 13.sp
-                        ), modifier = Modifier.height(32.dp), maxLines = 2, overflow = TextOverflow.Ellipsis
+                        ),
+                        modifier = Modifier.height(32.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
+                }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
+                // 底部区域 - 状态和时间
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .align(Alignment.BottomStart),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    // 左下角 - 状态指示
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        // 状态圆点
+                        Box(
+                            modifier = Modifier.size(8.dp)
+                                .background(
+                                    if (sessionStatus == SessionStatus.RUNNING) {
+                                        Color(0xFF4CAF50)  // 绿色圆点 - 运行中
+                                    } else {
+                                        Color(0xFF9E9E9E)  // 灰色圆点 - 已完成
+                                    },
+                                    RoundedCornerShape(4.dp)
+                                )
+                        )
+
+                        // 状态文字
                         Text(
-                            text = session.lastUpdated, style = TextStyle(
-                                color = chatColors.textSecondary.copy(alpha = 0.7f), fontSize = 11.sp
+                            text = if (sessionStatus == SessionStatus.RUNNING) "运行中" else "已完成",
+                            style = TextStyle(
+                                color = if (sessionStatus == SessionStatus.RUNNING) {
+                                    Color(0xFF4CAF50)
+                                } else {
+                                    Color(0xFF9E9E9E)
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         )
                     }
-                }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                    // 右下角 - 时间和删除按钮
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 时间
+                        Text(
+                            text = session.lastUpdated,
+                            style = TextStyle(
+                                color = chatColors.textSecondary.copy(alpha = 0.7f),
+                                fontSize = 11.sp
+                            )
+                        )
 
-                // 删除按钮
-                IconButton(
-                    onClick = onDelete, modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "删除",
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                        modifier = Modifier.size(20.dp)
-                    )
+                        // 删除按钮 - 鼠标悬停时显示
+                        if (isHovered.value) {
+                            IconButton(
+                                onClick = onDelete,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "删除",
+                                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
                 }
+            }
+        }
+    }
+}
+
+// 鼠标悬停扩展函数
+private fun Modifier.onMouseEnter(
+    onEnter: () -> Unit
+) = this.pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.type == PointerEventType.Enter) {
+                onEnter()
+            }
+        }
+    }
+}
+
+private fun Modifier.onMouseLeave(
+    onLeave: () -> Unit
+) = this.pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.type == PointerEventType.Exit) {
+                onLeave()
             }
         }
     }
