@@ -133,7 +133,7 @@ fun ChatInput(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             // 统一的输入区域容器
             Box(
