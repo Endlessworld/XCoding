@@ -20,18 +20,19 @@ import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.gui.FileSessionManager;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
-import com.xr21.ai.agent.tools.WebSearchTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.SinksUtil;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import lombok.SneakyThrows;
 import org.slf4j.Logger;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.mcp.McpToolUtils;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.lang.NonNull;
 import reactor.core.publisher.Flux;
@@ -54,42 +55,14 @@ public class LocalAgent {
             .targetFolder(Path.of(fileSystemSaverFolder))
             .build();
     private static final Logger log = org.slf4j.LoggerFactory.getLogger(LocalAgent.class);
-    private ChatModel chatModel;
     protected FileSessionManager sessionManager = FileSessionManager.Companion.getInstance();
+    private ChatModel chatModel;
 
     public static void main(String[] args) {
         LocalAgent localAgent = new LocalAgent();
         localAgent.initializeChatModel();
         var agent = localAgent.buildAgent();
     }
-
-    /**
-     * 初始化聊天模型，延迟加载以避免启动时依赖环境变量
-     */
-    public void initializeChatModel() {
-        try {
-            this.chatModel = AiModels.STEP_3_5_FLASH.createChatModel();
-            log.info("ChatModel initialized successfully");
-        } catch (Exception e) {
-            log.error("Failed to initialize ChatModel: {}", e.getMessage());
-            // 创建一个简单的回退模型，不依赖外部API
-            this.chatModel = createFallbackChatModel();
-        }
-    }
-
-    /**
-     * 创建回退聊天模型
-     */
-    private ChatModel createFallbackChatModel() {
-        try {
-            return AiModels.STEP_3_5_FLASH.createChatModel();
-        } catch (Exception e) {
-            log.error("Failed to create fallback ChatModel: {}", e.getMessage());
-            throw new RuntimeException(e);
-
-        }
-    }
-
 
     private static ArrayList<ToolCallback> getTools() {
         List<ToolCallback> mcpTools = getMcpTools();
@@ -103,7 +76,13 @@ public class LocalAgent {
                 .filter(toolCallback -> includes.contains(toolCallback.getToolDefinition().name()))
                 .toList());
 //        tools.add(FeedBackTool.build("feed_back_tool", new FeedBackTool()));
-        tools.add(WebSearchTool.createWebSearchToolCallback());
+//        tools.add(WebSearchTool.createWebSearchToolCallback());
+        var streamableHttpTransport = HttpClientStreamableHttpTransport.builder("https://mcp.api-inference.modelscope.net")
+                .endpoint("/b799a1ba459541/mcp")
+                .build();
+        McpSyncClient streamableSyncClient = McpClient.sync(streamableHttpTransport).build();
+        tools.addAll(McpToolUtils.getToolCallbacksFromSyncClients(streamableSyncClient));
+
         return tools;
     }
 
@@ -189,6 +168,33 @@ public class LocalAgent {
                 .withShellCommand(List.of("cmd.exe"))
                 .withDescription(shellDescription)
                 .build();
+    }
+
+    /**
+     * 初始化聊天模型，延迟加载以避免启动时依赖环境变量
+     */
+    public void initializeChatModel() {
+        try {
+            this.chatModel = AiModels.MINIMAX_M2_1.createChatModel();
+            log.info("ChatModel initialized successfully");
+        } catch (Exception e) {
+            log.error("Failed to initialize ChatModel: {}", e.getMessage());
+            // 创建一个简单的回退模型，不依赖外部API
+            this.chatModel = createFallbackChatModel();
+        }
+    }
+
+    /**
+     * 创建回退聊天模型
+     */
+    private ChatModel createFallbackChatModel() {
+        try {
+            return AiModels.MINIMAX_M2_1.createChatModel();
+        } catch (Exception e) {
+            log.error("Failed to create fallback ChatModel: {}", e.getMessage());
+            throw new RuntimeException(e);
+
+        }
     }
 
     /**

@@ -142,13 +142,13 @@ fun SessionDetailScreen(
             // 订阅 SharedFlow
             subscriptionJob.value?.cancel()
             subscriptionJob.value = scope.launch {
-                println("=== Starting to collect from SharedFlow ===")
+//                println("=== Starting to collect from SharedFlow ===")
                 mutableFlow.collect { output ->
-                    println("=== Received output ===")
-                    println("  chunk: ${output.chunk}")
-                    println("  message: ${output.message}")
-                    println("  metadata: ${output.metadata}")
-                    println("  timestamp: ${output.timestamp}")
+//                    println("=== Received output ===")
+//                    println("  chunk: ${output.chunk}")
+//                    println("  message: ${output.message}")
+//                    println("  metadata: ${output.metadata}")
+//                    println("  timestamp: ${output.timestamp}")
 
                     // 检查是否是当前会话的输出
                     val isThinking = output.metadata?.containsKey("reasoningContent") == true
@@ -167,18 +167,18 @@ fun SessionDetailScreen(
                     }
 
                     if (shouldProcess) {
-                        println("=== Processing output ===")
-                        println("  messages before update: ${messages.size} items")
+//                        println("=== Processing output ===")
+//                        println("  messages before update: ${messages.size} items")
 
                         val updates = streamingProcessor.processAgentOutput(output, messages)
-                        println("  updates: ${updates.size} items")
+//                        println("  updates: ${updates.size} items")
 
                         updates.forEach { updatedMsg ->
-                            println("  Update type: ${if (messages.any { it.id == updatedMsg.id }) "Update" else "Add"}")
-                            println("  Update id: ${updatedMsg.id}")
+//                            println("  Update type: ${if (messages.any { it.id == updatedMsg.id }) "Update" else "Add"}")
+//                            println("  Update id: ${updatedMsg.id}")
                             if (updatedMsg is ConversationMessage.Assistant) {
-                                println("  Update text: ${updatedMsg.text}")
-                                println("  Update raw messages count: ${updatedMsg.rawMessages.size}")
+//                                println("  Update text: ${updatedMsg.text}")
+//                                println("  Update raw messages count: ${updatedMsg.rawMessages.size}")
                             }
 
                             val existingIndex = messages.indexOfFirst { it.id == updatedMsg.id }
@@ -189,11 +189,11 @@ fun SessionDetailScreen(
                             }
                         }
 
-                        println("  messages after update: ${messages.size} items")
+//                        println("  messages after update: ${messages.size} items")
                         messages.forEachIndexed { index, msg ->
-                            println("  $index: ${msg.javaClass.simpleName}")
+//                            println("  $index: ${msg.javaClass.simpleName}")
                             if (msg is ConversationMessage.Assistant) {
-                                println("    text: ${msg.text}")
+//                                println("    text: ${msg.text}")
                             }
                         }
 

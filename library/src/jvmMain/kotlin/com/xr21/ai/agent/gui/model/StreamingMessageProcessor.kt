@@ -92,10 +92,10 @@ class StreamingMessageProcessor {
 
             // 情况2: AssistantMessage（可能包含 toolCalls）
             message is AssistantMessage -> {
-                println("=== Handling AssistantMessage ===")
-                println("  message.text: ${message.text}")
-                println("  message.toolCalls: ${message.toolCalls}")
-                println("  chunk: $chunk")
+//                println("=== Handling AssistantMessage ===")
+//                println("  message.text: ${message.text}")
+//                println("  message.toolCalls: ${message.toolCalls}")
+//                println("  chunk: $chunk")
                 handleAssistantMessage(
                     message = message,
                     chunk = chunk,
@@ -108,16 +108,16 @@ class StreamingMessageProcessor {
 
             // 情况3: 只有 chunk，没有完整的 message（流式输出中）
             chunk.isNotBlank() && message == null -> {
-                println("=== Handling Streaming Chunk ===")
-                println("  chunk: $chunk")
+//                println("=== Handling Streaming Chunk ===")
+//                println("  chunk: $chunk")
                 handleStreamingChunk(chunk, isFinal, currentMessages, updates, output)
             }
 
             // 情况4: 无内容的输出
             else -> {
-                println("=== Handling Empty Output ===")
-                println("  chunk: $chunk")
-                println("  message: $message")
+//                println("=== Handling Empty Output ===")
+//                println("  chunk: $chunk")
+//                println("  message: $message")
             }
         }
 

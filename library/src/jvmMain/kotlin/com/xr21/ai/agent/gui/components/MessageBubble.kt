@@ -36,7 +36,6 @@ import com.xr21.ai.agent.gui.getCurrentChatColors
 import com.xr21.ai.agent.gui.getUserBubbleGradientBrush
 import com.xr21.ai.agent.gui.model.ConversationMessage
 import com.xr21.ai.agent.gui.model.isUser
-import com.xr21.ai.agent.utils.Json
 
 /**
  * 基于 ConversationMessage 的消息气泡组件 - macOS/iOS 磨砂玻璃风格
@@ -211,8 +210,8 @@ fun ConversationMessageBubble(
                                         // 直接从 message 获取响应数据，message 变化时会自动重组
                                         val toolResponse = (message as? ConversationMessage.Assistant)?.getToolResponseFor(item.toolCall.id)
                                         val responseData = toolResponse?.responses?.firstOrNull()?.responseData()
-                                        val responseMap = responseData?.let { Json.to(it, Map::class.java) } ?: emptyMap<String, Any>()
-                                        val isError = responseMap.containsKey("error")
+//                                        val responseMap = responseData?.let { Json.to(it, Map::class.java) } ?: emptyMap<String, Any>()
+                                        val isError = responseData?.contains("error") ?: false
                                         InlineToolCall(
                                             toolCall = item.toolCall,
                                             isStreaming = isStreaming,

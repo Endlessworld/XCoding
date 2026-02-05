@@ -56,6 +56,7 @@ kotlin {
 
             // Spring AI
             implementation(libs.spring.ai.openai)
+            implementation(libs.spring.ai.mcp.client)
 
             // Reactor
             implementation(libs.reactor.core)
@@ -70,8 +71,9 @@ kotlin {
             // Utilities
             implementation(libs.hutool.all)
             implementation(libs.lombok)
-            implementation(libs.jna)
-            implementation(libs.lanterna)
+//            implementation(libs.jna)
+//            implementation(libs.lanterna)
+
         }
     }
 }
