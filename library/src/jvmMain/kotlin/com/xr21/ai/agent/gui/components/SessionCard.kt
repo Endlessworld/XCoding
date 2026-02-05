@@ -46,47 +46,50 @@ fun SessionCard(
         ), label = "pulse"
     )
 
-    // 磨砂玻璃会话卡片
+    // 磨砂玻璃会话卡片 - 精致紫调
     Card(
         modifier = modifier.fillMaxWidth().shadow(
-                elevation = 10.dp,
-                shape = RoundedCornerShape(16.dp),
-                ambientColor = Color.Black.copy(alpha = 0.08f),
-                spotColor = Color.Black.copy(alpha = 0.1f)
-            ).clickable(onClick = onClick), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+                elevation = 12.dp,
+                shape = RoundedCornerShape(18.dp),
+                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+            ).clickable(onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(
             containerColor = Color.Transparent
         )
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            chatColors.glassGradientStart, chatColors.glassGradientEnd.copy(alpha = 0.8f)
+                            chatColors.glassGradientStart,
+                            chatColors.glassGradientEnd.copy(alpha = 0.85f)
                         )
                     )
                 ).border(
-                    width = if (sessionStatus == SessionStatus.RUNNING) 2.dp else 1.dp, brush = Brush.verticalGradient(
+                    width = if (sessionStatus == SessionStatus.RUNNING) 2.dp else 1.dp,
+                    brush = Brush.verticalGradient(
                         colors = if (sessionStatus == SessionStatus.RUNNING) {
                             listOf(
                                 MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha),
-                                MaterialTheme.colorScheme.secondary.copy(alpha = pulseAlpha * 0.7f)
+                                MaterialTheme.colorScheme.secondary.copy(alpha = pulseAlpha * 0.8f)
                             )
                         } else {
                             listOf(
-                                chatColors.borderColor.copy(alpha = 0.3f), chatColors.borderColor.copy(alpha = 0.1f)
+                                chatColors.borderColor.copy(alpha = 0.4f),
+                                chatColors.borderColor.copy(alpha = 0.15f)
                             )
                         }
-                    ), shape = RoundedCornerShape(16.dp)
+                    ), shape = RoundedCornerShape(18.dp)
                 )
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top
             ) {
-                // 会话图标 - 带渐变效果和状态指示
+                // 会话图标 - 带渐变效果和状态指示 - 精致紫调
                 Box(
-                    modifier = Modifier.size(48.dp).shadow(
-                            elevation = 6.dp,
-                            shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.size(52.dp).shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(16.dp),
                             ambientColor = if (sessionStatus == SessionStatus.RUNNING) {
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                             } else {
@@ -97,17 +100,17 @@ fun SessionCard(
                             } else {
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                             }
-                        ).clip(RoundedCornerShape(14.dp)).background(
+                        ).clip(RoundedCornerShape(16.dp)).background(
                             Brush.linearGradient(
                                 colors = if (sessionStatus == SessionStatus.RUNNING) {
                                     listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                                     )
                                 } else {
                                     listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
                                     )
                                 }
                             )
@@ -154,18 +157,18 @@ fun SessionCard(
                                 overflow = TextOverflow.Ellipsis
                             )
 
-                            // 状态标签（运行中时显示）
+                            // 状态标签（运行中时显示）- 精致紫调
                             if (sessionStatus == SessionStatus.RUNNING) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Box(
-                                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(
+                                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(
                                             Brush.horizontalGradient(
                                                 colors = listOf(
-                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
                                                 )
                                             )
-                                        ).padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ).padding(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(
@@ -186,16 +189,16 @@ fun SessionCard(
                             }
                         }
 
-                        // 消息计数标签 - 磨砂玻璃风格
+                        // 消息计数标签 - 磨砂玻璃风格 - 精致紫调
                         Box(
-                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(
+                            modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(
                                     Brush.horizontalGradient(
                                         colors = listOf(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
                                         )
                                     )
-                                ).padding(horizontal = 10.dp, vertical = 5.dp)
+                                ).padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = "${session.messageCount} 条", style = TextStyle(

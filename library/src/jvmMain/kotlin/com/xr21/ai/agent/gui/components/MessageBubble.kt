@@ -139,35 +139,35 @@ fun ConversationMessageBubble(
                     ), modifier = Modifier.padding(bottom = 6.dp, start = 4.dp, end = 4.dp)
                 )
 
-                // 消息气泡 - 磨砂玻璃效果
+                // 消息气泡 - 磨砂玻璃效果 - 精致紫调
                 Box(
                     modifier = Modifier
                         .widthIn(max = 680.dp)
                         .shadow(
-                            elevation = 8.dp,
+                            elevation = 10.dp,
                             shape = RoundedCornerShape(
-                                topStart = if (isUser) 20.dp else 8.dp,
-                                topEnd = if (isUser) 8.dp else 20.dp,
-                                bottomStart = 20.dp,
-                                bottomEnd = 20.dp
+                                topStart = if (isUser) 22.dp else 10.dp,
+                                topEnd = if (isUser) 10.dp else 22.dp,
+                                bottomStart = 22.dp,
+                                bottomEnd = 22.dp
                             ),
                             ambientColor = if (isUser) {
-                                Color.Gray.copy(alpha = 0.2f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                             } else {
-                                Color.Black.copy(alpha = 0.1f)
+                                Color.Black.copy(alpha = 0.12f)
                             },
                             spotColor = if (isUser) {
-                                Color.Gray.copy(alpha = 0.15f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             } else {
-                                Color.Black.copy(alpha = 0.08f)
+                                Color.Black.copy(alpha = 0.1f)
                             }
                         )
                         .clip(
                             RoundedCornerShape(
-                                topStart = if (isUser) 20.dp else 8.dp,
-                                topEnd = if (isUser) 8.dp else 20.dp,
-                                bottomStart = 20.dp,
-                                bottomEnd = 20.dp
+                                topStart = if (isUser) 22.dp else 10.dp,
+                                topEnd = if (isUser) 10.dp else 22.dp,
+                                bottomStart = 22.dp,
+                                bottomEnd = 22.dp
                             )
                         )
                         .background(bubbleGradient)

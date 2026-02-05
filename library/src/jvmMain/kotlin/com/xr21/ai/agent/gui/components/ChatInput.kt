@@ -117,17 +117,17 @@ fun ChatInput(
         label = "sendAlpha"
     )
 
-    // 磨砂玻璃输入区域
+    // 磨砂玻璃输入区域 - 精致紫调
     Box(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 20.dp,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                ambientColor = Color.Black.copy(alpha = 0.1f),
-                spotColor = Color.Black.copy(alpha = 0.15f)
+                elevation = 24.dp,
+                shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
             )
-            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
             .background(getGlassGradientBrush())
     ) {
         Column(
@@ -135,7 +135,7 @@ fun ChatInput(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            // 统一的输入区域容器
+            // 统一的输入区域容器 - 精致紫调
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -143,24 +143,31 @@ fun ChatInput(
                         scaleX = scale
                         scaleY = scale
                     }
-                    .clip(RoundedCornerShape(32.dp))
+                    .clip(RoundedCornerShape(36.dp))
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
-                                inputBgColor.copy(alpha = 0.6f),
-                                inputBgColor.copy(alpha = 0.4f)
+                                inputBgColor.copy(alpha = 0.65f),
+                                inputBgColor.copy(alpha = 0.45f)
                             )
                         )
                     )
                     .border(
-                        width = if (isFocused) 2.dp else 1.dp,
+                        width = if (isFocused) 2.dp else 1.5.dp,
                         brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                focusBorderColor.copy(alpha = if (isFocused) 1f else 0.5f),
-                                focusBorderColor.copy(alpha = if (isFocused) 0.6f else 0.2f)
-                            )
+                            colors = if (isFocused) {
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                                )
+                            } else {
+                                listOf(
+                                    focusBorderColor.copy(alpha = 0.6f),
+                                    focusBorderColor.copy(alpha = 0.3f)
+                                )
+                            }
                         ),
-                        shape = RoundedCornerShape(32.dp)
+                        shape = RoundedCornerShape(36.dp)
                     )
                     .focusRequester(focusRequester)
                     .onFocusChanged { isFocused = it.isFocused }
@@ -230,7 +237,7 @@ fun ChatInput(
                             unfocusedContainerColor = Color.Transparent,
                             cursorColor = MaterialTheme.colorScheme.primary
                         ),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(28.dp),
                         enabled = !isLoading,
                         maxLines = 4,
                         interactionSource = interactionSource,
@@ -271,31 +278,44 @@ fun ChatInput(
 
                         Spacer(modifier = Modifier.width(4.dp))
 
-                        // 发送/停止按钮
+                        // 发送/停止按钮 - 精致紫调
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(42.dp)
                                 .graphicsLayer {
                                     scaleX = sendButtonScale
                                     scaleY = sendButtonScale
                                 }
-                                .shadow(0.dp, CircleShape)
+                                .shadow(
+                                    elevation = if ((hasText && !isLoading) || (isLoading && onStop != null)) 6.dp else 0.dp,
+                                    shape = CircleShape,
+                                    ambientColor = if (isLoading || isSending) {
+                                        MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                                    } else {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                    },
+                                    spotColor = if (isLoading || isSending) {
+                                        MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                                    } else {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                    }
+                                )
                                 .clip(CircleShape)
                                 .background(
                                     if (isLoading || isSending) {
                                         // 停止按钮颜色
                                         Brush.linearGradient(
                                             colors = listOf(
-                                                MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-                                                MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                                MaterialTheme.colorScheme.error,
+                                                MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
                                             )
                                         )
                                     } else {
-                                        // 发送按钮颜色
+                                        // 发送按钮颜色 - 紫色渐变
                                         Brush.linearGradient(
                                             colors = listOf(
-                                                MaterialTheme.colorScheme.primary.copy(alpha = sendButtonAlpha),
-                                                MaterialTheme.colorScheme.secondary.copy(alpha = sendButtonAlpha * 0.9f)
+                                                MaterialTheme.colorScheme.primary,
+                                                MaterialTheme.colorScheme.secondary
                                             )
                                         )
                                     }
@@ -303,11 +323,11 @@ fun ChatInput(
                                 .then(
                                     if ((hasText && !isLoading) || (isLoading && onStop != null)) {
                                         Modifier.border(
-                                            width = 1.dp,
+                                            width = 1.5.dp,
                                             brush = Brush.linearGradient(
                                                 colors = listOf(
-                                                    Color.White.copy(alpha = 0.25f),
-                                                    Color.White.copy(alpha = 0.1f)
+                                                    Color.White.copy(alpha = 0.3f),
+                                                    Color.White.copy(alpha = 0.15f)
                                                 )
                                             ),
                                             shape = CircleShape
@@ -351,22 +371,23 @@ fun ChatInput(
                 }
             }
 
-            // 焦点指示器（聚焦时显示）
+            // 焦点指示器（聚焦时显示）- 精致紫调
             if (isFocused) {
                 Box(
                     modifier = Modifier
                         .padding(top = 8.dp)
                         .fillMaxWidth()
-                        .height(2.dp)
+                        .height(2.5.dp)
                         .graphicsLayer {
                             scaleX = pulseAlpha
                         }
-                        .clip(RoundedCornerShape(1.dp))
+                        .clip(RoundedCornerShape(1.25.dp))
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
                                     MaterialTheme.colorScheme.primary.copy(alpha = 0f),
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f),
                                     MaterialTheme.colorScheme.primary.copy(alpha = 0f)
                                 )
                             )

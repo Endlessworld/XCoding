@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,7 +43,6 @@ fun HomeScreen(
     sessionStateTracker: SessionStateTracker,
     homeSendMessageBehavior: HomeSendMessageBehavior = HomeSendMessageBehavior.REFRESH_LIST,
     onNavigateToSession: (String) -> Unit,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var sessions by remember { mutableStateOf(listOf<UiSessionInfo>()) }
@@ -217,27 +215,7 @@ fun HomeScreen(
         }
     }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "AI Agents", style = TextStyle(
-                            fontWeight = FontWeight.Bold, fontSize = 20.sp
-                        )
-                    )
-                }
-            }, actions = {
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = Icons.Default.Settings, contentDescription = "设置"
-                    )
-                }
-            }, colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-            )
-        )
-    }, bottomBar = {
+    Scaffold(bottomBar = {
         // 固定的输入框区域 - 首页不阻塞输入框
         ChatInput(
             inputText = inputText,
@@ -331,43 +309,45 @@ private fun EmptyHomeState() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 图标
+        // 图标 - 精致紫调渐变
         Box(
-            modifier = Modifier.size(100.dp).shadow(
-                elevation = 15.dp,
-                shape = RoundedCornerShape(28.dp),
-                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-            ).clip(RoundedCornerShape(28.dp)).background(
+            modifier = Modifier.size(110.dp).shadow(
+                elevation = 20.dp,
+                shape = RoundedCornerShape(32.dp),
+                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+            ).clip(RoundedCornerShape(32.dp)).background(
                 Brush.linearGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
-                    )
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                    ),
+                    start = androidx.compose.ui.geometry.Offset.Zero,
+                    end = androidx.compose.ui.geometry.Offset.Infinite
                 )
             ), contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Chat,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(50.dp)
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(55.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         Text(
             text = "开始您的对话", style = TextStyle(
-                color = MaterialTheme.colorScheme.onSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold
+                color = MaterialTheme.colorScheme.onSurface, fontSize = 24.sp, fontWeight = FontWeight.Bold
             )
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
             text = "在下方输入框输入消息开始会话", style = TextStyle(
-                color = chatColors.textSecondary, fontSize = 14.sp
+                color = chatColors.textSecondary, fontSize = 15.sp
             )
         )
     }

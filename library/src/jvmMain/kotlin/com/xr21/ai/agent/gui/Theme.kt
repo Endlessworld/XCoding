@@ -20,41 +20,73 @@ enum class ThemeMode {
 }
 
 /**
- * 亮色主题颜色 - macOS/iOS 风格
+ * 亮色主题颜色 - 现代渐变风格
  */
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF6366F1),
-    secondary = Color(0xFF8B5CF6),
-    tertiary = Color(0xFF06B6D4),
-    background = Color(0xFFF5F5F7),  // macOS 风格浅灰背景
-    surface = Color(0xFFFFFFFF).copy(alpha = 0.8f),  // 磨砂玻璃基础色
-    surfaceVariant = Color(0xF0F1F5FF),  // 带透明度的表面
+    primary = Color(0xFF5B21B6),       // 主色调：深邃紫罗兰
+    primaryContainer = Color(0xFFE9D5FF),
+    secondary = Color(0xFF7C3AED),     // 辅助色：优雅紫
+    secondaryContainer = Color(0xFFDDD6FE),
+    tertiary = Color(0xFF0891B2),      // 强调色：海洋青
+    tertiaryContainer = Color(0xFFCFFAFE),
+    background = Color(0xFFFAF9FF),    // 背景色：极浅紫白
+    surface = Color(0xFFFFFFFF).copy(alpha = 0.96f),  // 表面色：半透明白
+    surfaceVariant = Color(0xFFF1F0FA), // 表面变体：浅紫灰
+    surfaceBright = Color(0xFFFFFFFF),
+    surfaceDim = Color(0xFFDFDDFF),
     onPrimary = Color.White,
+    onPrimaryContainer = Color(0xFF2A0055),
     onSecondary = Color.White,
+    onSecondaryContainer = Color(0xFF2A1063),
     onTertiary = Color.White,
-    onBackground = Color(0xFF1D1D1F),
-    onSurface = Color(0xFF1D1D1F),
-    onSurfaceVariant = Color(0xFF86868B),
-    error = Color(0xFFEF4444)
+    onTertiaryContainer = Color(0xFF001E28),
+    onBackground = Color(0xFF1B1B22),  // 深色文字
+    onSurface = Color(0xFF1B1B22),
+    onSurfaceVariant = Color(0xFF474752),
+    outline = Color(0xFF777782),
+    outlineVariant = Color(0xFFC7C6D1),
+    error = Color(0xFFDC2626),
+    errorContainer = Color(0xFFFEE2E2),
+    onError = Color.White,
+    onErrorContainer = Color(0xFF590B0B),
+    scrim = Color(0xFF000000),
+    inverseSurface = Color(0xFF303038),
+    inverseOnSurface = Color(0xFFF2F0FB)
 )
 
 /**
- * 暗色主题颜色 - macOS/iOS 风格
+ * 暗色主题颜色 - 现代渐变风格
  */
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF6366F1),
-    secondary = Color(0xFF8B5CF6),
-    tertiary = Color(0xFF06B6D4),
-    background = Color(0xFF1C1C1E),  // macOS 风格深灰背景
-    surface = Color(0xFF2C2C2E).copy(alpha = 0.85f),  // 磨砂玻璃基础色
-    surfaceVariant = Color(0x3A3A3CFF),  // 带透明度的表面
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFFF5F5F7),
-    onSurface = Color(0xFFF5F5F7),
-    onSurfaceVariant = Color(0xFFAEAEB2),
-    error = Color(0xFFEF4444)
+    primary = Color(0xFFD8B4FE),       // 主色调：淡雅紫
+    primaryContainer = Color(0xFF411D76),
+    secondary = Color(0xFFC4A6FF),     // 辅助色：柔和紫紫
+    secondaryContainer = Color(0xFF582D9C),
+    tertiary = Color(0xFF67E8F9),      // 强调色：明亮青
+    tertiaryContainer = Color(0xFF004C5B),
+    background = Color(0xFF0C0C14),    // 背景色：深邃紫黑
+    surface = Color(0xFF1C1C24).copy(alpha = 0.92f),  // 表面色：半透明深紫
+    surfaceVariant = Color(0xFF2B2B36), // 表面变体：深紫灰
+    surfaceBright = Color(0xFF43434E),
+    surfaceDim = Color(0xFF1C1C24),
+    onPrimary = Color(0xFF3B006A),
+    onPrimaryContainer = Color(0xFFE9D5FF),
+    onSecondary = Color(0xFF35156A),
+    onSecondaryContainer = Color(0xFFDDD6FE),
+    onTertiary = Color(0xFF00363F),
+    onTertiaryContainer = Color(0xFFCFFAFE),
+    onBackground = Color(0xFFE4E1E9),  // 浅色文字
+    onSurface = Color(0xFFE4E1E9),
+    onSurfaceVariant = Color(0xFFC7C6D1),
+    outline = Color(0xFF91919E),
+    outlineVariant = Color(0xFF474752),
+    error = Color(0xFFEF4444),
+    errorContainer = Color(0xFF7F1D1D),
+    onError = Color.White,
+    onErrorContainer = Color(0xFFFEE2E2),
+    scrim = Color(0xFF000000),
+    inverseSurface = Color(0xFFF2F0FB),
+    inverseOnSurface = Color(0xFF303038)
 )
 
 /**
@@ -63,6 +95,7 @@ private val DarkColors = darkColorScheme(
 data class ChatColors(
     val primary: Color,
     val secondary: Color,
+    val tertiary: Color,
     val userMessageColor: Color,
     val assistantMessageColor: Color,
     val systemMessageColor: Color,
@@ -83,48 +116,50 @@ data class ChatColors(
  * 亮色聊天主题 - 磨砂玻璃风格
  */
 val LightChatColors = ChatColors(
-    primary = Color(0xFF6366F1),
-    secondary = Color(0xFF8B5CF6),
-    userMessageColor = Color(0xFFE0E0E0),
-    assistantMessageColor = Color(0xFFFFFFFF).copy(alpha = 0.7f),
+    primary = Color(0xFF5B21B6),
+    secondary = Color(0xFF7C3AED),
+    tertiary = Color(0xFF0891B2),
+    userMessageColor = Color(0xFFDDD6FE),
+    assistantMessageColor = Color(0xFFFFFFFF).copy(alpha = 0.85f),
     systemMessageColor = Color(0xFFF59E0B),
-    textPrimary = Color(0xFF1D1D1F),
-    textSecondary = Color(0xFF86868B),
-    borderColor = Color(0xFFD2D2D7),
-    toolCallBackgroundColor = Color(0xFF6366F1),
-    // 磨砂玻璃渐变
-    glassGradientStart = Color(0xFFFFFFFF).copy(alpha = 0.9f),
-    glassGradientEnd = Color(0xFFF5F5F7).copy(alpha = 0.7f),
-    // 用户消息气泡渐变 (中性灰色系)
-    userBubbleGradientStart = Color(0xFFE8E8E8),
-    userBubbleGradientEnd = Color(0xFFDCDCDC),
+    textPrimary = Color(0xFF1B1B22),
+    textSecondary = Color(0xFF6B6B76),
+    borderColor = Color(0xFFE5E4EB),
+    toolCallBackgroundColor = Color(0xFFE9D5FF),
+    // 磨砂玻璃渐变 - 精致紫调
+    glassGradientStart = Color(0xFFFAF9FF).copy(alpha = 0.92f),
+    glassGradientEnd = Color(0xFFF1F0FA).copy(alpha = 0.85f),
+    // 用户消息气泡渐变 (紫色系)
+    userBubbleGradientStart = Color(0xFFDDD6FE),
+    userBubbleGradientEnd = Color(0xFFC9B0FA),
     // AI消息气泡渐变 (白色系磨砂)
-    assistantBubbleGradientStart = Color(0xFFFFFFFF).copy(alpha = 0.9f),
-    assistantBubbleGradientEnd = Color(0xFFF5F5F7).copy(alpha = 0.8f)
+    assistantBubbleGradientStart = Color(0xFFFFFFFF).copy(alpha = 0.95f),
+    assistantBubbleGradientEnd = Color(0xFFF8F7FC).copy(alpha = 0.88f)
 )
 
 /**
  * 暗色聊天主题 - 磨砂玻璃风格
  */
 val DarkChatColors = ChatColors(
-    primary = Color(0xFF6366F1),
-    secondary = Color(0xFF8B5CF6),
-    userMessageColor = Color(0xFFE0E0E0),
-    assistantMessageColor = Color(0xFF3A3A3C).copy(alpha = 0.8f),
-    systemMessageColor = Color(0xFFF59E0B),
-    textPrimary = Color(0xFFF5F5F7),
-    textSecondary = Color(0xFFAEAEB2),
-    borderColor = Color(0xFF48484A),
-    toolCallBackgroundColor = Color(0xFF8B5CF6),
-    // 磨砂玻璃渐变
-    glassGradientStart = Color(0xFF2C2C2E).copy(alpha = 0.95f),
-    glassGradientEnd = Color(0xFF1C1C1E).copy(alpha = 0.9f),
-    // 用户消息气泡渐变 (中性灰色系)
-    userBubbleGradientStart = Color(0xFFE8E8E8),
-    userBubbleGradientEnd = Color(0xFFDCDCDC),
+    primary = Color(0xFFD8B4FE),
+    secondary = Color(0xFFC4A6FF),
+    tertiary = Color(0xFF67E8F9),
+    userMessageColor = Color(0xFF411D76),
+    assistantMessageColor = Color(0xFF2B2B36).copy(alpha = 0.88f),
+    systemMessageColor = Color(0xFFFBBF24),
+    textPrimary = Color(0xFFE4E1E9),
+    textSecondary = Color(0xFF9B9BA6),
+    borderColor = Color(0xFF3A3A44),
+    toolCallBackgroundColor = Color(0xFF582D9C),
+    // 磨砂玻璃渐变 - 精致深紫调
+    glassGradientStart = Color(0xFF1C1C24).copy(alpha = 0.95f),
+    glassGradientEnd = Color(0xFF16161D).copy(alpha = 0.9f),
+    // 用户消息气泡渐变 (紫色系)
+    userBubbleGradientStart = Color(0xFF582D9C),
+    userBubbleGradientEnd = Color(0xFF411D76),
     // AI消息气泡渐变 (深色系磨砂)
-    assistantBubbleGradientStart = Color(0xFF3A3A3C).copy(alpha = 0.9f),
-    assistantBubbleGradientEnd = Color(0xFF2C2C2E).copy(alpha = 0.85f)
+    assistantBubbleGradientStart = Color(0xFF2B2B36).copy(alpha = 0.92f),
+    assistantBubbleGradientEnd = Color(0xFF23232B).copy(alpha = 0.87f)
 )
 
 /**

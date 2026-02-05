@@ -15,7 +15,11 @@
       "Bash(xargs:*)",
       "Bash(Get-ChildItem:*)",
       "Bash(Select-String:*)",
-      "Bash(Test-Path:*)"
+      "Bash(Test-Path:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)"
     ]
   }
 }
