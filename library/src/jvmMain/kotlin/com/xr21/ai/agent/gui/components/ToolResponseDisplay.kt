@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -183,17 +185,21 @@ private fun ToolResponseItem(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                             )
                         ) {
-                            Text(
-                                text = response.responseData().ifBlank { "(无输出)" },
-                                style = androidx.compose.ui.text.TextStyle(
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                ),
-                                modifier = Modifier.padding(8.dp),
-                                maxLines = 10,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .heightIn(max = 200.dp) // 限制最大高度
+                                    .verticalScroll(rememberScrollState()) // 添加垂直滚动
+                            ) {
+                                Text(
+                                    text = response.responseData().ifBlank { "(无输出)" },
+                                    style = androidx.compose.ui.text.TextStyle(
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    )
+                                )
+                            }
                         }
                     }
                 }
