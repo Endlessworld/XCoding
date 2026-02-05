@@ -23,6 +23,7 @@ import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.SinksUtil;
+import io.modelcontextprotocol.client.McpAsyncClient;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
@@ -77,11 +78,15 @@ public class LocalAgent {
                 .toList());
 //        tools.add(FeedBackTool.build("feed_back_tool", new FeedBackTool()));
 //        tools.add(WebSearchTool.createWebSearchToolCallback());
-        var streamableHttpTransport = HttpClientStreamableHttpTransport.builder("https://mcp.api-inference.modelscope.net")
+        var streamableHttpBingSearchTransport = HttpClientStreamableHttpTransport.builder("https://mcp.api-inference.modelscope.net")
                 .endpoint("/b799a1ba459541/mcp")
                 .build();
-        McpSyncClient streamableSyncClient = McpClient.sync(streamableHttpTransport).build();
-        tools.addAll(McpToolUtils.getToolCallbacksFromSyncClients(streamableSyncClient));
+        var streamableHttp12306Transport = HttpClientStreamableHttpTransport.builder("https://mcp.api-inference.modelscope.net")
+                .endpoint("/cc7a46cde65648/mcp")
+                .build();
+        McpAsyncClient streamableBingSearchSyncClient = McpClient.async(streamableHttpBingSearchTransport).build();
+        McpAsyncClient streamable12306SyncClient = McpClient.async(streamableHttp12306Transport).build();
+        tools.addAll(McpToolUtils.getToolCallbacksFromAsyncClients(streamableBingSearchSyncClient,streamable12306SyncClient));
 
         return tools;
     }
