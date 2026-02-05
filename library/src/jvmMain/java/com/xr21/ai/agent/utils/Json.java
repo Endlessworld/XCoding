@@ -4,26 +4,22 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 
 public abstract class Json {
 
-    private static final ObjectMapper OBJECT_MAPPER;
+    private static final JsonMapper jsonMapper;
 
     static {
-        OBJECT_MAPPER = new ObjectMapper();
-        OBJECT_MAPPER.registerModule(new JavaTimeModule());
-        SimpleModule module = new SimpleModule();
-        OBJECT_MAPPER.registerModule(module);
-        OBJECT_MAPPER.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        OBJECT_MAPPER.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        jsonMapper = JsonMapper.builder().addModules(ObjectMapper.findModules()).build();
+        jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        jsonMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
 
     public static <T> String toJson(T value) {
         try {
-            return OBJECT_MAPPER.writeValueAsString(value);
+            return jsonMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
@@ -31,7 +27,7 @@ public abstract class Json {
 
     public static <T> String toPrettyJson(T value) {
         try {
-            return OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(value);
+            return jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
@@ -39,7 +35,7 @@ public abstract class Json {
 
     public static <R> R to(String value, Class<R> clazz) {
         try {
-            return OBJECT_MAPPER.readValue(value, clazz);
+            return jsonMapper.readValue(value, clazz);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
@@ -47,7 +43,7 @@ public abstract class Json {
 
     public static <T, R> R to(T value, Class<R> clazz) {
         try {
-            return OBJECT_MAPPER.readValue(toJson(value), clazz);
+            return jsonMapper.readValue(toJson(value), clazz);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
