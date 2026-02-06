@@ -19,13 +19,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -54,26 +65,23 @@ fun ChatInput(
     var isFocused by remember { mutableStateOf(false) }
     val hasText = inputText.text.isNotBlank()
 
-    // 焦点状态动画
-    val focusAnimation = rememberInfiniteTransition(label = "focus")
-    val pulseAlpha by focusAnimation.animateFloat(
+    // 暖色系定义
+    val warmOrange = Color(0xFFFF6B35)      // 活力橙
+    val warmCoral = Color(0xFFFF8E53)       // 珊瑚色
+    val warmGold = Color(0xFFFFB347)        // 金色
+    val warmRed = Color(0xFFFF4757)        // 暖红
+    val warmYellow = Color(0xFFFFD93D)     // 明黄
+
+    // 呼吸灯动画 - 暖色系，聚焦时频率加快到1.2秒
+    val breatheAnimation = rememberInfiniteTransition(label = "breathe")
+    val breatheAlpha by breatheAnimation.animateFloat(
         initialValue = 0.6f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
+            animation = tween(if (isFocused) 1200 else 1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "pulse"
-    )
-
-    // 点击缩放动画
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
-        ),
-        label = "scale"
+        label = "breatheAlpha"
     )
 
     // 焦点边框颜色动画
@@ -123,11 +131,11 @@ fun ChatInput(
             .fillMaxWidth()
             .shadow(
                 elevation = 24.dp,
-                shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
                 ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                 spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
             )
-            .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+            .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
             .background(getGlassGradientBrush())
     ) {
         Column(
@@ -135,15 +143,12 @@ fun ChatInput(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            // 统一的输入区域容器 - 精致紫调
+            // 统一的输入区域容器 - 呼吸灯特效
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                    .clip(RoundedCornerShape(36.dp))
+                    // 移除缩放动画，保持固定大小
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(
@@ -152,27 +157,59 @@ fun ChatInput(
                             )
                         )
                     )
-                    .border(
-                        width = if (isFocused) 2.dp else 1.5.dp,
-                        brush = Brush.horizontalGradient(
-                            colors = if (isFocused) {
-                                listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
-                                )
-                            } else {
-                                listOf(
-                                    focusBorderColor.copy(alpha = 0.6f),
-                                    focusBorderColor.copy(alpha = 0.3f)
-                                )
+                    .then(
+                        if (isFocused) {
+                            // 聚焦时：暖色系呼吸灯效果（频率1.2秒）
+                            Modifier.drawWithCache {
+                                onDrawWithContent {
+                                    drawContent()
+
+                                    // 边框宽度
+                                    val strokeWidth = 4.dp.toPx()
+                                    val breathe = breatheAlpha
+
+                                    val gradientBrush = Brush.sweepGradient(
+                                        colors = listOf(
+                                            warmOrange.copy(alpha = 0.95f * breathe),
+                                            warmCoral.copy(alpha = 0.85f * breathe),
+                                            warmGold.copy(alpha = 0.75f * breathe),
+                                            warmYellow.copy(alpha = 0.65f * breathe),
+                                            warmRed.copy(alpha = 0.8f * breathe),
+                                            warmCoral.copy(alpha = 0.9f * breathe),
+                                            warmOrange.copy(alpha = 0.95f * breathe)
+                                        ),
+                                        center = Offset(size.width / 2, size.height / 2)
+                                    )
+
+                                    drawRoundRect(
+                                        brush = gradientBrush,
+                                        size = Size(size.width, size.height),
+                                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                                        style = Stroke(width = strokeWidth)
+                                    )
+
+                                    // 呼吸时也添加高光效果
+                                    drawRoundRect(
+                                        color = Color.White.copy(alpha = 0.3f * breathe),
+                                        size = Size(size.width, size.height),
+                                        cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                                        style = Stroke(width = strokeWidth * 0.25f)
+                                    )
+                                }
                             }
-                        ),
-                        shape = RoundedCornerShape(36.dp)
+                        } else {
+                            // 非聚焦时：普通边框
+                            Modifier.border(
+                                width = 1.5.dp,
+                                color = chatColors.borderColor.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
                     )
                     .focusRequester(focusRequester)
                     .onFocusChanged { isFocused = it.isFocused }
                     .onKeyEvent { event ->
-                        if (event.key == androidx.compose.ui.input.key.Key.Enter) {
+                        if (event.key == Key.Enter) {
                             // Ctrl+Enter: 手动插入换行符
                             if (event.isCtrlPressed) {
                                 onInputChange(TextFieldValue(
@@ -209,16 +246,16 @@ fun ChatInput(
                         placeholder = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (isFocused) {
-                                    // 聚焦时的动态光点提示
+                                    // 聚焦时的动态光点提示 - 暖色系呼吸效果
                                     Box(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .graphicsLayer {
-                                                scaleX = pulseAlpha
-                                                scaleY = pulseAlpha
+                                                scaleX = breatheAlpha
+                                                scaleY = breatheAlpha
                                             }
                                             .background(
-                                                MaterialTheme.colorScheme.primary,
+                                                warmOrange,
                                                 CircleShape
                                             )
                                     )
@@ -237,7 +274,7 @@ fun ChatInput(
                             unfocusedContainerColor = Color.Transparent,
                             cursorColor = MaterialTheme.colorScheme.primary
                         ),
-                        shape = RoundedCornerShape(28.dp),
+                        shape = RoundedCornerShape(6.dp),
                         enabled = !isLoading,
                         maxLines = 4,
                         interactionSource = interactionSource,
@@ -371,29 +408,6 @@ fun ChatInput(
                 }
             }
 
-            // 焦点指示器（聚焦时显示）- 精致紫调
-            if (isFocused) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .fillMaxWidth()
-                        .height(2.5.dp)
-                        .graphicsLayer {
-                            scaleX = pulseAlpha
-                        }
-                        .clip(RoundedCornerShape(1.25.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0f),
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f),
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0f)
-                                )
-                            )
-                        )
-                )
-            }
         }
     }
 }

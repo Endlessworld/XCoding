@@ -13,6 +13,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
@@ -107,6 +109,20 @@ fun ChatApplication() {
                                 )
                             )
                         )
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    // 双击最大化/还原窗口
+                                    val currentState = window.extendedState
+                                    val isMaximized = (currentState and java.awt.Frame.MAXIMIZED_BOTH) != 0
+                                    window.extendedState = if (isMaximized) {
+                                        currentState and java.awt.Frame.MAXIMIZED_BOTH.inv()
+                                    } else {
+                                        currentState or java.awt.Frame.MAXIMIZED_BOTH
+                                    }
+                                }
+                            )
+                        }
                         .onPointerEvent(PointerEventType.Press) {
                             val window = window
                             val pointerInfo: PointerInfo = MouseInfo.getPointerInfo()
