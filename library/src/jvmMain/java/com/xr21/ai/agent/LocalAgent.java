@@ -180,7 +180,7 @@ public class LocalAgent {
      */
     public void initializeChatModel() {
         try {
-            this.chatModel = AiModels.MINIMAX_M2_1.createChatModel();
+            this.chatModel = AiModels.KIMI_K2_5.createChatModel();
             log.info("ChatModel initialized successfully");
         } catch (Exception e) {
             log.error("Failed to initialize ChatModel: {}", e.getMessage());
@@ -194,7 +194,7 @@ public class LocalAgent {
      */
     private ChatModel createFallbackChatModel() {
         try {
-            return AiModels.MINIMAX_M2_1.createChatModel();
+            return AiModels.KIMI_K2_5.createChatModel();
         } catch (Exception e) {
             log.error("Failed to create fallback ChatModel: {}", e.getMessage());
             throw new RuntimeException(e);
