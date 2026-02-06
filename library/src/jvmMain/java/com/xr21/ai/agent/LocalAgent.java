@@ -84,9 +84,9 @@ public class LocalAgent {
         var streamableHttp12306Transport = HttpClientStreamableHttpTransport.builder("https://mcp.api-inference.modelscope.net")
                 .endpoint("/cc7a46cde65648/mcp")
                 .build();
-        McpAsyncClient streamableBingSearchSyncClient = McpClient.async(streamableHttpBingSearchTransport).build();
-        McpAsyncClient streamable12306SyncClient = McpClient.async(streamableHttp12306Transport).build();
-        tools.addAll(McpToolUtils.getToolCallbacksFromAsyncClients(streamableBingSearchSyncClient,streamable12306SyncClient));
+//        McpAsyncClient streamableBingSearchSyncClient = McpClient.async(streamableHttpBingSearchTransport).build();
+//        McpAsyncClient streamable12306SyncClient = McpClient.async(streamableHttp12306Transport).build();
+//        tools.addAll(McpToolUtils.getToolCallbacksFromAsyncClients(streamableBingSearchSyncClient,streamable12306SyncClient));
 
         return tools;
     }

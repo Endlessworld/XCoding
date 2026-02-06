@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,19 +58,19 @@ fun InlineToolCall(
         visible = true
     }
 
-    val chatColors = getCurrentChatColors()
     val toolConfig = getToolConfig(toolCall.name)
 
     // 根据状态显示不同文本
+    // 修复：如果有响应，显示完成状态，不再依赖 isStreaming
     val statusText = when {
-        isStreaming -> "执行中..."
         hasResponse -> if (isError) "❌ 执行失败" else "✅ 执行完成"
+        isStreaming -> "执行中..."
         else -> "🚀 发起调用"
     }
 
     val statusColor = when {
-        isStreaming -> toolConfig.color
         hasResponse -> if (isError) Color(0xFFE53935) else Color(0xFF43A047)
+        isStreaming -> toolConfig.color
         else -> toolConfig.color.copy(alpha = 0.8f)
     }
 
@@ -192,7 +193,7 @@ fun InlineToolCall(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.List,
+                                    imageVector = Icons.AutoMirrored.Filled.List,
                                     contentDescription = null,
                                     modifier = Modifier.size(12.dp),
                                     tint = statusColor
@@ -368,8 +369,6 @@ private fun ParameterItem(
     key: String,
     value: String
 ) {
-    val chatColors = getCurrentChatColors()
-    
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top
@@ -427,7 +426,7 @@ private fun StreamingIndicator(color: Color) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        repeat(3) { index ->
+        repeat(3) { _ ->
             Box(
                 modifier = Modifier
                     .size(6.dp)
@@ -577,7 +576,7 @@ private fun parseToolArguments(arguments: String?): Map<String, String> {
 fun ToolCallAnimationContainer(
     toolCalls: List<AssistantMessage.ToolCall>,
     modifier: Modifier = Modifier,
-    isStreaming: Boolean = false,
+    @Suppress("UNUSED_PARAMETER") isStreaming: Boolean = false,
     content: @Composable (toolCall: AssistantMessage.ToolCall, index: Int) -> Unit
 ) {
     Column(modifier = modifier) {

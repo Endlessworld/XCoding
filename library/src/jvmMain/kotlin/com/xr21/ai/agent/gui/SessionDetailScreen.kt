@@ -69,8 +69,11 @@ fun SessionDetailScreen(
     val streamingProcessor = remember { StreamingMessageProcessor.getInstance() }
     val messageAggregator = remember { MessageAggregator.getInstance() }
 
-    // 当前会话状态
-    val sessionState = sessionStateTracker.getSessionState(sessionId) ?: SessionStatus.IDLE
+    // 收集所有会话状态（响应式）
+    val allSessionStates by sessionStateTracker.statesFlow.collectAsState(emptyList())
+
+    // 当前会话状态（从 statesFlow 中动态获取，确保响应式更新）
+    val sessionState = allSessionStates.find { it.sessionId == sessionId }?.status ?: SessionStatus.IDLE
 
     // 收集运行中的会话
     val runningSessions by sessionStateTracker.runningSessions.collectAsState()
@@ -78,7 +81,6 @@ fun SessionDetailScreen(
     // 检查会话是否正在流式传输，如果是，订阅共享流
     val isSubscribingToExistingStream = remember { mutableStateOf(false) }
     val subscriptionJob = remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    val enterCount = remember { mutableStateOf(0L) }
     val messagesReady = remember { mutableStateOf(false) }
     val processedOutputs = remember { mutableSetOf<String>() }
 
@@ -106,8 +108,8 @@ fun SessionDetailScreen(
         sessionStateTracker.registerSession(sessionId)
 
         // 检查会话是否正在流式传输，如果不是，则不订阅
-        val sessionState = chatService.getSessionStreamingState(sessionId)
-        if (sessionState != null && !sessionState.isStreaming) {
+        val streamingStateSnapshot = chatService.getSessionStreamingState(sessionId)
+        if (streamingStateSnapshot != null && !streamingStateSnapshot.isStreaming) {
             // 流已经结束，不需要再订阅
             isLoading.value = false
             isStreaming.value = false
@@ -190,7 +192,7 @@ fun SessionDetailScreen(
                         }
 
 //                        println("  messages after update: ${messages.size} items")
-                        messages.forEachIndexed { index, msg ->
+                        messages.forEachIndexed { _, msg ->
 //                            println("  $index: ${msg.javaClass.simpleName}")
                             if (msg is ConversationMessage.Assistant) {
 //                                println("    text: ${msg.text}")

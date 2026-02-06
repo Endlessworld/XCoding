@@ -28,7 +28,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
         toolList.add(ListFilesTool.createListFilesToolCallback(this.customToolDescriptions.getOrDefault("ls", "Lists all files in the filesystem, filtering by directory.\n\nUsage:\n- The path parameter must be an absolute path, not a relative path\n- The list_files tool will return a list of all files in the specified directory.\n- This is very useful for exploring the file system and finding the right file to read or edit.\n- You should almost ALWAYS use this tool before using the Read or Edit tools.\n")));
         toolList.add(ReadFileTool.createReadFileToolCallback(null));
         if (!this.readOnly) {
-            toolList.add(WriteFileTool.createWriteFileToolCallback(this.customToolDescriptions.getOrDefault("write_file", "Writes to a new file in the filesystem.\n\nUsage:\n- The file_path parameter must be an absolute path, not a relative path\n- The content parameter must be a string\n- The write_file tool will create a new file.\n- When writing to a file, the content will completely replace the existing content.\n")));
+            toolList.add(WriteFileTool.createWriteFileToolCallback());
             toolList.add(EditFileTool.createEditFileToolCallback(this.customToolDescriptions.getOrDefault("edit_file", "在文件中批量执行精确的字符串替换。\n\n使用法：\n- 编辑输出文本时，请保持精确缩进，- 始终优先编辑现有文件。 \n- 如果“old_string”在文件中不唯一，编辑将失败。\n- new_string 不得超过1000字符，超过1000字符使用新的工具调用\n")));
         }
 

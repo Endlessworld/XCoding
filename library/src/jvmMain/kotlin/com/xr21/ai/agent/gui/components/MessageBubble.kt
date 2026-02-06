@@ -52,7 +52,6 @@ fun ConversationMessageBubble(
     isStreaming: Boolean = false
 ) {
     val isUser = message.isUser()
-    val chatColors = getCurrentChatColors()
     var showActionBar by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -65,7 +64,7 @@ fun ConversationMessageBubble(
 
     // 获取混合内容项列表
     val mixedContentItems = when (message) {
-        is ConversationMessage.User -> listOf(ConversationMessage.MixedContentItem.Text(message.content))
+        is ConversationMessage.User -> listOf(ConversationMessage.MixedContentItem.Text(message.content, index = 0))
         is ConversationMessage.Assistant -> message.buildMixedContentItems()
     }
 

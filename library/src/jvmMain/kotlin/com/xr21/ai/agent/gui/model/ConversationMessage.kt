@@ -80,6 +80,7 @@ sealed class ConversationMessage {
         fun buildMixedContentItems(): List<MixedContentItem> {
             val items = mutableListOf<MixedContentItem>()
             val toolResponseById = mutableMapOf<String, ToolResponseMessage>()
+            var textIndex = 0 // 用于生成稳定的 Text 索引
 
             // 先收集所有工具响应，按 id 索引
             rawMessages.filterIsInstance<ToolResponseMessage>().forEach { response ->
@@ -95,7 +96,7 @@ sealed class ConversationMessage {
                         // 如果有文本内容，添加文本项
                         val text = message.text?.trim()
                         if (!text.isNullOrBlank()) {
-                            items.add(MixedContentItem.Text(text))
+                            items.add(MixedContentItem.Text(text, textIndex++))
                         }
 
                         // 如果有工具调用，添加工具调用项
@@ -117,7 +118,7 @@ sealed class ConversationMessage {
                         // 其他类型的消息，只取文本
                         val text = message.text?.trim()
                         if (!text.isNullOrBlank()) {
-                            items.add(MixedContentItem.Text(text))
+                            items.add(MixedContentItem.Text(text, textIndex++))
                         }
                     }
                 }
@@ -136,8 +137,11 @@ sealed class ConversationMessage {
          */
         abstract val stableId: String
 
-        data class Text(val content: String) : MixedContentItem() {
-            override val stableId: String = "text_${content.hashCode()}"
+        data class Text(
+            val content: String,
+            val index: Int // 添加索引以确保 stableId 的稳定性
+        ) : MixedContentItem() {
+            override val stableId: String = "text_${index}"
         }
 
         data class ToolCall(val toolCall: AssistantMessage.ToolCall) : MixedContentItem() {
