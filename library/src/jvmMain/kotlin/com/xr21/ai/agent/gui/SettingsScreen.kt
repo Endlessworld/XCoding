@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -41,11 +43,14 @@ fun SettingsScreen(
     onClearHistory: () -> Unit,
     currentTheme: ThemeMode,
     homeSendMessageBehavior: HomeSendMessageBehavior = HomeSendMessageBehavior.REFRESH_LIST,
-    onHomeSendMessageBehaviorChange: ((HomeSendMessageBehavior) -> Unit)? = null
+    onHomeSendMessageBehaviorChange: ((HomeSendMessageBehavior) -> Unit)? = null,
+    onModelSettingsChange: ((ModelSettings) -> Unit)? = null,
+    currentModelSettings: ModelSettings = ModelSettings()
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showBehaviorDialog by remember { mutableStateOf(false) }
+    var showModelSettingsDialog by remember { mutableStateOf(false) }
     var autoSaveEnabled by remember { mutableStateOf(true) }
     val currentBehavior = homeSendMessageBehavior
 
@@ -270,6 +275,97 @@ fun SettingsScreen(
                                 checkedThumbColor = MaterialTheme.colorScheme.primary,
                                 checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                             )
+                        )
+                    }
+                }
+            }
+
+            // 模型设置
+            item {
+                SettingsSection(title = "模型")
+            }
+
+            item {
+                // 磨砂玻璃模型设置项
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(16.dp),
+                            ambientColor = Color.Black.copy(alpha = 0.1f),
+                            spotColor = Color.Black.copy(alpha = 0.08f)
+                        )
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    chatColors.glassGradientStart,
+                                    chatColors.glassGradientEnd.copy(alpha = 0.8f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    chatColors.borderColor.copy(alpha = 0.3f),
+                                    chatColors.borderColor.copy(alpha = 0.1f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .clickable { showModelSettingsDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SmartToy,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "模型设置",
+                                style = TextStyle(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                            Text(
+                                text = if (currentModelSettings.modelName.isNotBlank()) currentModelSettings.modelName else "使用默认配置",
+                                style = TextStyle(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp
+                                )
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = chatColors.textSecondary
                         )
                     }
                 }
@@ -806,6 +902,18 @@ fun SettingsScreen(
             }
         )
     }
+
+    // 模型设置对话框
+    if (showModelSettingsDialog) {
+        ModelSettingsDialog(
+            currentSettings = currentModelSettings,
+            onSettingsSaved = { settings ->
+                onModelSettingsChange?.invoke(settings)
+                showModelSettingsDialog = false
+            },
+            onDismiss = { showModelSettingsDialog = false }
+        )
+    }
 }
 
 /**
@@ -968,6 +1076,123 @@ fun BehaviorOption(
             )
         }
     }
+}
+
+/**
+ * 模型设置对话框
+ */
+@Composable
+fun ModelSettingsDialog(
+    currentSettings: ModelSettings,
+    onSettingsSaved: (ModelSettings) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var modelName by remember { mutableStateOf(currentSettings.modelName) }
+    var baseUrl by remember { mutableStateOf(currentSettings.baseUrl) }
+    var apiKey by remember { mutableStateOf(currentSettings.apiKey) }
+    var showApiKey by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("模型设置")
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "配置 AI 模型的连接参数。留空则使用默认环境变量配置。",
+                    style = TextStyle(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp
+                    )
+                )
+
+                // 模型名称输入
+                OutlinedTextField(
+                    value = modelName,
+                    onValueChange = { modelName = it },
+                    label = { Text("模型名称") },
+                    placeholder = { Text("例如: gpt-4, deepseek-chat") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+
+                // Base URL 输入
+                OutlinedTextField(
+                    value = baseUrl,
+                    onValueChange = { baseUrl = it },
+                    label = { Text("Base URL") },
+                    placeholder = { Text("例如: https://api.openai.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+
+                // API Key 输入
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text("API Key") },
+                    placeholder = { Text("输入您的 API Key") },
+                    singleLine = true,
+                    visualTransformation = if (showApiKey) VisualTransformation.None
+                    else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showApiKey = !showApiKey }) {
+                            Icon(
+                                imageVector = if (showApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showApiKey) "隐藏" else "显示"
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSettingsSaved(ModelSettings(
+                        modelName = modelName.trim(),
+                        baseUrl = baseUrl.trim(),
+                        apiKey = apiKey.trim()
+                    ))
+                }
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            Row {
+                if (modelName.isNotBlank() || baseUrl.isNotBlank() || apiKey.isNotBlank()) {
+                    TextButton(
+                        onClick = {
+                            onSettingsSaved(ModelSettings())
+                        }
+                    ) {
+                        Text("重置为默认", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("取消")
+                }
+            }
+        }
+    )
 }
 
 /**

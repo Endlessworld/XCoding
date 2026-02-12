@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class LocalAgent {
 
-    public static final String WORKSPACE_ROOT = "D:\\local-github\\ai-agents-multiplatform";
+    public static final String WORKSPACE_ROOT = "D:\\IdeaProjects\\agi_working";
 
     public static final String fileSystemSaverFolder = System.getProperty("user.home") + File.separator + ".agi_working" + File.separator + "SystemSaver";
     public static final FileSystemSaver fileSystemSaver = FileSystemSaver.builder()

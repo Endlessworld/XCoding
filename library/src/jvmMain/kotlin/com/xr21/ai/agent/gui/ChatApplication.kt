@@ -37,10 +37,13 @@ import androidx.compose.ui.graphics.Color
 @Composable
 @Preview
 fun ChatApplication() {
+    // 从 SettingsManager 加载设置
+    val settingsManager = remember { SettingsManager }
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
     var currentSessionId by remember { mutableStateOf<String?>(null) }
-    var currentTheme by remember { mutableStateOf(ThemeMode.SYSTEM) }
-    var homeSendMessageBehavior by remember { mutableStateOf(HomeSendMessageBehavior.REFRESH_LIST) }
+    var currentTheme by remember { mutableStateOf(settingsManager.getThemeMode()) }
+    var homeSendMessageBehavior by remember { mutableStateOf(settingsManager.getHomeSendMessageBehavior()) }
+    var currentModelSettings by remember { mutableStateOf(settingsManager.getModelSettings()) }
     var sessions by remember { mutableStateOf(listOf<UiSessionInfo>()) }
 
     val sessionManager = remember { FileSessionManager.getInstance() }
@@ -50,6 +53,21 @@ fun ChatApplication() {
     val windowState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.Center), width = 1200.dp, height = 800.dp
     )
+
+    // 初始化 AiModels 的默认模型设置
+    LaunchedEffect(currentModelSettings) {
+        if (!currentModelSettings.modelName.isNullOrEmpty() ||
+            !currentModelSettings.baseUrl.isNullOrEmpty() ||
+            !currentModelSettings.apiKey.isNullOrEmpty()) {
+            com.xr21.ai.agent.config.AiModels.setDefaultModelSettings(
+                com.xr21.ai.agent.config.AiModels.ModelSettings(
+                    currentModelSettings.modelName,
+                    currentModelSettings.baseUrl,
+                    currentModelSettings.apiKey
+                )
+            )
+        }
+    }
 
     // 加载会话列表
     LaunchedEffect(Unit) {
@@ -304,6 +322,7 @@ fun ChatApplication() {
                                 },
                                 onThemeChange = { theme ->
                                     currentTheme = theme
+                                    settingsManager.updateThemeMode(theme)
                                 },
                                 onClearHistory = {
                                     coroutineScope.launch(Dispatchers.IO) {
@@ -315,6 +334,12 @@ fun ChatApplication() {
                                 homeSendMessageBehavior = homeSendMessageBehavior,
                                 onHomeSendMessageBehaviorChange = { behavior ->
                                     homeSendMessageBehavior = behavior
+                                    settingsManager.updateHomeSendMessageBehavior(behavior)
+                                },
+                                currentModelSettings = currentModelSettings,
+                                onModelSettingsChange = { settings ->
+                                    currentModelSettings = settings
+                                    settingsManager.updateModelSettings(settings)
                                 }
                             )
                         }
