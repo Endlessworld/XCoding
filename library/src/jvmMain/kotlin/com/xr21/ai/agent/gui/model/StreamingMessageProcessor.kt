@@ -37,6 +37,12 @@ class StreamingMessageProcessor {
     // 当前思考会话的消息ID（用于判断是否是同一个思考过程）
     private var currentReasoningMessageId: String? = null
 
+    // 内容顺序计数器，用于追踪思考块在消息中的正确位置
+    private var contentOrderCounter: Int = 0
+
+    // 内容序列列表，记录内容项出现的顺序
+    private val contentSequenceList: MutableList<String> = mutableListOf()
+
     /**
      * 重置处理器状态（包括去重集合）
      */
@@ -49,6 +55,8 @@ class StreamingMessageProcessor {
         completedReasoningBlocks.clear()
         currentReasoningStartTime = 0
         currentReasoningMessageId = null
+        contentOrderCounter = 0
+        contentSequenceList.clear()
     }
 
     /**
@@ -141,24 +149,32 @@ class StreamingMessageProcessor {
             println("  reasoningMessageId: $reasoningMessageId")
 
             if (reasoningChunk.isNotEmpty()) {
-                // 判断是否是新的思考会话
-                val isNewReasoningSession = reasoningMessageId != null &&
-                    currentReasoningMessageId != null &&
-                    reasoningMessageId != currentReasoningMessageId
+                // 过滤掉占位符内容（如"正在思考..."）
+                val isPlaceholder = reasoningChunk == "正在思考..." ||
+                    reasoningChunk == "正在思考" ||
+                    reasoningChunk.length < 3
 
-                if (isNewReasoningSession) {
-                    // 新的思考会话，完成当前思考块并开始新的
-                    println("=== New reasoning session detected ===")
-                    if (currentReasoningBlock != null) {
-                        val completedBlock = currentReasoningBlock!!.copy(isStreaming = false)
-                        completedReasoningBlocks.add(completedBlock)
-                        println("  Completed previous block: ${completedBlock.id}")
-                    }
-                    // 清空累积内容，开始新的思考
-                    accumulatedReasoningContent = reasoningChunk
-                    currentReasoningBlock = null
-                    currentReasoningStartTime = 0
+                if (isPlaceholder) {
+                    println("=== Skipping placeholder reasoning content: '$reasoningChunk' ===")
                 } else {
+                    // 判断是否是新的思考会话
+                    val isNewReasoningSession = reasoningMessageId != null &&
+                        currentReasoningMessageId != null &&
+                        reasoningMessageId != currentReasoningMessageId
+
+                    if (isNewReasoningSession) {
+                        // 新的思考会话，完成当前思考块并开始新的
+                        println("=== New reasoning session detected ===")
+                        if (currentReasoningBlock != null) {
+                            val completedBlock = currentReasoningBlock!!.copy(isStreaming = false)
+                            completedReasoningBlocks.add(completedBlock)
+                            println("  Completed previous block: ${completedBlock.id}")
+                        }
+                        // 清空累积内容，开始新的思考
+                        accumulatedReasoningContent = reasoningChunk
+                        currentReasoningBlock = null
+                        currentReasoningStartTime = 0
+                    } else {
                     // 同一个思考会话，累积内容
                     // 判断是增量还是累积：
                     // - 如果 reasoningChunk 包含在累积内容的末尾，说明是重复，跳过
@@ -196,18 +212,26 @@ class StreamingMessageProcessor {
                 // 处理思考块
                 val currentBlock = currentReasoningBlock
                 if (currentBlock == null) {
-                    // 创建新的思考块
+                    // 创建新的思考块，分配当前顺序
                     currentReasoningStartTime = System.currentTimeMillis()
+                    val blockId = UUID.randomUUID().toString()
                     val newBlock = ConversationMessage.ReasoningBlock(
-                        id = UUID.randomUUID().toString(),
+                        id = blockId,
                         content = accumulatedReasoningContent.trim(),
                         timestamp = currentReasoningStartTime,
                         isStreaming = true,
-                        messageIndex = -1 // 设置为 -1 确保显示在最前面
+                        order = contentOrderCounter++
                     )
                     currentReasoningBlock = newBlock
+
+                    // 记录到内容序列
+                    if (!contentSequenceList.contains("reasoning:$blockId")) {
+                        contentSequenceList.add("reasoning:$blockId")
+                    }
+
                     println("=== Created new reasoning block ===")
                     println("  block id: ${newBlock.id}")
+                    println("  block order: ${newBlock.order}")
                     println("  block content length: ${newBlock.content.length}")
                 } else {
                     // 更新当前思考块的内容
@@ -220,20 +244,16 @@ class StreamingMessageProcessor {
                     println("  content length: ${updatedBlock.content.length}")
                 }
             }
+        }
 
             // 如果有当前流式消息，更新其思考块
             val streamingMsg = currentStreamingMessage
             if (streamingMsg != null) {
-                // 思考块应该显示在消息的最前面，设置 messageIndex 为 0
-                // 这样思考块会显示在所有文本和工具调用之前
-                val updatedBlock = currentReasoningBlock?.copy(messageIndex = -1)
-                if (updatedBlock != null) {
-                    currentReasoningBlock = updatedBlock
-                }
-
                 val allBlocks = completedReasoningBlocks + listOfNotNull(currentReasoningBlock)
                 val updatedMsg = streamingMsg.copy(
-                    reasoningContent = accumulatedReasoningContent.trim(), reasoningBlocks = allBlocks
+                    reasoningContent = accumulatedReasoningContent.trim(),
+                    reasoningBlocks = allBlocks,
+                    contentSequence = contentSequenceList.toList()
                 )
                 val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
                 if (index >= 0) {
@@ -253,7 +273,8 @@ class StreamingMessageProcessor {
                         timestamp = System.currentTimeMillis(),
                         rawMessages = emptyList(),
                         reasoningContent = accumulatedReasoningContent.trim(),
-                        reasoningBlocks = allBlocks
+                        reasoningBlocks = allBlocks,
+                        contentSequence = contentSequenceList.toList()
                     )
                     currentMessages.add(tempMsg)
                     updates.add(tempMsg)
@@ -483,6 +504,11 @@ class StreamingMessageProcessor {
                         AssistantMessage.builder().toolCalls(listOf(toolCall)).content("")  // 工具调用可能没有文本内容
                             .media(message.media).properties(message.metadata).build()
                     newRawMessages.add(toolCallMessage)
+
+                    // 记录到内容序列
+                    if (!contentSequenceList.contains("tool:${toolCall.id}")) {
+                        contentSequenceList.add("tool:${toolCall.id}")
+                    }
                 }
             }
 
@@ -492,7 +518,8 @@ class StreamingMessageProcessor {
             val updatedMsg = streamingMsg.copy(
                 rawMessages = newRawMessages,
                 reasoningBlocks = if (allBlocks.isNotEmpty()) allBlocks else streamingMsg.reasoningBlocks,
-                reasoningContent = accumulatedReasoningContent.trim().ifBlank { streamingMsg.reasoningContent }
+                reasoningContent = accumulatedReasoningContent.trim().ifBlank { streamingMsg.reasoningContent },
+                contentSequence = contentSequenceList.toList()
             )
             val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
             if (index >= 0) {
@@ -711,6 +738,12 @@ class StreamingMessageProcessor {
             val newRawMessages = streamingMsg.rawMessages.toMutableList()
             val lastAssistantIndex = newRawMessages.indexOfLast { it is AssistantMessage }
 
+            // 如果这是第一个文本chunk，记录到内容序列
+            val textKey = "text:0"
+            if (!contentSequenceList.contains(textKey) && chunk.isNotBlank()) {
+                contentSequenceList.add(textKey)
+            }
+
             if (lastAssistantIndex >= 0) {
                 val lastAssistant = newRawMessages[lastAssistantIndex] as AssistantMessage
                 val updatedAssistant = AssistantMessage.builder().toolCalls(lastAssistant.toolCalls)
@@ -725,7 +758,8 @@ class StreamingMessageProcessor {
                 val updatedMsg = streamingMsg.copy(
                     rawMessages = newRawMessages,
                     reasoningBlocks = if (allBlocks.isNotEmpty()) allBlocks else streamingMsg.reasoningBlocks,
-                    reasoningContent = accumulatedReasoningContent.trim().ifBlank { streamingMsg.reasoningContent }
+                    reasoningContent = accumulatedReasoningContent.trim().ifBlank { streamingMsg.reasoningContent },
+                    contentSequence = contentSequenceList.toList()
                 )
                 val index = currentMessages.indexOfFirst { it.id == streamingMsg.id }
                 if (index >= 0) {

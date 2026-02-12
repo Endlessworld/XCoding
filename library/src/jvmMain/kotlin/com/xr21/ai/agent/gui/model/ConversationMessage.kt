@@ -5,6 +5,7 @@ import org.springframework.ai.chat.messages.Message
 import org.springframework.ai.chat.messages.MessageType
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import java.util.UUID
+import kotlin.collections.emptyList
 
 /**
  * UI层统一消息模型
@@ -29,13 +30,14 @@ sealed class ConversationMessage {
     /**
      * 思考段落块
      * 每个思考段落作为独立的卡片显示
+     * @param order 在内容序列中的顺序位置，用于正确排序显示
      */
     data class ReasoningBlock(
         val id: String,
         val content: String,
         val timestamp: Long,
         val isStreaming: Boolean = false,
-        val messageIndex: Int = -1 // 关联到rawMessages中的索引，用于确定位置
+        val order: Int = 0 // 在内容序列中的顺序位置
     )
 
     /**
@@ -58,7 +60,12 @@ sealed class ConversationMessage {
          * 兼容字段：单个思考内容字符串
          * 用于向后兼容和流式处理
          */
-        val reasoningContent: String? = null
+        val reasoningContent: String? = null,
+        /**
+         * 内容序列：记录内容项出现的顺序
+         * 每个元素格式为 "type:id"，如 "reasoning:uuid", "text:0", "tool:toolCallId"
+         */
+        val contentSequence: List<String> = emptyList()
     ) : ConversationMessage() {
 
         /**
@@ -101,12 +108,11 @@ sealed class ConversationMessage {
         /**
          * 构建混合内容项列表，用于渲染
          * 包含：思考段落、文本、工具调用
-         * 思考块会嵌入在对应的消息位置
+         * 按 contentSequence 的顺序渲染
          */
         fun buildMixedContentItems(): List<MixedContentItem> {
             val items = mutableListOf<MixedContentItem>()
             val toolResponseById = mutableMapOf<String, ToolResponseMessage>()
-            var textIndex = 0 // 用于生成稳定的 Text 索引
 
             // 先收集所有工具响应，按 id 索引
             rawMessages.filterIsInstance<ToolResponseMessage>().forEach { response ->
@@ -114,77 +120,122 @@ sealed class ConversationMessage {
                     toolResponseById[resp.id()] = response
                 }
             }
+
             println("=== buildMixedContentItems ===")
             println("  reasoningContent length: ${reasoningContent?.length ?: 0}")
             println("  reasoningBlocks.size: ${reasoningBlocks.size}")
+            println("  contentSequence.size: ${contentSequence.size}")
+            println("  contentSequence: $contentSequence")
             reasoningBlocks.forEachIndexed { idx, block ->
-                println("  reasoningBlocks[$idx]: id=${block.id}, messageIndex=${block.messageIndex}, content.length=${block.content.length}, isStreaming=${block.isStreaming}")
-            }
-            
-            // 创建一个按messageIndex排序的思考块映射
-            val reasoningBlockByIndex = reasoningBlocks
-                .filter { it.messageIndex >= 0 }
-                .groupBy { it.messageIndex }
-
-            // 收集没有 messageIndex 或 messageIndex 为负数的思考块（应该显示在最前面）
-            val frontReasoningBlocks = reasoningBlocks.filter { it.messageIndex < 0 }
-
-            // 检查是否有有效的思考块内容
-            val hasValidReasoningBlocks = reasoningBlocks.any { it.content.isNotBlank() }
-            
-            // 如果有向后兼容的 reasoningContent 且没有有效的思考块，添加它到最前面
-            if (!hasValidReasoningBlocks && !reasoningContent.isNullOrBlank()) {
-                println("Creating legacy reasoning block with content length: ${reasoningContent.length}")
-                val legacyBlock = ReasoningBlock(
-                    id = "legacy_reasoning",
-                    content = reasoningContent,
-                    timestamp = timestamp,
-                    isStreaming = false
-                )
-                items.add(MixedContentItem.Reasoning(legacyBlock))
-                println("Added legacy reasoning block to items, items.size = ${items.size}")
+                println("  reasoningBlocks[$idx]: id=${block.id}, order=${block.order}, content.length=${block.content.length}, isStreaming=${block.isStreaming}")
             }
 
-            // 先添加应该显示在前面的思考块（没有 messageIndex 或 messageIndex < 0）
-            frontReasoningBlocks.forEach { block ->
-                println("Processing front reasoning block: id=${block.id}, content.length=${block.content.length}")
-                if (block.content.isNotBlank()) {
-                    items.add(MixedContentItem.Reasoning(block))
+            // 创建思考块ID到块的映射
+            val reasoningBlockById = reasoningBlocks.associateBy { it.id }
+
+            // 如果有 contentSequence，按它来排序渲染
+            if (contentSequence.isNotEmpty()) {
+                var textIndex = 0
+                contentSequence.forEach { itemKey ->
+                    val parts = itemKey.split(":", limit = 2)
+                    if (parts.size != 2) return@forEach
+
+                    val (type, id) = parts
+                    when (type) {
+                        "reasoning" -> {
+                            val block = reasoningBlockById[id]
+                            if (block != null && block.content.isNotBlank()) {
+                                items.add(MixedContentItem.Reasoning(block))
+                            }
+                        }
+                        "text" -> {
+                            // 文本内容从 rawMessages 中的 AssistantMessage 提取
+                            val allText = rawMessages.filterIsInstance<AssistantMessage>()
+                                .joinToString("") { it.text ?: "" }
+                            if (allText.isNotBlank()) {
+                                items.add(MixedContentItem.Text(allText.trim(), textIndex++))
+                            }
+                        }
+                        "tool" -> {
+                            // 查找对应的工具调用
+                            val toolCall = rawMessages.filterIsInstance<AssistantMessage>()
+                                .flatMap { it.toolCalls }
+                                .find { it.id == id }
+                            if (toolCall != null) {
+                                items.add(MixedContentItem.ToolCall(toolCall))
+                            }
+                        }
+                    }
                 }
-            }
+            } else {
+                // 向后兼容：使用旧的渲染逻辑
+                var textIndex = 0
 
-            // 遍历 rawMessages，按顺序构建混合内容
-            rawMessages.forEachIndexed { messageIndex, message ->
-                // 先添加该位置对应的思考块
-                reasoningBlockByIndex[messageIndex]?.forEach { block ->
+                // 检查是否有有效的思考块内容
+                val hasValidReasoningBlocks = reasoningBlocks.any { it.content.isNotBlank() }
+
+                // 如果有向后兼容的 reasoningContent 且没有有效的思考块，添加它
+                if (!hasValidReasoningBlocks && !reasoningContent.isNullOrBlank()) {
+                    println("Creating legacy reasoning block with content length: ${reasoningContent.length}")
+                    val legacyBlock = ReasoningBlock(
+                        id = "legacy_reasoning",
+                        content = reasoningContent,
+                        timestamp = timestamp,
+                        isStreaming = false
+                    )
+                    items.add(MixedContentItem.Reasoning(legacyBlock))
+                }
+
+                // 先按 order 排序思考块
+                val sortedReasoningBlocks = reasoningBlocks.sortedBy { it.order }
+
+                // 如果没有 order 信息，将所有思考块放在前面（向后兼容）
+                val frontBlocks: List<ReasoningBlock>
+                val orderedBlocks: List<ReasoningBlock>
+                if (sortedReasoningBlocks.all { it.order == 0 }) {
+                    frontBlocks = sortedReasoningBlocks
+                    orderedBlocks = emptyList()
+                } else {
+                    frontBlocks = emptyList()
+                    orderedBlocks = sortedReasoningBlocks
+                }
+
+                // 添加前置思考块
+                frontBlocks.forEach { block ->
                     if (block.content.isNotBlank()) {
                         items.add(MixedContentItem.Reasoning(block))
                     }
                 }
 
-                when (message) {
-                    is AssistantMessage -> {
-                        // 如果有文本内容，添加文本项
-                        val text = message.text?.trim()
-                        if (!text.isNullOrBlank()) {
-                            items.add(MixedContentItem.Text(text, textIndex++))
+                // 遍历 rawMessages，在适当位置插入思考块
+                var currentOrder = 0
+                rawMessages.filterIsInstance<AssistantMessage>().forEach { message ->
+                    // 先添加该位置之前的思考块
+                    orderedBlocks.filter { it.order <= currentOrder && it.order > (currentOrder - 1) }.forEach { block ->
+                        if (block.content.isNotBlank()) {
+                            items.add(MixedContentItem.Reasoning(block))
                         }
+                    }
 
-                        // 如果有工具调用，添加工具调用项
-                        message.toolCalls.forEach { toolCall ->
-                            items.add(MixedContentItem.ToolCall(toolCall))
-                        }
+                    // 添加文本内容
+                    val text = message.text?.trim()
+                    if (!text.isNullOrBlank()) {
+                        items.add(MixedContentItem.Text(text, textIndex++))
                     }
-                    is ToolResponseMessage -> {
-                        // ToolResponseMessage 通过工具调用关联处理，这里不需要单独添加
-                        // 因为响应内容会在对应的 ToolCall 中显示
+
+                    // 添加工具调用
+                    message.toolCalls.forEach { toolCall ->
+                        items.add(MixedContentItem.ToolCall(toolCall))
+                        currentOrder++
                     }
-                    else -> {
-                        // 其他类型的消息，只取文本
-                        val text = message.text?.trim()
-                        if (!text.isNullOrBlank()) {
-                            items.add(MixedContentItem.Text(text, textIndex++))
-                        }
+
+                    currentOrder++
+                }
+
+                // 添加剩余的思考块
+                orderedBlocks.filter { it.order >= currentOrder }.forEach { block ->
+                    if (block.content.isNotBlank()) {
+                        items.add(MixedContentItem.Reasoning(block))
                     }
                 }
             }
