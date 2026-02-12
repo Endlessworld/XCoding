@@ -32,6 +32,9 @@ class LocalChatService {
     // 服务范围内的协程作用域
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // 存储每个会话的累积输出缓存，用于页面切换时恢复状态
+    private val sessionOutputCache = ConcurrentHashMap<String, MutableList<AgentOutput<*>>>()
+
     init {
         localAgent = LocalAgent()
         localAgent.initializeChatModel()
@@ -55,10 +58,13 @@ class LocalChatService {
         val newSessionCreated = threadId == null
         val currentThreadId = threadId ?: IdUtil.getSnowflakeNextIdStr()
 
-        // 创建或获取该会话的 SharedFlow，只保留最新的少量数据
+        // 创建或获取该会话的 SharedFlow，增加 replay 缓存大小
         val sharedFlow = sessionFlows.getOrPut(currentThreadId) {
-            MutableSharedFlow(replay = 10, extraBufferCapacity = 64)
+            MutableSharedFlow(replay = 50, extraBufferCapacity = 128)
         }
+
+        // 初始化或清空累积缓存
+        sessionOutputCache[currentThreadId] = mutableListOf()
 
         // 更新会话状态
         val current = sessionStatusFlow.value[currentThreadId]
@@ -77,12 +83,15 @@ class LocalChatService {
                 try {
                     // 发送 THINKING 状态
                     val thinkingOutput = createThinkingOutput(newSessionCreated, currentThreadId)
+                    sessionOutputCache[currentThreadId]?.add(thinkingOutput)
                     sharedFlow.emit(thinkingOutput)
 
                     val agent = localAgent.buildAgent()
                     val stateUpdate = HashMap<String, Any>()
 
                     processAgentOutput(agent, userInput, currentThreadId, stateUpdate) { output ->
+                        // 缓存输出
+                        sessionOutputCache[currentThreadId]?.add(output)
                         sharedFlow.tryEmit(output)
                     }.collect { output ->
                         // 收集器只是为了保持流活跃
@@ -96,6 +105,7 @@ class LocalChatService {
                                 .message(AssistantMessage.builder().content(responseBuilder.toString()).build())
                                 .metadata(mapOf( "final" to true, "cancelled" to true))
                                 .build()
+                            sessionOutputCache[currentThreadId]?.add(cancelledOutput)
                             sharedFlow.emit(cancelledOutput)
                         } catch (e: Throwable) {
                             e.printStackTrace()
@@ -109,6 +119,7 @@ class LocalChatService {
                             .message(AssistantMessage.builder().content("发生错误: ${e.message}").build())
                             .metadata(mapOf("id" to UUID.randomUUID().toString(), "error" to true))
                             .build()
+                        sessionOutputCache[currentThreadId]?.add(errorOutput)
                         sharedFlow.emit(errorOutput)
                     } catch (e: Throwable) {
                         e.printStackTrace()
@@ -164,6 +175,21 @@ class LocalChatService {
     }
 
     /**
+     * 获取会话的累积输出缓存
+     * 用于页面切换时恢复状态
+     */
+    fun getSessionOutputCache(sessionId: String): List<AgentOutput<*>> {
+        return sessionOutputCache[sessionId]?.toList() ?: emptyList()
+    }
+
+    /**
+     * 清除会话的累积输出缓存
+     */
+    fun clearSessionOutputCache(sessionId: String) {
+        sessionOutputCache.remove(sessionId)
+    }
+
+    /**
      * 清理会话流（当会话完全结束时调用）
      */
     fun clearSessionFlow(sessionId: String) {
@@ -171,6 +197,7 @@ class LocalChatService {
         processingJobs.remove(sessionId)
         sessionFlows.remove(sessionId)
         sessionStatusFlow.value = sessionStatusFlow.value - sessionId
+        sessionOutputCache.remove(sessionId)
     }
 
     /**

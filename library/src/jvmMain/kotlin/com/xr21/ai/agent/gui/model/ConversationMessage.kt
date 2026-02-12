@@ -27,16 +27,40 @@ sealed class ConversationMessage {
     ) : ConversationMessage()
 
     /**
+     * 思考段落块
+     * 每个思考段落作为独立的卡片显示
+     */
+    data class ReasoningBlock(
+        val id: String,
+        val content: String,
+        val timestamp: Long,
+        val isStreaming: Boolean = false,
+        val messageIndex: Int = -1 // 关联到rawMessages中的索引，用于确定位置
+    )
+
+    /**
      * 助手消息
      * 通过 rawMessages 存储原始消息，支持混合渲染：
      * - AssistantMessage: 文本内容 + 工具调用
      * - ToolResponseMessage: 工具响应（通过 id 关联到对应的工具调用）
+     * - ReasoningBlock: 思考过程段落
      */
     data class Assistant(
         override val id: String,
         override val timestamp: Long,
-        override val rawMessages: List<Message>
+        override val rawMessages: List<Message>,
+        /**
+         * 思考过程段落列表
+         * 每个段落作为独立的卡片显示
+         */
+        val reasoningBlocks: List<ReasoningBlock> = emptyList(),
+        /**
+         * 兼容字段：单个思考内容字符串
+         * 用于向后兼容和流式处理
+         */
+        val reasoningContent: String? = null
     ) : ConversationMessage() {
+
         /**
          * 获取所有文本内容
          */
@@ -76,6 +100,8 @@ sealed class ConversationMessage {
 
         /**
          * 构建混合内容项列表，用于渲染
+         * 包含：思考段落、文本、工具调用
+         * 思考块会嵌入在对应的消息位置
          */
         fun buildMixedContentItems(): List<MixedContentItem> {
             val items = mutableListOf<MixedContentItem>()
@@ -88,9 +114,54 @@ sealed class ConversationMessage {
                     toolResponseById[resp.id()] = response
                 }
             }
+            println("=== buildMixedContentItems ===")
+            println("  reasoningContent length: ${reasoningContent?.length ?: 0}")
+            println("  reasoningBlocks.size: ${reasoningBlocks.size}")
+            reasoningBlocks.forEachIndexed { idx, block ->
+                println("  reasoningBlocks[$idx]: id=${block.id}, messageIndex=${block.messageIndex}, content.length=${block.content.length}, isStreaming=${block.isStreaming}")
+            }
+            
+            // 创建一个按messageIndex排序的思考块映射
+            val reasoningBlockByIndex = reasoningBlocks
+                .filter { it.messageIndex >= 0 }
+                .groupBy { it.messageIndex }
 
-            // 遍历 rawMessages，构建混合内容
-            rawMessages.forEach { message ->
+            // 收集没有 messageIndex 或 messageIndex 为负数的思考块（应该显示在最前面）
+            val frontReasoningBlocks = reasoningBlocks.filter { it.messageIndex < 0 }
+
+            // 检查是否有有效的思考块内容
+            val hasValidReasoningBlocks = reasoningBlocks.any { it.content.isNotBlank() }
+            
+            // 如果有向后兼容的 reasoningContent 且没有有效的思考块，添加它到最前面
+            if (!hasValidReasoningBlocks && !reasoningContent.isNullOrBlank()) {
+                println("Creating legacy reasoning block with content length: ${reasoningContent.length}")
+                val legacyBlock = ReasoningBlock(
+                    id = "legacy_reasoning",
+                    content = reasoningContent,
+                    timestamp = timestamp,
+                    isStreaming = false
+                )
+                items.add(MixedContentItem.Reasoning(legacyBlock))
+                println("Added legacy reasoning block to items, items.size = ${items.size}")
+            }
+
+            // 先添加应该显示在前面的思考块（没有 messageIndex 或 messageIndex < 0）
+            frontReasoningBlocks.forEach { block ->
+                println("Processing front reasoning block: id=${block.id}, content.length=${block.content.length}")
+                if (block.content.isNotBlank()) {
+                    items.add(MixedContentItem.Reasoning(block))
+                }
+            }
+
+            // 遍历 rawMessages，按顺序构建混合内容
+            rawMessages.forEachIndexed { messageIndex, message ->
+                // 先添加该位置对应的思考块
+                reasoningBlockByIndex[messageIndex]?.forEach { block ->
+                    if (block.content.isNotBlank()) {
+                        items.add(MixedContentItem.Reasoning(block))
+                    }
+                }
+
                 when (message) {
                     is AssistantMessage -> {
                         // 如果有文本内容，添加文本项
@@ -102,17 +173,11 @@ sealed class ConversationMessage {
                         // 如果有工具调用，添加工具调用项
                         message.toolCalls.forEach { toolCall ->
                             items.add(MixedContentItem.ToolCall(toolCall))
-
-                            // 查找对应的工具响应
-                            val response = toolResponseById[toolCall.id]
-                            if (response != null) {
-                                items.add(MixedContentItem.ToolResponse(response, toolCall.id))
-                            }
                         }
                     }
                     is ToolResponseMessage -> {
-                        // ToolResponseMessage 已经通过上面的逻辑处理过了
-                        // 这里不需要额外处理
+                        // ToolResponseMessage 通过工具调用关联处理，这里不需要单独添加
+                        // 因为响应内容会在对应的 ToolCall 中显示
                     }
                     else -> {
                         // 其他类型的消息，只取文本
@@ -136,6 +201,13 @@ sealed class ConversationMessage {
          * 获取稳定的唯一标识符，用于重组时保持状态一致性
          */
         abstract val stableId: String
+
+        /**
+         * 思考段落
+         */
+        data class Reasoning(val block: ReasoningBlock) : MixedContentItem() {
+            override val stableId: String = "reasoning_${block.id}_${block.content.length}_${block.isStreaming}"
+        }
 
         data class Text(
             val content: String,

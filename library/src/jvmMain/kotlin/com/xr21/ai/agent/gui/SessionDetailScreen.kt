@@ -87,6 +87,8 @@ fun SessionDetailScreen(
     // 加载会话消息并标记就绪
     LaunchedEffect(sessionId) {
         if (sessionId != lastSessionId) {
+            // 切换到不同会话时，重置处理器状态
+            streamingProcessor.reset()
             messages.clear()
             processedOutputs.clear() // 清空去重集合，确保新会话的消息不会受影响
             val rawMessages = withContext(Dispatchers.IO) {
@@ -133,13 +135,37 @@ fun SessionDetailScreen(
             isLoading.value = true
             isStreaming.value = true
 
-            // 重置 streamingProcessor，避免从首页带来的残留状态
-            streamingProcessor.reset()
+            // 注意：不再重置 streamingProcessor，保留累积的思考内容
+            // 这样当用户返回页面时，之前的思考过程不会丢失
+            // streamingProcessor.reset()
 
             // 获取会话开始时间（用户消息的 timestamp）
             val sessionStartTime = messages
                 .filterIsInstance<ConversationMessage.User>()
                 .maxOfOrNull { it.timestamp } ?: 0L
+
+            // 先处理累积缓存中的输出，恢复之前的内容
+            val cachedOutputs = chatService.getSessionOutputCache(sessionId)
+            // 用于去重的集合，记录已处理的输出时间戳
+            val processedTimestamps = mutableSetOf<Long>()
+            if (cachedOutputs.isNotEmpty()) {
+                println("=== Processing cached outputs: ${cachedOutputs.size} items ===")
+                cachedOutputs.forEach { output ->
+                    // 记录已处理的时间戳
+                    if (output.timestamp > 0) {
+                        processedTimestamps.add(output.timestamp)
+                    }
+                    val updates = streamingProcessor.processAgentOutput(output, messages)
+                    updates.forEach { updatedMsg ->
+                        val existingIndex = messages.indexOfFirst { it.id == updatedMsg.id }
+                        if (existingIndex >= 0) {
+                            messages[existingIndex] = updatedMsg
+                        } else {
+                            messages.add(updatedMsg)
+                        }
+                    }
+                }
+            }
 
             // 订阅 SharedFlow
             subscriptionJob.value?.cancel()
@@ -151,6 +177,11 @@ fun SessionDetailScreen(
 //                    println("  message: ${output.message}")
 //                    println("  metadata: ${output.metadata}")
 //                    println("  timestamp: ${output.timestamp}")
+
+                    // 跳过已经从缓存处理过的输出
+                    if (output.timestamp > 0 && processedTimestamps.contains(output.timestamp)) {
+                        return@collect // 跳过此输出
+                    }
 
                     // 检查是否是当前会话的输出
                     val isThinking = output.metadata?.containsKey("reasoningContent") == true
@@ -584,7 +615,10 @@ fun SessionDetailScreen(
                                     }
                                 }
                             },
-                            isStreaming = isStreaming.value && message.id == streamingProcessor.getCurrentStreamingMessage()?.id
+                            isStreaming = isStreaming.value && (
+                                message.id == streamingProcessor.getCurrentStreamingMessage()?.id ||
+                                (message is ConversationMessage.Assistant && message.reasoningBlocks.any { it.isStreaming })
+                            )
                         )
                     }
                 }

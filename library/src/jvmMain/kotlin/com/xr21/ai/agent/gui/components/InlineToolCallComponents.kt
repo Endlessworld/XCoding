@@ -467,14 +467,14 @@ private fun getToolConfig(toolName: String): ToolConfig {
         // 文件读取操作 - 使用清新的绿色系，强调只读性质
         "read_file" -> ToolConfig(
             icon = Icons.Default.FileOpen,
-            color = Color(0xFFF3F2F2),  // 深绿色，更专业的视觉感受
+            color = Color(0xFF2E7D32),  // 深绿色，更专业的视觉感受
             displayName = "📖 读取文件"
         )
 
         // 文件写入操作 - 使用活力蓝色，强调创建和修改
         "write_file" -> ToolConfig(
             icon = Icons.Default.Edit,
-            color = Color(0xFFF3F2F2),  // 标准蓝色，清晰醒目
+            color = Color(0xFF1976D2),  // 标准蓝色，清晰醒目
             displayName = "✏️ 写入文件"
         )
 
@@ -516,14 +516,14 @@ private fun getToolConfig(toolName: String): ToolConfig {
         // 网络搜索操作 - 使用深邃靛蓝，网络意象
         "web_search" -> ToolConfig(
             icon = Icons.Default.Language,
-            color = Color(0xFFF3F2F2),  // 深靛蓝，网络连接
+            color = Color(0xFF283593),  // 深靛蓝，网络连接
             displayName = "🌐 网络搜索"
         )
 
         // 用户反馈收集 - 使用柔和的紫灰色，温和亲切
         "feed_back_tool" -> ToolConfig(
             icon = Icons.Default.Feedback,
-            color = Color(0xFFF3F2F2),  // 柔和棕色，反馈交互
+            color = Color(0xFF795548),  // 柔和棕色，反馈交互
             displayName = "📝 收集反馈"
         )
 

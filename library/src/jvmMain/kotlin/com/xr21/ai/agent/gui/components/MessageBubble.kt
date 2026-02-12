@@ -1,5 +1,10 @@
 package com.xr21.ai.agent.gui.components
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -10,9 +15,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -65,7 +74,28 @@ fun ConversationMessageBubble(
     // 获取混合内容项列表
     val mixedContentItems = when (message) {
         is ConversationMessage.User -> listOf(ConversationMessage.MixedContentItem.Text(message.content, index = 0))
-        is ConversationMessage.Assistant -> message.buildMixedContentItems()
+        is ConversationMessage.Assistant -> {
+            val items = message.buildMixedContentItems()
+            println("=== mixedContentItems ===")
+            println("  total items: ${items.size}")
+            items.forEach { item ->
+                when (item) {
+                    is ConversationMessage.MixedContentItem.Reasoning -> {
+                        println("  - Reasoning block: id=${item.block.id}, content.length=${item.block.content.length}")
+                    }
+                    is ConversationMessage.MixedContentItem.Text -> {
+                        println("  - Text: content.length=${item.content.length}")
+                    }
+                    is ConversationMessage.MixedContentItem.ToolCall -> {
+                        println("  - ToolCall: id=${item.toolCall.id}")
+                    }
+                    else -> {
+                        println("  - Other: ${item::class.simpleName}")
+                    }
+                }
+            }
+            items
+        }
     }
 
     // 获取用于复制的完整文本内容
@@ -195,6 +225,15 @@ fun ConversationMessageBubble(
                             // 遍历混合内容项进行渲染
                             mixedContentItems.forEach { item ->
                                 when (item) {
+                                    is ConversationMessage.MixedContentItem.Reasoning -> {
+                                        // 渲染思考过程块（每个思考段落独立显示）
+                                        ReasoningBlockItem(
+                                            block = item.block,
+                                            isStreaming = isStreaming || item.block.isStreaming
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+
                                     is ConversationMessage.MixedContentItem.Text -> {
                                         // 渲染文本内容
                                         if (item.content.isNotBlank()) {
@@ -211,9 +250,12 @@ fun ConversationMessageBubble(
                                         val responseData = toolResponse?.responses?.firstOrNull()?.responseData()
 //                                        val responseMap = responseData?.let { Json.to(it, Map::class.java) } ?: emptyMap<String, Any>()
                                         val isError = responseData?.contains("error") ?: false
+                                        val hasResponse = responseData != null
+                                        // 判断工具调用是否正在执行中：没有响应数据且当前消息正在流式输出
+                                        val isToolStreaming = !hasResponse && isStreaming
                                         InlineToolCall(
                                             toolCall = item.toolCall,
-                                            isStreaming = isStreaming,
+                                            isStreaming = isToolStreaming,
                                             responseData = responseData,
                                             isError = isError
                                         )
@@ -417,5 +459,130 @@ fun formatTimestamp(timestamp: Long): String {
         "${localDateTime.hour.toString().padStart(2, '0')}:${localDateTime.minute.toString().padStart(2, '0')}"
     } catch (e: Exception) {
         ""
+    }
+}
+
+/**
+ * 单个思考块组件
+ * 每个思考段落作为独立的卡片显示，显示"思考了 X 秒"
+ */
+@Composable
+private fun ReasoningBlockItem(
+    block: ConversationMessage.ReasoningBlock,
+    isStreaming: Boolean,
+    modifier: Modifier = Modifier
+) {
+    // 计算思考持续时间
+    val durationSeconds = remember(block.timestamp) {
+        (System.currentTimeMillis() - block.timestamp) / 1000
+    }
+    
+    // 改进思考内容显示逻辑：确保内容可见，即使为空也显示状态
+    val displayText = block.content.trim()
+    val hasContent = displayText.isNotEmpty()
+    println("=== ReasoningBlockItem ===")
+    println("  block.id: ${block.id}")
+    println("  block.isStreaming: ${block.isStreaming}")
+    println("  displayText.length: ${displayText.length}")
+    println("  displayText preview: '${displayText.take(200)}...'")
+    println("  hasContent: $hasContent")
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp)
+        ) {
+            // 标题行 - 始终显示思考状态
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // 思考图标
+                    Icon(
+                        imageVector = Icons.Default.Psychology,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    // 显示思考状态和时间
+                    Text(
+                        text = if (isStreaming) "思考中..." else "思考了 ${durationSeconds.coerceAtLeast(1)} 秒",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+            }
+            
+            // 思考内容 - 改进显示逻辑：即使内容为空，如果是流式状态也显示占位符
+            if (hasContent || isStreaming) {
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (hasContent) {
+                    // 有内容时使用 Markdown 渲染
+                    MarkdownContent(
+                        markdown = displayText,
+                        modifier = Modifier.fillMaxWidth(),
+                        onLinkClick = { url -> println("点击链接：$url") }
+                    )
+                } else if (isStreaming) {
+                    // 流式状态但无内容时显示占位符
+                    Text(
+                        text = "正在思考...",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // 流式指示器
+            if (isStreaming) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(3) { index ->
+                        val infiniteTransition = rememberInfiniteTransition(
+                            label = "thinking_dots_$index"
+                        )
+                        val alpha by infiniteTransition.animateFloat(
+                            initialValue = 0.3f,
+                            targetValue = 1f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(
+                                    durationMillis = 600,
+                                    delayMillis = index * 150
+                                ),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "dot_alpha_$index"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
+                        )
+                    }
+                }
+            }
+        }
     }
 }
