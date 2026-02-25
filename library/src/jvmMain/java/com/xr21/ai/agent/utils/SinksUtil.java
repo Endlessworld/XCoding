@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
@@ -107,6 +108,13 @@ public class SinksUtil {
             if (streamingOutput.message() != null) {
                 builder.metadata(streamingOutput.message().getMetadata());
                 builder.metadata("timestamp",System.currentTimeMillis());
+                String reasoningContent = streamingOutput.message()
+                        .getMetadata()
+                        .getOrDefault("reasoningContent", "")
+                        .toString();
+                if (StringUtils.hasText(reasoningContent)) {
+                    builder.think(reasoningContent);
+                }
             }
             builder.originData(streamingOutput.getOriginData());
             builder.chunk(streamingOutput.chunk());

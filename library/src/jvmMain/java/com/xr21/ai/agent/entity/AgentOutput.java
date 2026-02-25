@@ -4,6 +4,7 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.metadata.Usage;
@@ -12,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Data
 public class AgentOutput<T> {
 
     @JsonProperty(value = "node")
@@ -33,6 +35,9 @@ public class AgentOutput<T> {
 //    @Deprecated
     @JsonProperty(value = "chunk")
     private final String chunk;
+
+    @JsonProperty(value = "think")
+    private final String think;
 
     /**
      * 生成的消息
@@ -64,22 +69,24 @@ public class AgentOutput<T> {
     @JsonProperty(value = "toolFeedbacks")
     private List<InterruptionMetadata.ToolFeedback> toolFeedbacks;
 
-    public AgentOutput(String node, long timestamp, Map<String, Object> data, RunnableConfig config, String chunk, Message message, T originData) {
+    public AgentOutput(String node, long timestamp, Map<String, Object> data, RunnableConfig config, String chunk, String think, Message message, T originData) {
         this.node = node;
         this.timestamp = timestamp;
         this.data = data;
         this.config = config;
         this.chunk = chunk;
+        this.think = think;
         this.message = message;
         this.originData = originData;
     }
 
-    public AgentOutput(String node, long timestamp, Map<String, Object> data, RunnableConfig config, String chunk, Message message, T originData, Map<String, Object> metadata, String agent, Usage tokenUsage, boolean subGraph, List<AssistantMessage.ToolCall> toolsAutomaticallyApproved, List<InterruptionMetadata.ToolFeedback> toolFeedbacks) {
+    public AgentOutput(String node, long timestamp, Map<String, Object> data, RunnableConfig config, String chunk, String think, Message message, T originData, Map<String, Object> metadata, String agent, Usage tokenUsage, boolean subGraph, List<AssistantMessage.ToolCall> toolsAutomaticallyApproved, List<InterruptionMetadata.ToolFeedback> toolFeedbacks) {
         this.node = node;
         this.timestamp = timestamp;
         this.data = data;
         this.config = config;
         this.chunk = chunk;
+        this.think = think;
         this.message = message;
         this.originData = originData;
         this.metadata = metadata;
@@ -94,57 +101,6 @@ public class AgentOutput<T> {
         return new AgentOutputBuilder<T>();
     }
 
-    public String getNode() {
-        return this.node;
-    }
-
-    public long getTimestamp() {
-        return this.timestamp;
-    }
-
-    public Map<String, Object> getData() {
-        return this.data;
-    }
-
-    public RunnableConfig getConfig() {
-        return this.config;
-    }
-
-    public String getChunk() {
-        return this.chunk;
-    }
-
-    public Message getMessage() {
-        return this.message;
-    }
-
-    public T getOriginData() {
-        return this.originData;
-    }
-
-    public Map<String, Object> getMetadata() {
-        return this.metadata;
-    }
-
-    public String getAgent() {
-        return this.agent;
-    }
-
-    public Usage getTokenUsage() {
-        return this.tokenUsage;
-    }
-
-    public boolean isSubGraph() {
-        return this.subGraph;
-    }
-
-    public List<AssistantMessage.ToolCall> getToolsAutomaticallyApproved() {
-        return this.toolsAutomaticallyApproved;
-    }
-
-    public List<InterruptionMetadata.ToolFeedback> getToolFeedbacks() {
-        return this.toolFeedbacks;
-    }
 
     public static class AgentOutputBuilder<T> {
         private String node;
@@ -152,6 +108,7 @@ public class AgentOutput<T> {
         private Map<String, Object> data;
         private RunnableConfig config;
         private String chunk;
+        private String think;
         private Message message;
         private T originData;
         private Map<String, Object> metadata;
@@ -167,6 +124,12 @@ public class AgentOutput<T> {
         @JsonProperty("node")
         public AgentOutputBuilder<T> node(String node) {
             this.node = node;
+            return this;
+        }
+
+        @JsonProperty("node")
+        public AgentOutputBuilder<T> think(String think) {
+            this.think = think;
             return this;
         }
 
@@ -255,11 +218,11 @@ public class AgentOutput<T> {
         }
 
         public AgentOutput<T> build() {
-            return new AgentOutput<T>(this.node, this.timestamp, this.data, this.config, this.chunk, this.message, this.originData, this.metadata, this.agent, this.tokenUsage, this.subGraph, this.toolsAutomaticallyApproved, this.toolFeedbacks);
+            return new AgentOutput<T>(this.node, this.timestamp, this.data, this.config, this.chunk, this.think, this.message, this.originData, this.metadata, this.agent, this.tokenUsage, this.subGraph, this.toolsAutomaticallyApproved, this.toolFeedbacks);
         }
 
         public String toString() {
-            return "AgentOutput.AgentOutputBuilder(node=" + this.node + ", timestamp=" + this.timestamp + ", data=" + this.data + ", config=" + this.config + ", chunk=" + this.chunk + ", message=" + this.message + ", originData=" + this.originData + ", metadata=" + this.metadata + ", agent=" + this.agent + ", tokenUsage=" + this.tokenUsage + ", subGraph=" + this.subGraph + ", toolsAutomaticallyApproved=" + this.toolsAutomaticallyApproved + ", toolFeedbacks=" + this.toolFeedbacks + ")";
+            return "AgentOutput.AgentOutputBuilder(node=" + this.node + ", timestamp=" + this.timestamp + ", data=" + this.data + ", config=" + this.config + ", chunk=" + this.chunk + ",  think=" + this.think + ", message=" + this.message + ", originData=" + this.originData + ", metadata=" + this.metadata + ", agent=" + this.agent + ", tokenUsage=" + this.tokenUsage + ", subGraph=" + this.subGraph + ", toolsAutomaticallyApproved=" + this.toolsAutomaticallyApproved + ", toolFeedbacks=" + this.toolFeedbacks + ")";
         }
     }
 }

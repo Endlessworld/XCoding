@@ -5,9 +5,12 @@ import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpSchema.*;
+import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.Agent;
+import com.alibaba.cloud.ai.graph.checkpoint.Checkpoint;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.entity.AgentOutput;
+import com.xr21.ai.agent.tools.ToolKindFind;
 import com.xr21.ai.agent.utils.SinksUtil;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +30,8 @@ public class AcpLocalAgent {
     private final Map<String, AcpSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, Agent> agents = new ConcurrentHashMap<>();
 
-
+    private final SessionModeState sessionModeState = new SessionModeState("chat", List.of(new SessionMode("Agent", "Agent", "智能体模式"), new SessionMode("Plan", "Plan", "规划执行模式")));
+    private final SessionModelState sessionModelState = new SessionModelState(AiModels.KIMI_K2_5.getModelName(), AiModels.availableModes());
     public static void main(String[] args) {
         AcpLocalAgent acpAgent = new AcpLocalAgent();
         acpAgent.start();
@@ -48,7 +52,6 @@ public class AcpLocalAgent {
                     System.err.println("[AcpLocalAgent] Client capabilities: " + req.clientCapabilities());
                     return InitializeResponse.ok();
                 })
-
                 // 新会话处理器
                 .newSessionHandler(req -> {
                     String sessionId = UUID.randomUUID().toString();
@@ -56,37 +59,42 @@ public class AcpLocalAgent {
                     sessions.put(sessionId, new AcpSession(sessionId, threadId));
                     System.err.println("[AcpLocalAgent] New session created: " + sessionId);
                     System.err.println("[AcpLocalAgent] Working directory: " + req.cwd());
-                    var sessionModeState = new SessionModeState("chat", List.of(new SessionMode("Agent", "Agent", "智能体模式"), new SessionMode("Plan", "Plan", "规划执行模式")));
-                    var sessionModelState = new SessionModelState(AiModels.KIMI_K2_5.getModelName(), AiModels.availableModes());
                     agents.put(sessionId, LocalAgent.createAgent(req.cwd()));
                     return new NewSessionResponse(sessionId, sessionModeState, sessionModelState);
                 })
-
                 // 加载会话处理器
                 .loadSessionHandler(req -> {
                     System.err.println("[AcpLocalAgent] Load session: " + req.sessionId());
                     if (sessions.containsKey(req.sessionId())) {
                         System.err.println("[AcpLocalAgent] Session found");
-                        return new LoadSessionResponse(null, null);
+                        Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder()
+                                .threadId(sessions.get(req.sessionId()).threadId)
+                                .build());
+                        String modelId = checkpointOpt.get()
+                                .getState()
+                                .getOrDefault("model", AiModels.KIMI_K2_5.getModelName())
+                                .toString();
+                        var modelState = checkpointOpt.map(Checkpoint::getState)
+                                .map(e -> new SessionModelState(modelId, AiModels.availableModes()))
+                                .orElse(sessionModelState);
+                        return new LoadSessionResponse(sessionModeState, modelState);
                     }
                     System.err.println("[AcpLocalAgent] Session not found");
-                    return new LoadSessionResponse(null, null);
+                    return new LoadSessionResponse(sessionModeState, sessionModelState);
                 })
-
                 // 提示处理器 - 核心逻辑
                 .promptHandler(this::handlePrompt)
-
                 // 取消处理器
                 .cancelHandler(req -> {
-                    System.err.println("[AcpLocalAgent] Cancel request for session: " + req.sessionId());
+//                    System.err.println("[AcpLocalAgent] Cancel request for session: " + req.sessionId());
                     // 这里可以添加取消正在处理的请求的逻辑
                 })
 
                 .build();
 
-        System.err.println("[AcpLocalAgent] Ready, waiting for messages...");
+//        System.err.println("[AcpLocalAgent] Ready, waiting for messages...");
         acpAgent.run();
-        System.err.println("[AcpLocalAgent] Shutdown.");
+//        System.err.println("[AcpLocalAgent] Shutdown.");
     }
 
     /**
@@ -128,17 +136,27 @@ public class AcpLocalAgent {
                 // 流式发送消息片段给客户端
                 context.sendMessage(chunk);
             }
+            if (output.getThink() != null) {
+                String think = output.getThink();
+                // 流式发送消息片段给客户端
+                context.sendThought(think);
+            }
 
             // 处理工具调用
             if (output.getMessage() instanceof org.springframework.ai.chat.messages.AssistantMessage message) {
                 if (!CollectionUtils.isEmpty(message.getToolCalls())) {
                     for (var toolCall : message.getToolCalls()) {
-                        String toolMsg = String.format("[调用工具] %s", toolCall.name());
-                        context.sendThought(toolMsg);
-
                         // 发送工具调用更新
-                        context.sendUpdate(sessionId, new ToolCall("tool_call", UUID.randomUUID()
-                                .toString(), toolCall.name(), ToolKind.THINK, ToolCallStatus.IN_PROGRESS, List.of(), null, null, null, null));
+                        context.sendUpdate(sessionId, new ToolCall("tool_call", toolCall.id(), toolCall.name(), ToolKindFind.find(toolCall.name()), ToolCallStatus.IN_PROGRESS, List.of(new ToolCallContentBlock("", new TextContent(toolCall.arguments()))), List.of(new ToolCallLocation("D:\\local-github\\ai-agents", 1)), toolCall.arguments(), null, null));
+                    }
+                }
+            }
+            // 处理工具调用
+            if (output.getMessage() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) {
+                if (!CollectionUtils.isEmpty(message.getResponses())) {
+                    for (var responses : message.getResponses()) {
+                        // 发送工具调用更新
+                        context.sendUpdate(sessionId, new ToolCall("tool_call", responses.id(), responses.name(), ToolKindFind.find(responses.name()), ToolCallStatus.IN_PROGRESS, List.of(), null, null, responses, message.getMetadata()));
                     }
                 }
             }
@@ -148,7 +166,6 @@ public class AcpLocalAgent {
                 for (var toolFeedback : output.getToolFeedbacks()) {
                     String feedbackMsg = String.format("[工具] %s: %s", toolFeedback.getName(), toolFeedback.getDescription());
                     context.sendThought(feedbackMsg);
-
                     // 发送工具完成更新
                     context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", UUID.randomUUID()
                             .toString(), toolFeedback.getName(), ToolKind.THINK, ToolCallStatus.COMPLETED, List.of(), null, null, null, null));

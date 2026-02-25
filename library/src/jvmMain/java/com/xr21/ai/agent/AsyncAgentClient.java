@@ -18,6 +18,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.AgentMessageChunk;
 import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
+import io.modelcontextprotocol.json.McpJsonMapper;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,7 +35,7 @@ public class AsyncAgentClient {
             .arg(findAgentJar())
             .build();
 
-        var transport = new StdioAcpClientTransport(params);
+        var transport = new StdioAcpClientTransport(params, McpJsonMapper.createDefault());
 
         try (AcpSyncClient client = AcpClient.sync(transport)
                 .sessionUpdateConsumer(notification -> {
