@@ -1,5 +1,4 @@
 plugins {
-    alias(libs.plugins.android.kotlin.multiplatform.library) apply false
-    alias(libs.plugins.kotlinMultiplatform) apply  false
+    kotlin("jvm") version "1.9.24" apply false
     alias(libs.plugins.vanniktech.mavenPublish) apply false
 }

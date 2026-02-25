@@ -16,8 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
-
 public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = """
             从文件系统读取文件或目录。如果是目录，则会递归读取该目录及其所有子目录下的文件。
@@ -166,7 +164,7 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
         @JsonPropertyDescription("Maximum number of lines to read (default: 500)")
         public Integer limit;
         @JsonProperty(required = true, value = "file_paths")
-        @JsonPropertyDescription("List of absolute paths of files or directory to read. only parent path:" + WORKSPACE_ROOT)
+        @JsonPropertyDescription("List of absolute paths of files or directory to read")
         private List<String> filePaths;
 
         public ReadFileRequest() {

@@ -17,8 +17,6 @@ import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
-
 public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, ToolContext, Map<String, Object>> {
 
     public static ToolCallback createEditFileToolCallback(String description) {
@@ -145,7 +143,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
 
     public static class EditFileRequest {
         @JsonProperty(value = "file_path", required = true)
-        @JsonPropertyDescription("The absolute path of the file to edit only path:" + WORKSPACE_ROOT)
+        @JsonPropertyDescription("The absolute path of the file to edit")
         public String filePath;
 
         @JsonProperty(value = "old_string", required = true)

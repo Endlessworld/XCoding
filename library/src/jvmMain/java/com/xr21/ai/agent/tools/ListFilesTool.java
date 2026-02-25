@@ -120,7 +120,7 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
 
     public static class ListFilesRequest {
         @JsonProperty(required = true, value = "directory")
-        @JsonPropertyDescription("目录路径. only parent directory:" + WORKSPACE_ROOT)
+        @JsonPropertyDescription("目录路径")
         private String directory;
 
         @JsonProperty(value = "maxDepth")

@@ -124,7 +124,7 @@ public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest,
                 required = true,
                 value = "file_path"
         )
-        @JsonPropertyDescription("The absolute path of the file to create. Must be within workspace: " + WORKSPACE_ROOT)
+        @JsonPropertyDescription("The absolute path of the file to create" )
         public String filePath;
 
         @JsonProperty(required = true)

@@ -1,8 +1,4 @@
 [versions]
-agp = "8.13.0"
-kotlin = "1.9.24"
-android-minSdk = "24"
-android-compileSdk = "36"
 vanniktechMavenPublish = "0.34.0"
 spring = "6.2.0"
 springAi = "1.1.0"
@@ -11,27 +7,23 @@ reactor = "3.6.0"
 jackson = "2.17.0"
 hutool = "5.8.33"
 lombok = "1.18.30"
-jna = "4.4.0"
-lanterna = "3.1.2"
+acpSdk = "0.9.0-SNAPSHOT"
 
 [libraries]
-kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 spring-core = { group = "org.springframework", name = "spring-core", version.ref = "spring" }
 spring-context = { group = "org.springframework", name = "spring-context", version.ref = "spring" }
 spring-web = { group = "org.springframework", name = "spring-web", version.ref = "spring" }
 spring-ai-openai = { group = "org.springframework.ai", name = "spring-ai-openai", version.ref = "springAi" }
 spring-ai-mcp-client = { group = "org.springframework.ai", name = "spring-ai-starter-mcp-client-webflux", version.ref = "springAi" }
 reactor-core = { group = "io.projectreactor", name = "reactor-core", version.ref = "reactor" }
-reactor-extra = { group = "io.projectreactor", name = "reactor-extra", version.ref = "reactor" }
 jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson" }
 spring-ai-alibaba-graph = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-graph-core", version.ref = "springAiAlibaba" }
 spring-ai-alibaba-agent = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-agent-framework", version.ref = "springAiAlibaba" }
 hutool-all = { group = "cn.hutool", name = "hutool-all", version.ref = "hutool" }
 lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
-jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
-lanterna = { group = "com.googlecode.lanterna", name = "lanterna", version.ref = "lanterna" }
+acp-core = { group = "com.agentclientprotocol", name = "acp-core", version.ref = "acpSdk" }
+acp-agent-support = { group = "com.agentclientprotocol", name = "acp-agent-support", version.ref = "acpSdk" }
+acp-websocket-jetty = { group = "com.agentclientprotocol", name = "acp-websocket-jetty", version.ref = "acpSdk" }
 
 [plugins]
-android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
-kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 vanniktech-mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }

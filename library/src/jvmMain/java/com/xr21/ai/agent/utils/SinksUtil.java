@@ -17,7 +17,10 @@
 package com.xr21.ai.agent.utils;
 
 import com.alibaba.cloud.ai.graph.NodeOutput;
+import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
+import com.alibaba.cloud.ai.graph.agent.Agent;
+import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.alibaba.cloud.ai.graph.state.StateSnapshot;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -91,6 +94,7 @@ public class SinksUtil {
     }
 
     private static AgentOutput<Object> buildContent(NodeOutput output) {
+        System.err.println(output);
         var builder = AgentOutput.builder()
                 .agent(output.agent())
                 .data(output.state().data())
@@ -131,5 +135,28 @@ public class SinksUtil {
             }
         }
         return builder.build();
+    }
+
+
+    public static Flux<AgentOutput<Object>> toFlux(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
+        var builder = RunnableConfig.builder().threadId(threadId);
+        if (feedbackMetadata != null) {
+            builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, feedbackMetadata);
+        }
+        if (stateUpdate != null && !stateUpdate.isEmpty()) {
+            builder.addStateUpdate(stateUpdate);
+        }
+        RunnableConfig runnableConfig = builder.build();
+        Flux<NodeOutput> nodeOutputFlux = null;
+        try {
+            nodeOutputFlux = agent.stream(input, runnableConfig);
+        } catch (GraphRunnerException e) {
+            try {
+                nodeOutputFlux = agent.stream(input, runnableConfig);
+            } catch (GraphRunnerException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+        return SinksUtil.sinksOutput(nodeOutputFlux);
     }
 }
