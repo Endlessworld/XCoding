@@ -1,5 +1,6 @@
 package com.xr21.ai.agent.tools;
 
+import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -8,7 +9,6 @@ import org.springframework.ai.tool.function.FunctionToolCallback;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -26,26 +26,48 @@ public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, M
     }
 
     public Map<String, Object> apply(@ToolParam(description = "The glob pattern to match files") GlobPattern globPattern, ToolContext toolContext) {
-        Map<String, Object> result = new HashMap<>();
         try {
             String pattern = globPattern.getPattern();
             Path basePathObj = Paths.get(WORKSPACE_ROOT);
             PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
-            List<String> matchedFiles = new ArrayList();
-            Files.walk(basePathObj).filter((x$0) -> Files.isRegularFile(x$0)).filter((path) -> {
-                Path relativePath = basePathObj.relativize(path);
-                return matcher.matches(relativePath) || matcher.matches(path);
-            }).forEach((path) -> matchedFiles.add(path.toString()));
-            
+            List<String> matchedFiles = new ArrayList<>();
+            List<ToolCallLocation> locations = new ArrayList<>();
+
+            Files.walk(basePathObj)
+                    .filter((x$0) -> Files.isRegularFile(x$0))
+                    .filter((path) -> {
+                        Path relativePath = basePathObj.relativize(path);
+                        return matcher.matches(relativePath) || matcher.matches(path);
+                    })
+                    .forEach((path) -> {
+                        String absolutePath = path.toAbsolutePath().toString();
+                        matchedFiles.add(absolutePath);
+                        locations.add(new ToolCallLocation(absolutePath, 1));
+                    });
+
+            ToolResult result = ToolResult.builder();
+
             if (matchedFiles.isEmpty()) {
                 result.put("files", "No files found matching pattern: " + pattern);
+                result.content("No files found matching pattern: " + pattern);
             } else {
                 result.put("files", String.join("\n", matchedFiles));
+                result.content(String.join("\n", matchedFiles));
             }
-            return result;
+
+            // Add locations - limit to first 100 to avoid too many locations
+            if (!locations.isEmpty()) {
+                result.locations(locations.size() > 100 ? locations.subList(0, 100) : locations);
+            }
+
+            result.metadata("fileCount", matchedFiles.size());
+            result.metadata("pattern", pattern);
+
+            return result.build();
         } catch (IOException e) {
-            result.put("error", "Error searching for files: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Error searching for files: " + e.getMessage())
+                    .build();
         }
     }
 

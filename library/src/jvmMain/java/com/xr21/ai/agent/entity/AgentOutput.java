@@ -4,6 +4,8 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -14,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 @Data
+@Builder
+@AllArgsConstructor
 public class AgentOutput<T> {
 
     @JsonProperty(value = "node")
@@ -68,34 +72,6 @@ public class AgentOutput<T> {
 
     @JsonProperty(value = "toolFeedbacks")
     private List<InterruptionMetadata.ToolFeedback> toolFeedbacks;
-
-    public AgentOutput(String node, long timestamp, Map<String, Object> data, RunnableConfig config, String chunk, String think, Message message, T originData) {
-        this.node = node;
-        this.timestamp = timestamp;
-        this.data = data;
-        this.config = config;
-        this.chunk = chunk;
-        this.think = think;
-        this.message = message;
-        this.originData = originData;
-    }
-
-    public AgentOutput(String node, long timestamp, Map<String, Object> data, RunnableConfig config, String chunk, String think, Message message, T originData, Map<String, Object> metadata, String agent, Usage tokenUsage, boolean subGraph, List<AssistantMessage.ToolCall> toolsAutomaticallyApproved, List<InterruptionMetadata.ToolFeedback> toolFeedbacks) {
-        this.node = node;
-        this.timestamp = timestamp;
-        this.data = data;
-        this.config = config;
-        this.chunk = chunk;
-        this.think = think;
-        this.message = message;
-        this.originData = originData;
-        this.metadata = metadata;
-        this.agent = agent;
-        this.tokenUsage = tokenUsage;
-        this.subGraph = subGraph;
-        this.toolsAutomaticallyApproved = toolsAutomaticallyApproved;
-        this.toolFeedbacks = toolFeedbacks;
-    }
 
     public static <T> AgentOutputBuilder<T> builder() {
         return new AgentOutputBuilder<T>();

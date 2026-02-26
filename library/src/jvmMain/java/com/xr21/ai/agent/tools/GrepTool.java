@@ -5,6 +5,7 @@
 
 package com.xr21.ai.agent.tools;
 
+import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.springframework.ai.chat.model.ToolContext;
@@ -32,48 +33,94 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
     }
 
     public Map<String, Object> apply(GrepRequest request, ToolContext toolContext) {
-        Map<String, Object> result = new HashMap<>();
         try {
             Path searchPath = request.path != null ? Paths.get(request.path) : Paths.get(WORKSPACE_ROOT);
-            List<String> matches = new ArrayList();
+            List<String> matches = new ArrayList<>();
+            List<ToolCallLocation> locations = new ArrayList<>();
+            Map<String, Integer> fileMatchCounts = new HashMap<>();
+
             PathMatcher globMatcher = request.glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + request.glob) : null;
+
             Files.walk(searchPath)
                     .filter((x$0) -> Files.isRegularFile(x$0))
                     .filter((path) -> globMatcher == null || globMatcher.matches(path.getFileName()))
                     .forEach((path) -> {
                         try {
                             List<String> lines = Files.readAllLines(path);
+                            String absolutePath = path.toAbsolutePath().toString();
+                            boolean fileAdded = false;
 
                             for (int i = 0; i < lines.size(); ++i) {
                                 if (lines.get(i).contains(request.pattern)) {
-                                    String var10000;
+                                    String matchEntry;
                                     switch (request.outputMode) {
-                                        case "files_with_matches" -> var10000 = path.toString();
-                                        case "content" -> var10000 = path + ":" + (i + 1) + ": " + lines.get(i);
-                                        case "count" -> var10000 = path + ": matched";
-                                        default -> var10000 = path.toString();
+                                        case "files_with_matches":
+                                            if (!fileAdded) {
+                                                matchEntry = path.toString();
+                                                fileAdded = true;
+                                            } else {
+                                                continue;
+                                            }
+                                            break;
+                                        case "content":
+                                            matchEntry = path + ":" + (i + 1) + ": " + lines.get(i);
+                                            break;
+                                        case "count":
+                                            fileMatchCounts.merge(path.toString(), 1, Integer::sum);
+                                            continue;
+                                        default:
+                                            if (!fileAdded) {
+                                                matchEntry = path.toString();
+                                                fileAdded = true;
+                                            } else {
+                                                continue;
+                                            }
+                                            break;
                                     }
-                                    matches.add(var10000);
+                                    matches.add(matchEntry);
+
+                                    // Add location for this match
+                                    locations.add(new ToolCallLocation(absolutePath, i + 1));
+
                                     if ("files_with_matches".equals(request.outputMode)) {
                                         break;
                                     }
                                 }
                             }
                         } catch (IOException var8) {
+                            // Ignore file read errors
                         }
-
                     });
-            if (matches.isEmpty()) {
+
+            ToolResult result = ToolResult.builder();
+
+            if ("count".equals(request.outputMode) && !fileMatchCounts.isEmpty()) {
+                List<String> countEntries = new ArrayList<>();
+                for (Map.Entry<String, Integer> entry : fileMatchCounts.entrySet()) {
+                    countEntries.add(entry.getKey() + ": " + entry.getValue() + " matches");
+                }
+                result.put("matches", String.join("\n", countEntries));
+                result.content(String.join("\n", countEntries));
+            } else if (matches.isEmpty()) {
                 result.put("matches", "No matches found for pattern: " + request.pattern);
+                result.content("No matches found for pattern: " + request.pattern);
             } else {
                 result.put("matches", String.join("\n", matches));
+                result.content(String.join("\n", matches));
             }
-            return result;
+
+            // Add locations
+            result.locations(locations);
+            result.metadata("matchCount", locations.size());
+            result.metadata("fileCount", fileMatchCounts.isEmpty() ? -1 : fileMatchCounts.size());
+
+            return result.build();
 
         } catch (IOException e) {
-            result.put("error", "Error searching files: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Error searching files: " + e.getMessage())
+                    .build();
         }
     }
 

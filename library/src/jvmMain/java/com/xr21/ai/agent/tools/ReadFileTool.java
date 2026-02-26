@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -22,7 +21,7 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
             你可以使用这个工具直接访问任何文件或目录、且一次性可以读取多个文件或目录。
             假设这个工具能够读取机器上的所有文件。如果用户提供了文件/目录路径，则假设该路径有效。
             读取不存在的文件/目录是可以的;将返回错误。
-            
+
             Usage
                 - 支持同时访问多个文件或目录，增加执行效率
                 - file_paths 参数是个list可以同时传多个文件或目录路径，必须是绝对路径，而非相对路径
@@ -48,14 +47,16 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
     }
 
     public Map<String, Object> apply(ReadFileRequest request, ToolContext toolContext) {
-        Map<String, Object> result = new HashMap<>();
-        
         if (request.getFilePaths() == null || request.getFilePaths().isEmpty()) {
-            result.put("error", "No file or directory paths provided");
-            return result;
+            return ToolResult.builder()
+                    .error("No file or directory paths provided")
+                    .build();
         }
 
         StringBuilder content = new StringBuilder();
+        ToolResult result = ToolResult.builder();
+        int filesRead = 0;
+
         for (String pathStr : request.getFilePaths()) {
             try {
                 Path path = Paths.get(pathStr).normalize();
@@ -65,9 +66,10 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
                 }
 
                 if (Files.isDirectory(path)) {
-                    processDirectory(path, content, request.offset, request.limit);
+                    processDirectory(path, content, request.offset, request.limit, result);
                 } else {
-                    processFile(path, content, request.offset, request.limit);
+                    processFile(path, content, request.offset, request.limit, result);
+                    filesRead++;
                 }
             } catch (IOException e) {
                 content.append("reading path failed").append(pathStr).append(": ").append(e.getMessage()).append("\n\n");
@@ -82,16 +84,17 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
             }
         }
 
-        result.put("content", content.toString().trim());
-        return result;
+        result.content(content.toString().trim());
+        result.metadata("filesRead", filesRead);
+        return result.build();
     }
 
-    private void processDirectory(Path dir, StringBuilder result, Integer offset, Integer limit) throws IOException {
+    private void processDirectory(Path dir, StringBuilder result, Integer offset, Integer limit, ToolResult toolResult) throws IOException {
         boolean isEmpty = true;
         try (var paths = Files.walk(dir)) {
             for (Path path : paths.sorted().toList()) {
                 if (Files.isRegularFile(path)) {
-                    processFile(path, result, offset, limit);
+                    processFile(path, result, offset, limit, toolResult);
                     isEmpty = false;
                 }
             }
@@ -102,11 +105,15 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
         }
     }
 
-    private void processFile(Path file, StringBuilder result, Integer offset, Integer limit) throws IOException {
+    private void processFile(Path file, StringBuilder result, Integer offset, Integer limit, ToolResult toolResult) throws IOException {
         try {
             List<String> allLines = Files.readAllLines(file);
+            String absolutePath = file.toAbsolutePath().toString();
+
             if (allLines.isEmpty()) {
                 result.append("File is empty: ").append(file).append("\n\n");
+                // 添加位置信息 - 空文件从第1行开始
+                toolResult.location(absolutePath, 1);
                 return;
             }
 
@@ -114,14 +121,19 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
             int maxLimit = limit != null ? limit : 500;
             int end = Math.min(start + maxLimit, allLines.size());
 
-            result.append("=== ").append(file.toAbsolutePath()).append(" ===\n");
+            result.append("=== ").append(absolutePath).append(" ===\n");
             if (start >= allLines.size()) {
                 result.append("Error: Offset ")
                         .append(start)
                         .append(" is beyond file length ")
                         .append(allLines.size())
                         .append("\n");
+                // 即使超出范围也添加位置信息
+                toolResult.location(absolutePath, allLines.size());
             } else {
+                // 添加起始行位置
+                toolResult.location(absolutePath, start + 1);
+
                 List<String> lines = allLines.subList(start, end);
                 for (int i = 0; i < lines.size(); i++) {
                     String line = lines.get(i);

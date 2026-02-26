@@ -23,8 +23,17 @@ public class ToolKindFind {
         NAME_TO_KIND.put("glob", SEARCH);
         NAME_TO_KIND.put("grep", SEARCH);
         NAME_TO_KIND.put("webSearch", SEARCH);
+        // EXECUTE tools
+        NAME_TO_KIND.put("Bash", EXECUTE);
+        NAME_TO_KIND.put("BashOutput", EXECUTE);
+        NAME_TO_KIND.put("KillShell", EXECUTE);
+        // THINK tools
+        NAME_TO_KIND.put("think", THINK);
+        NAME_TO_KIND.put("contextCacheTool", THINK);
+        // FETCH tools
+        NAME_TO_KIND.put("webFetch", FETCH);
         // OTHER tools
-        NAME_TO_KIND.put("contextCacheTool", OTHER);
+        NAME_TO_KIND.put("FeedBackTool", OTHER);
     }
 
     /**

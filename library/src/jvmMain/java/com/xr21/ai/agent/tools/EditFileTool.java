@@ -10,7 +10,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermission;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -28,19 +29,20 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
 
     @Override
     public Map<String, Object> apply(EditFileRequest request, ToolContext toolContext) {
-        Map<String, Object> result = new HashMap<>();
         Path path = Paths.get(request.filePath);
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-            result.put("error", "File not found: " + request.filePath);
-            return result;
+            return ToolResult.builder()
+                    .error("File not found: " + request.filePath)
+                    .build();
         }
 
         String content;
         try {
             content = Files.readString(path, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            result.put("error", "Error reading file: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Error reading file: " + e.getMessage())
+                    .build();
         }
 
         // 归一换行符，减少因 CRLF/LF 差异导致的匹配失败
@@ -50,51 +52,58 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
         // 如果归一化后仍找不到，尝试直接匹配原始内容（兼容未归一化写法）
         boolean found = normalizedContent.contains(normalizedOld);
         if (!found && !content.contains(request.oldString)) {
-            result.put("error", "String not found in file: " + request.oldString);
-            result.put("stringSearched", request.oldString);
-            return result;
+            return ToolResult.builder()
+                    .error("String not found in file: " + request.oldString)
+                    .put("stringSearched", request.oldString)
+                    .build();
         }
 
         // 使用正则进行字面量匹配（跨行 DOTALL），确保对特殊字符安全
         Pattern pattern = Pattern.compile(Pattern.quote(request.oldString), Pattern.DOTALL | Pattern.UNICODE_CHARACTER_CLASS);
         Matcher matcher = pattern.matcher(content);
+        String contentToUse = content;
         if (!matcher.find()) {
-            // 兼容“归一换行”的匹配：如果 original 匹配失败，再对归一化后的字符串匹配
+            // 兼容"归一换行"的匹配：如果 original 匹配失败，再对归一化后的字符串匹配
             Pattern normalizedPattern = Pattern.compile(Pattern.quote(normalizedOld), Pattern.DOTALL | Pattern.UNICODE_CHARACTER_CLASS);
             Matcher normalizedMatcher = normalizedPattern.matcher(normalizedContent);
             if (!normalizedMatcher.find()) {
-                result.put("error", "String not found in file (even after normalization): " + request.oldString);
-                result.put("stringSearched", request.oldString);
-                return result;
+                return ToolResult.builder()
+                        .error("String not found in file (even after normalization): " + request.oldString)
+                        .put("stringSearched", request.oldString)
+                        .build();
             } else {
                 // 如果在归一化后才找到，提示用户可能存在换行/空白差异
-                // 继续使用原始 content 做替换，但采用归一化后定位的文本做替换
-                // 为简单起见，此处直接将 oldString 以归一换行形式替换，效果等价
-                content = normalizedContent;
+                contentToUse = normalizedContent;
                 matcher = normalizedMatcher;
             }
         }
 
-        // 统计出现次数
+        // 计算匹配位置的行号
+        int matchStartLine = findLineNumber(contentToUse, matcher.start());
+
+        // 统计出现次数并收集所有匹配行号
         int count = 0;
+        List<Integer> matchLines = new ArrayList<>();
         matcher.reset();
         while (matcher.find()) {
             count++;
+            matchLines.add(findLineNumber(contentToUse, matcher.start()));
         }
 
         // 如果不允许全局替换且出现多次，返回提示
         if (!request.replaceAll && count > 1) {
-            result.put("error", "String appears multiple times in file. Use replace_all=true or provide more context. Occurrences: " + count);
-            return result;
+            return ToolResult.builder()
+                    .error("String appears multiple times in file. Use replace_all=true or provide more context. Occurrences: " + count)
+                    .build();
         }
 
         // 执行替换
         String newContent;
         if (request.replaceAll) {
-            newContent = content.replaceAll(Pattern.quote(request.oldString),
+            newContent = contentToUse.replaceAll(Pattern.quote(request.oldString),
                     Matcher.quoteReplacement(request.newString));
         } else {
-            newContent = content.replaceFirst(Pattern.quote(request.oldString),
+            newContent = contentToUse.replaceFirst(Pattern.quote(request.oldString),
                     Matcher.quoteReplacement(request.newString));
         }
 
@@ -116,17 +125,51 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
                 }
             }
         } catch (IOException e) {
-            result.put("error", "Error writing file: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Error writing file: " + e.getMessage())
+                    .build();
         }
 
         int replacements = request.replaceAll ? count : 1;
-        result.put("message", "File edited successfully");
-        result.put("filePath", request.filePath);
-        result.put("replacements", replacements);
-        result.put("totalOccurrences", count);
-        result.put("replacedAll", request.replaceAll);
-        return result;
+        String absolutePath = path.toAbsolutePath().toString();
+
+        // 构建结果
+        ToolResult result = ToolResult.builder()
+                .success(true)
+                .content("File edited successfully")
+                .put("message", "File edited successfully")
+                .put("filePath", request.filePath)
+                .put("replacements", replacements)
+                .put("totalOccurrences", count)
+                .put("replacedAll", request.replaceAll);
+
+        // 添加 ToolCallDiff 内容类型
+        result.toolCallContent(ToolResult.createDiffContent(absolutePath, request.oldString, request.newString));
+
+        // 添加 locations - 每个匹配的行号
+        if (request.replaceAll) {
+            for (Integer line : matchLines) {
+                result.location(absolutePath, line);
+            }
+        } else {
+            result.location(absolutePath, matchStartLine);
+        }
+
+        return result.build();
+    }
+
+    /**
+     * Find the line number (1-based) of a given character position in the content.
+     */
+    private int findLineNumber(String content, int charPosition) {
+        if (charPosition <= 0) return 1;
+        int line = 1;
+        for (int i = 0; i < Math.min(charPosition, content.length()); i++) {
+            if (content.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
     }
 
     /**

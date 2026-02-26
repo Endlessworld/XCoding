@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
@@ -45,51 +44,55 @@ public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest,
 
     @Override
     public Map<String, Object> apply(WriteFileRequest request, ToolContext toolContext) {
-        Map<String, Object> result = new HashMap<>();
-
         // Validate request parameters
         if (request.filePath == null || request.filePath.isBlank()) {
-            result.put("error", "File path cannot be null or empty");
-            return result;
+            return ToolResult.builder()
+                    .error("File path cannot be null or empty")
+                    .build();
         }
 
         if (request.content == null) {
-            result.put("error", "Content cannot be null");
-            return result;
+            return ToolResult.builder()
+                    .error("Content cannot be null")
+                    .build();
         }
 
         // Validate content length
         if (request.content.length() > MAX_CONTENT_LENGTH) {
-            result.put("error", String.format(
-                    "Content exceeds maximum length of %d characters (actual: %d). " +
-                    "Please split the content and use edit_file tool for remaining parts.",
-                    MAX_CONTENT_LENGTH,
-                    request.content.length()
-            ));
-            return result;
+            return ToolResult.builder()
+                    .error(String.format(
+                            "Content exceeds maximum length of %d characters (actual: %d). " +
+                            "Please split the content and use edit_file tool for remaining parts.",
+                            MAX_CONTENT_LENGTH,
+                            request.content.length()
+                    ))
+                    .build();
         }
 
         try {
             Path path = Paths.get(request.filePath).normalize();
             Path workspacePath = Paths.get(WORKSPACE_ROOT_NORMALIZED);
+            String absolutePath = path.toAbsolutePath().toString();
 
             // Security: Validate that the path is within workspace
             if (!path.startsWith(workspacePath)) {
-                result.put("error", String.format(
-                        "Security violation: Path '%s' is outside the workspace root '%s'",
-                        path,
-                        WORKSPACE_ROOT
-                ));
-                return result;
+                return ToolResult.builder()
+                        .error(String.format(
+                                "Security violation: Path '%s' is outside the workspace root '%s'",
+                                path,
+                                WORKSPACE_ROOT
+                        ))
+                        .build();
             }
 
             // Check if file already exists
             if (Files.exists(path)) {
-                result.put("error", String.format(
-                        "File already exists: %s. Use edit_file to modify existing files.",
-                        request.filePath
-                ));
-                return result;
+                return ToolResult.builder()
+                        .error(String.format(
+                                "File already exists: %s. Use edit_file to modify existing files.",
+                                request.filePath
+                        ))
+                        .build();
             }
 
             // Create parent directories if they don't exist
@@ -101,21 +104,37 @@ public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest,
             // Write the file
             Files.writeString(path, request.content);
 
-            result.put("success", true);
-            result.put("message", String.format("Successfully created file: %s (%d characters)", request.filePath, request.content.length()));
-            result.put("file_path", request.filePath);
-            result.put("bytes_written", request.content.getBytes().length);
+            // Calculate line count for locations
+            int lineCount = request.content.isEmpty() ? 1 : (int) request.content.lines().count();
 
-            return result;
+            // Build result
+            ToolResult result = ToolResult.builder()
+                    .success(true)
+                    .content(String.format("Successfully created file: %s (%d characters)", request.filePath, request.content.length()))
+                    .put("message", String.format("Successfully created file: %s (%d characters)", request.filePath, request.content.length()))
+                    .put("file_path", request.filePath)
+                    .put("bytes_written", request.content.getBytes().length)
+                    .put("line_count", lineCount);
+
+            // Add locations - for write_file, we add the first line and optionally the last line
+            result.location(absolutePath, 1);
+            if (lineCount > 1) {
+                result.location(absolutePath, lineCount);
+            }
+
+            return result.build();
         } catch (IOException e) {
-            result.put("error", "Error writing file: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Error writing file: " + e.getMessage())
+                    .build();
         } catch (SecurityException e) {
-            result.put("error", "Security error: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Security error: " + e.getMessage())
+                    .build();
         } catch (Exception e) {
-            result.put("error", "Unexpected error: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Unexpected error: " + e.getMessage())
+                    .build();
         }
     }
 

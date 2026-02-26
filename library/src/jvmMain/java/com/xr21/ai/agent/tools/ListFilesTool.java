@@ -1,5 +1,6 @@
 package com.xr21.ai.agent.tools;
 
+import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.springframework.ai.chat.model.ToolContext;
@@ -12,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -88,33 +88,53 @@ public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest,
 
     @Override
     public Map<String, Object> apply(ListFilesRequest request, ToolContext toolContext) {
-        Map<String, Object> result = new HashMap<>();
         Path basePath = Paths.get(request.getDirectory()).toAbsolutePath();
         if (!Files.exists(basePath) || !Files.isDirectory(basePath)) {
-            result.put("error", "Directory not found: " + basePath);
-            return result;
+            return ToolResult.builder()
+                    .error("Directory not found: " + basePath)
+                    .build();
         }
 
         try {
             List<Pattern> ignorePatterns = loadGitignorePatterns(basePath);
             List<String> filePaths = new ArrayList<>();
+            List<ToolCallLocation> locations = new ArrayList<>();
+
             int maxDepth = request.getMaxDepth() != null ? request.getMaxDepth() : 3;
             Files.walk(basePath, maxDepth)
                     .filter(Files::isRegularFile)
                     .filter(file -> !isIgnored(file, basePath, ignorePatterns))
                     .map(Path::toAbsolutePath)
-                    .map(Path::toString)
-                    .forEach(filePaths::add);
+                    .forEach(path -> {
+                        String pathStr = path.toString();
+                        filePaths.add(pathStr);
+                        // Add location for each file (line 1)
+                        locations.add(new ToolCallLocation(pathStr, 1));
+                    });
+
+            ToolResult result = ToolResult.builder();
 
             if (filePaths.isEmpty()) {
                 result.put("filePaths", "No files found in directory: " + basePath);
+                result.content("No files found in directory: " + basePath);
             } else {
                 result.put("filePaths", String.join("\r\n", filePaths));
+                result.content(String.join("\r\n", filePaths));
             }
-            return result;
+
+            // Add locations - limit to first 100 to avoid too many locations
+            if (!locations.isEmpty()) {
+                result.locations(locations.size() > 100 ? locations.subList(0, 100) : locations);
+            }
+
+            result.metadata("fileCount", filePaths.size());
+            result.metadata("directory", basePath.toString());
+
+            return result.build();
         } catch (IOException e) {
-            result.put("error", "Failed to traverse directory: " + e.getMessage());
-            return result;
+            return ToolResult.builder()
+                    .error("Failed to traverse directory: " + e.getMessage())
+                    .build();
         }
     }
 
