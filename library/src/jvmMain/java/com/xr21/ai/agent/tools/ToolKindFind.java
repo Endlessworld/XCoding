@@ -15,7 +15,7 @@ public class ToolKindFind {
         NAME_TO_KIND = new HashMap<>();
         // READ tools
         NAME_TO_KIND.put("read_file", READ);
-        NAME_TO_KIND.put("ls", READ);
+        NAME_TO_KIND.put("ls", SEARCH);
         // EDIT tools
         NAME_TO_KIND.put("write_file", EDIT);
         NAME_TO_KIND.put("edit_file", EDIT);

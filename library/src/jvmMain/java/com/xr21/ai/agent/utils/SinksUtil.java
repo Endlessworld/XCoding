@@ -56,7 +56,7 @@ public class SinksUtil {
             try {
                 sink.tryEmitNext(ServerSentEvent.builder(buildJsonContent(output)).build());
             } catch (JsonProcessingException e) {
-                e.printStackTrace();
+                logger.error("Error processing JSON for NodeOutput", e);
 //                        sink.t(e);
             }
         }).doOnComplete(() -> {
@@ -95,7 +95,7 @@ public class SinksUtil {
     }
 
     private static AgentOutput<Object> buildContent(NodeOutput output) {
-        System.err.println(output);
+        logger.debug("NodeOutput: {}", output);
         var builder = AgentOutput.builder()
                 .agent(output.agent())
                 .data(output.state().data())
@@ -122,7 +122,7 @@ public class SinksUtil {
             builder.subGraph(streamingOutput.isSubGraph());
             if(streamingOutput.message() instanceof AssistantMessage message){
                 if(message.hasToolCalls()){
-                    System.err.println(message.getToolCalls());
+                    logger.debug("Tool calls: {}", message.getToolCalls());
                 }
             }
         }

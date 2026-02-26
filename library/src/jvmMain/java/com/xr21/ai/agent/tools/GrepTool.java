@@ -42,8 +42,12 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
             PathMatcher globMatcher = request.glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + request.glob) : null;
 
+            // Create gitignore utility for filtering
+            GitignoreUtil gitignoreUtil = new GitignoreUtil(searchPath);
+
             Files.walk(searchPath)
                     .filter((x$0) -> Files.isRegularFile(x$0))
+                    .filter((path) -> !gitignoreUtil.isIgnored(path))
                     .filter((path) -> globMatcher == null || globMatcher.matches(path.getFileName()))
                     .forEach((path) -> {
                         try {

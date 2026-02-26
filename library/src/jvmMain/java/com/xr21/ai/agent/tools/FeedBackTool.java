@@ -18,6 +18,7 @@ package com.xr21.ai.agent.tools;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.function.BiFunction;
 
+@Slf4j
 public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolContext, Map<String, Object>> {
 
     private static final Scanner SCANNER = new Scanner(System.in);
@@ -72,11 +74,11 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
     @Override
     public Map<String, Object> apply(AskRequest request, ToolContext toolContext) {
         Map<String, Object> result = new HashMap<>();
-        System.out.println("\n[系统提示] " + request.getPrompt());
+        log.info("\n[系统提示] {}", request.getPrompt());
 
         // 如果需要用户确认
         if (request.isRequireConfirmation()) {
-            System.out.print("是否确认执行? (y/n): ");
+            log.info("是否确认执行? (y/n): ");
             String confirmation = SCANNER.nextLine().trim().toLowerCase();
             if (!confirmation.equals("y") && !confirmation.equals("yes")) {
                 result.put("message", "用户取消了操作");
@@ -88,7 +90,7 @@ public class FeedBackTool implements BiFunction<FeedBackTool.AskRequest, ToolCon
 
         // 如果需要用户输入
         if (request.isRequireInput()) {
-            System.out.print("请输入: ");
+            log.info("请输入: ");
             String userInput = SCANNER.nextLine().trim();
             result.put("userInput", userInput);
             return result;

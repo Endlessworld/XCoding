@@ -33,8 +33,12 @@ public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, M
             List<String> matchedFiles = new ArrayList<>();
             List<ToolCallLocation> locations = new ArrayList<>();
 
+            // Create gitignore utility for filtering
+            GitignoreUtil gitignoreUtil = new GitignoreUtil(basePathObj);
+
             Files.walk(basePathObj)
                     .filter((x$0) -> Files.isRegularFile(x$0))
+                    .filter((path) -> !gitignoreUtil.isIgnored(path))
                     .filter((path) -> {
                         Path relativePath = basePathObj.relativize(path);
                         return matcher.matches(relativePath) || matcher.matches(path);

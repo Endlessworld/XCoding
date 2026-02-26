@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import static com.xr21.ai.agent.utils.ToolsUtil.describeMcpServer;
 
 /**
- * ACP 协议包装的 LocalAgent
+ * ACP 协议包装LocalAgent
  * 支持通过 ACP (Agent Client Protocol) 与客户端通信
  */
 @Slf4j
@@ -49,15 +49,15 @@ public class AcpLocalAgent {
      * 构建并启动 ACP Agent
      */
     public void start() {
-        System.err.println("[AcpLocalAgent] Starting...");
+        log.info("[AcpLocalAgent] Starting...");
 
         var transport = new StdioAcpAgentTransport();
 
         AcpSyncAgent acpAgent = AcpAgent.sync(transport)
                 // 初始化处理器
                 .initializeHandler(req -> {
-                    System.err.println("[AcpLocalAgent] Client initialized, protocol version: " + req.protocolVersion());
-                    System.err.println("[AcpLocalAgent] Client capabilities: " + req.clientCapabilities());
+                    log.info("[AcpLocalAgent] Client initialized, protocol version:  {}", req.protocolVersion());
+                    log.info("[AcpLocalAgent] Client capabilities:  {}", req.clientCapabilities());
                     return InitializeResponse.ok();
                 })
                 // 新会话处理器
@@ -66,28 +66,28 @@ public class AcpLocalAgent {
                     String threadId = "acp-session-" + System.currentTimeMillis();
                     String cwd = req.cwd() != null ? req.cwd() : System.getProperty("user.dir");
                     sessions.put(sessionId, new AcpSession(sessionId, threadId, cwd));
-                    System.err.println("[AcpLocalAgent] New session created: " + sessionId);
-                    System.err.println("[AcpLocalAgent] Working directory: " + cwd);
+                    log.info("[AcpLocalAgent] New session created:  {}", sessionId);
+                    log.info("[AcpLocalAgent] Working directory:  {}", cwd);
 
                     // Store MCP servers for this session
                     List<McpServer> mcpServers = req.mcpServers();
                     if (mcpServers != null && !mcpServers.isEmpty()) {
                         sessionMcpServers.put(sessionId, new ArrayList<>(mcpServers));
-                        System.err.println("[McpAgent] Received " + mcpServers.size() + " MCP server(s)");
+                        log.info("[McpAgent] Received  {}", mcpServers.size() + " MCP server(s)");
                         for (McpServer server : mcpServers) {
-                            System.err.println("[McpAgent]   - " + describeMcpServer(server));
+                            log.info("[McpAgent]   -  {}", describeMcpServer(server));
                         }
                     } else {
-                        System.err.println("[McpAgent] No MCP servers provided");
+                        log.info("[McpAgent] No MCP servers provided");
                     }
                     agents.put(sessionId, LocalAgent.createAgent(req.cwd(), mcpServers));
                     return new NewSessionResponse(sessionId, sessionModeState, sessionModelState);
                 })
-                // 加载会话处理器
+                // 加载会话处理�?
                 .loadSessionHandler(req -> {
-                    System.err.println("[AcpLocalAgent] Load session: " + req.sessionId());
+                    log.info("[AcpLocalAgent] Load session:  {}", req.sessionId());
                     if (sessions.containsKey(req.sessionId())) {
-                        System.err.println("[AcpLocalAgent] Session found");
+                        log.info("[AcpLocalAgent] Session found");
                         Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder()
                                 .threadId(sessions.get(req.sessionId()).threadId)
                                 .build());
@@ -100,22 +100,22 @@ public class AcpLocalAgent {
                                 .orElse(sessionModelState);
                         return new LoadSessionResponse(sessionModeState, modelState);
                     }
-                    System.err.println("[AcpLocalAgent] Session not found");
+                    log.info("[AcpLocalAgent] Session not found");
                     return new LoadSessionResponse(sessionModeState, sessionModelState);
                 })
-                // 提示处理器 - 核心逻辑
+                // 提示处理�?- 核心逻辑
                 .promptHandler(this::handlePrompt)
-                // 取消处理器
+                // 取消处理�?
                 .cancelHandler(req -> {
-                    System.err.println("[AcpLocalAgent] Cancel request for session: " + req.sessionId());
+                    log.info("[AcpLocalAgent] Cancel request for session:  {}", req.sessionId());
                     // 这里可以添加取消正在处理的请求的逻辑
                 })
 
                 .build();
 
-        System.err.println("[AcpLocalAgent] Ready, waiting for messages...");
+        log.info("[AcpLocalAgent] Ready, waiting for messages...");
         acpAgent.run();
-        System.err.println("[AcpLocalAgent] Shutdown.");
+        log.info("[AcpLocalAgent] Shutdown.");
     }
 
     /**
@@ -137,12 +137,12 @@ public class AcpLocalAgent {
         }
         // 提取用户输入文本
         String userInput = extractTextFromPrompt(req);
-        System.err.println("[AcpLocalAgent] Received: " + userInput);
+        log.info("[AcpLocalAgent] Received:  {}", userInput);
 
-        // 记录到历史
+        // 记录到历�?
         session.history.add("User: " + userInput);
 
-        // 发送思考过程
+        // 发送思考过�?
         context.sendThought("正在处理您的请求...");
 
         // 使用 LocalAgent 处理输入
@@ -155,14 +155,14 @@ public class AcpLocalAgent {
             if (output.getChunk() != null) {
                 String chunk = output.getChunk();
                 responseBuilder.append(chunk);
-                // 流式发送消息片段给客户端
+                // 流式发送消息片段给客户�?
                 context.sendMessage(chunk);
             }
 
-            // 处理思考过程
+            // 处理思考过�?
             if (output.getThink() != null) {
                 String think = output.getThink();
-                // 流式发送思考过程给客户端
+                // 流式发送思考过程给客户�?
                 context.sendThought(think);
             }
 
@@ -181,13 +181,13 @@ public class AcpLocalAgent {
                             contentList.add(new ToolCallContentBlock("content", new TextContent(arguments)));
                         }
                         // 发送工具调用开始通知 (status: PENDING)
-                        // ToolCall 是完整的工具调用记录，包含输入参数
+                        // ToolCall 是完整的工具调用记录，包含输入参�?
                         context.sendUpdate(sessionId, new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, null,  // locations
                                 arguments,  // rawInput
-                                null,  // rawOutput - 执行后才有
+                                null,  // rawOutput - 执行后才�?
                                 message.getMetadata()));
 
-                        System.err.println("[AcpLocalAgent] Tool call started: " + toolName + " (id: " + toolCallId + ")");
+                        log.info("[AcpLocalAgent] Tool call started:  {}", toolName + " (id: " + toolCallId + ")");
                     }
                 }
             }
@@ -200,37 +200,37 @@ public class AcpLocalAgent {
                         String toolName = response.name();
                         String responseData = response.responseData();
 
-                        // 解析 ToolResult 格式的响应数据
+                        // 解析 ToolResult 格式的响应数�?
                         ToolResultData resultData = parseToolResult(responseData);
 
                         // 构建位置信息
                         List<ToolCallLocation> locations = resultData.locations;
 
-                        // 确定状态
+                        // 确定状�?
                         ToolCallStatus status = resultData.success ? ToolCallStatus.COMPLETED : (resultData.error != null ? ToolCallStatus.FAILED : ToolCallStatus.COMPLETED);
 
                         // 发送工具调用更新通知 (status: COMPLETED/FAILED)
                         context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations,  // 位置信息
-                                null,  // rawInput - 已在之前的 ToolCall 中发送
+                                null,  // rawInput - 已在之前�?ToolCall 中发�?
                                 responseData,  // rawOutput
                                 null));
 
-                        System.err.println("[AcpLocalAgent] Tool call completed: " + toolName + " (id: " + toolCallId + ", status: " + status + ")");
+                        log.info("[AcpLocalAgent] Tool call completed:  {}", toolName + " (id: " + toolCallId + ", status: " + status + ")");
                     }
                 }
             }
 
-            // 处理工具调用反馈 (来自 HumanInTheLoop 等机制)
+            // 处理工具调用反馈 (来自 HumanInTheLoop 等机�?
             if (!CollectionUtils.isEmpty(output.getToolFeedbacks())) {
                 for (var toolFeedback : output.getToolFeedbacks()) {
                     String toolName = toolFeedback.getName();
                     String description = toolFeedback.getDescription();
                     String feedbackMsg = String.format("[工具] %s: %s", toolName, description);
 
-                    // 发送思考过程
+                    // 发送思考过�?
                     context.sendThought(feedbackMsg);
 
-                    // 如果有 toolCallId，发送更新通知
+                    // 如果�?toolCallId，发送更新通知
                     String toolCallId = toolFeedback.getId();
                     if (toolCallId != null) {
                         context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKind.THINK, ToolCallStatus.COMPLETED, List.of(new ToolCallContentBlock("content", new TextContent(description))), null, null, null, null));
@@ -242,12 +242,12 @@ public class AcpLocalAgent {
         String finalResponse = responseBuilder.toString();
         session.history.add("Assistant: " + finalResponse);
 
-        System.err.println("[AcpLocalAgent] Response complete, length: " + finalResponse.length());
+        log.info("[AcpLocalAgent] Response complete, length:  {}", finalResponse.length());
         return PromptResponse.endTurn();
     }
 
     /**
-     * 从 PromptRequest 中提取文本
+     * �?PromptRequest 中提取文�?
      */
     private String extractTextFromPrompt(PromptRequest req) {
         StringBuilder sb = new StringBuilder();
@@ -260,7 +260,7 @@ public class AcpLocalAgent {
     }
 
     /**
-     * 解析 ToolResult 格式的响应数据
+     * 解析 ToolResult 格式的响应数�?
      */
     private ToolResultData parseToolResult(String responseData) {
         ToolResultData result = new ToolResultData();
@@ -271,7 +271,7 @@ public class AcpLocalAgent {
         }
 
         try {
-            // 尝试解析为 JSON Map
+            // 尝试解析�?JSON Map
             ObjectMapper objectMapper = new ObjectMapper();
             Map<String, Object> jsonMap = objectMapper.readValue(responseData, new TypeReference<Map<String, Object>>() {
             });
@@ -307,10 +307,10 @@ public class AcpLocalAgent {
                 }
             }
 
-            // 提取 toolCallContents (简化处理，只提取原始数据)
+            // 提取 toolCallContents (简化处理，只提取原始数�?
             if (jsonMap.containsKey(ToolResult.KEY_TOOL_CALL_CONTENTS)) {
                 // 这里可以添加更复杂的解析逻辑
-                // 目前简单地将原始数据保留
+                // 目前简单地将原始数据保�?
             }
 
         } catch (Exception e) {
@@ -334,7 +334,7 @@ public class AcpLocalAgent {
     }
 
     /**
-     * ACP 会话状态
+     * ACP 会话状�?
      */
     private static class AcpSession {
         final String sessionId;
@@ -370,3 +370,5 @@ public class AcpLocalAgent {
     }
 
 }
+
+

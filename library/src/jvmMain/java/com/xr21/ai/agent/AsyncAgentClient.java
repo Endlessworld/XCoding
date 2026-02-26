@@ -19,11 +19,13 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.NewSessionRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PromptRequest;
 import com.agentclientprotocol.sdk.spec.AcpSchema.TextContent;
 import io.modelcontextprotocol.json.McpJsonMapper;
+import lombok.extern.slf4j.Slf4j;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+@Slf4j
 public class AsyncAgentClient {
 
     private static final String JAR_NAME = "library-1.0.0-all.jar";
@@ -42,23 +44,23 @@ public class AsyncAgentClient {
                     var update = notification.update();
                     if (update instanceof AgentMessageChunk msg) {
                         String text = ((TextContent) msg.content()).text();
-                        System.out.println("[Agent] " + text);
+                        log.info("[Agent] {}", text);
                     }
                 })
                 .build()) {
 
-            System.out.println("=== Module 22: Async Agent Demo ===\n");
-            System.out.println("This agent uses AcpAgent.async() with reactive Mono patterns.\n");
+            log.info("=== Module 22: Async Agent Demo ===\n");
+            log.info("This agent uses AcpAgent.async() with reactive Mono patterns.\n");
 
             // Initialize
-            System.out.println("Sending initialize...");
+            log.info("Sending initialize...");
             client.initialize();
-            System.out.println("Connected to AsyncAgent!\n");
+            log.info("Connected to AsyncAgent!\n");
 
             // Create session
             String cwd = System.getProperty("user.dir");
             var session = client.newSession(new NewSessionRequest(cwd, List.of()));
-            System.out.println("Session: " + session.sessionId() + "\n");
+            log.info("Session: {}\n", session.sessionId());
 
             // Send prompts
             String[] messages = {
@@ -67,18 +69,17 @@ public class AsyncAgentClient {
             };
 
             for (String message : messages) {
-                System.out.println("Sending: " + message);
+                log.info("Sending: {}", message);
                 var response = client.prompt(new PromptRequest(
                     session.sessionId(),
                     List.of(new TextContent(message))));
-                System.out.println("Stop reason: " + response.stopReason() + "\n");
+                log.info("Stop reason: {}\n", response.stopReason());
             }
 
-            System.out.println("Demo complete!");
+            log.info("Demo complete!");
 
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error occurred in AsyncAgentClient demo", e);
         }
     }
 

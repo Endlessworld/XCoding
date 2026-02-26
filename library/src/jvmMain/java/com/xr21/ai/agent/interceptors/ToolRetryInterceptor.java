@@ -59,7 +59,7 @@ public class ToolRetryInterceptor extends ToolInterceptor {
                     try {
                         return handler.call(request);
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        log.warn("Tool call attempt {} failed: {}", attempt, e.getMessage(), e);
                         lastException = e;
                         if (!this.retryOn.test(e)) {
                             log.debug("Exception {} not configured for retry, re-throwing", e.getClass()

@@ -7,6 +7,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.util.StringUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +15,8 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
+
+import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
 
 public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = """
@@ -59,6 +62,12 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
 
         for (String pathStr : request.getFilePaths()) {
             try {
+                if (!StringUtils.hasText(pathStr)) {
+                    continue;
+                }
+                if (pathStr.startsWith("/")) {
+                    pathStr = WORKSPACE_ROOT + File.pathSeparator + pathStr.replaceFirst("/", "");
+                }
                 Path path = Paths.get(pathStr).normalize();
                 if (!Files.exists(path)) {
                     content.append("Path not found - ").append(pathStr).append("\n\n");
@@ -91,9 +100,13 @@ public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, To
 
     private void processDirectory(Path dir, StringBuilder result, Integer offset, Integer limit, ToolResult toolResult) throws IOException {
         boolean isEmpty = true;
+
+        // Create gitignore utility for filtering files in this directory
+        GitignoreUtil gitignoreUtil = new GitignoreUtil(dir);
+
         try (var paths = Files.walk(dir)) {
             for (Path path : paths.sorted().toList()) {
-                if (Files.isRegularFile(path)) {
+                if (Files.isRegularFile(path) && !gitignoreUtil.isIgnored(path)) {
                     processFile(path, result, offset, limit, toolResult);
                     isEmpty = false;
                 }

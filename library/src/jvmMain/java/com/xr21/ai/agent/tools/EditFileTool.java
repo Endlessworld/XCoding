@@ -2,6 +2,8 @@ package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -19,6 +21,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, ToolContext, Map<String, Object>> {
+
+    private static final Logger logger = LoggerFactory.getLogger(EditFileTool.class);
 
     public static ToolCallback createEditFileToolCallback(String description) {
         return FunctionToolCallback.builder("edit_file", new EditFileTool())
@@ -121,7 +125,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
                 try {
                     Files.setPosixFilePermissions(path, perms);
                 } catch (IOException e) {
-                    System.err.println("Warning: Failed to restore file permissions: " + e.getMessage());
+                    logger.warn("Failed to restore file permissions: {}", e.getMessage());
                 }
             }
         } catch (IOException e) {
