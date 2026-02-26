@@ -1,6 +1,11 @@
 package com.xr21.ai.agent.utils;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallContent;
+import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xr21.ai.agent.tools.ToolResult;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
@@ -12,10 +17,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.mcp.McpToolUtils;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.lang.NonNull;
+import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 public class ToolsUtil {
@@ -144,6 +151,82 @@ public class ToolsUtil {
 
         McpSyncClient mcpClient = McpClient.sync(transport).build();
         return McpToolUtils.getToolCallbacksFromSyncClients(mcpClient);
+    }
+
+    /**
+     * 解析 ToolResult 格式的响应数据
+     * @param responseData 工具响应数据
+     * @return 解析后的工具结果数据
+     */
+    public static ToolResultData parseToolResult(String responseData) {
+        ToolResultData result = new ToolResultData();
+
+        if (!StringUtils.hasText(responseData)) {
+            result.success = true;
+            return result;
+        }
+
+        try {
+            // 尝试解析为 JSON Map
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> jsonMap = objectMapper.readValue(responseData, new TypeReference<Map<String, Object>>() {
+            });
+
+            // 提取 success
+            if (jsonMap.containsKey(ToolResult.KEY_SUCCESS)) {
+                result.success = Boolean.TRUE.equals(jsonMap.get(ToolResult.KEY_SUCCESS));
+            } else {
+                result.success = !jsonMap.containsKey(ToolResult.KEY_ERROR);
+            }
+
+            // 提取 content
+            if (jsonMap.containsKey(ToolResult.KEY_CONTENT)) {
+                result.content = String.valueOf(jsonMap.get(ToolResult.KEY_CONTENT));
+            }
+
+            // 提取 error
+            if (jsonMap.containsKey(ToolResult.KEY_ERROR)) {
+                result.error = String.valueOf(jsonMap.get(ToolResult.KEY_ERROR));
+            }
+
+            // 提取 locations
+            if (jsonMap.containsKey(ToolResult.KEY_LOCATIONS)) {
+                Object locs = jsonMap.get(ToolResult.KEY_LOCATIONS);
+                if (locs instanceof List) {
+                    List<Map<String, Object>> locList = (List<Map<String, Object>>) locs;
+                    result.locations = new ArrayList<>();
+                    for (Map<String, Object> loc : locList) {
+                        String path = loc.get("path") != null ? String.valueOf(loc.get("path")) : null;
+                        Integer line = loc.get("line") != null ? ((Number) loc.get("line")).intValue() : null;
+                        result.locations.add(new ToolCallLocation(path, line));
+                    }
+                }
+            }
+
+            // 提取 toolCallContents (简化处理，只提取原始数据)
+            if (jsonMap.containsKey(ToolResult.KEY_TOOL_CALL_CONTENTS)) {
+                // 这里可以添加更复杂的解析逻辑
+                // 目前简单地将原始数据保存
+            }
+
+        } catch (Exception e) {
+            // 解析失败，视为纯文本内容
+            result.success = true;
+            result.content = responseData;
+        }
+
+        return result;
+    }
+
+    /**
+     * 工具结果数据结构
+     */
+    public static class ToolResultData {
+        public boolean success = true;
+        public String content;
+        public String error;
+        public List<ToolCallLocation> locations;
+        public List<ToolCallContent> toolCallContents;
     }
 
 }

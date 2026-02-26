@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 public class ShellTools {
 
     // Storage for background processes
-    private static final Map<String, BackgroundProcess> backgroundProcesses = new ConcurrentHashMap<>();
+    public static final Map<String, BackgroundProcess> backgroundProcesses = new ConcurrentHashMap<>();
 
     public static Builder builder() {
         return new Builder();
@@ -407,7 +407,7 @@ public class ShellTools {
     }
 
     // Inner class to manage background processes
-    private static class BackgroundProcess {
+    public static class BackgroundProcess {
 
         final Process process;
 
@@ -507,7 +507,7 @@ public class ShellTools {
             return process.isAlive();
         }
 
-        void destroy() {
+       public void destroy() {
             process.destroy();
             try {
                 if (!process.waitFor(5, TimeUnit.SECONDS)) {
