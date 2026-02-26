@@ -1,0 +1,25 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": ".*\\.properties$"
+      },
+      {
+        "pattern": ".*\\.xml$"
+      },
+      {
+        "pattern": ".*\\.json$"
+      },
+      {
+        "pattern": "META-INF/.*"
+      },
+      {
+        "pattern": "prompt/.*"
+      },
+      {
+        "pattern": ".*\\.md$"
+      }
+    ]
+  },
+  "bundles": []
+}

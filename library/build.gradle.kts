@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm")
     alias(libs.plugins.vanniktech.mavenPublish)
+    id("org.graalvm.buildtools.native")
 }
 
 group = "com.xr21"
@@ -145,4 +146,46 @@ tasks.register<Jar>("fatJar") {
     })
 
     archiveClassifier.set("all")
+}
+
+// GraalVM Native Image Configuration
+graalvmNative {
+    binaries {
+        named("main") {
+            imageName.set("ai-agents")
+            mainClass.set("com.xr21.ai.agent.AcpLocalAgent")
+            javaLauncher.set(javaToolchains.launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(17))
+                vendor.set(JvmVendorSpec.matching("GraalVM Community"))
+            })
+            
+            // 构建参数优化
+            buildArgs.addAll(
+                "--no-fallback",
+                "--allow-incomplete-classpath",
+                "--report-unsupported-elements-at-runtime",
+                "-H:+ReportExceptionStackTraces",
+                "--enable-url-protocols=http,https",
+                "--enable-all-security-services",
+                "-O3",
+                "--gc=serial"  // G1 在某些 GraalVM 版本中不可用，使用 serial
+            )
+        }
+    }
+    
+    // Toolchain 检测
+    toolchainDetection.set(true)
+}
+
+// Native compile tasks
+tasks.named("nativeCompile") {
+    dependsOn("classes", "fatJar")
+    group = "build"
+    description = "Compiles the application to a native executable"
+}
+
+tasks.named("nativeRun") {
+    dependsOn("nativeCompile")
+    group = "application"
+    description = "Runs the native executable"
 }
