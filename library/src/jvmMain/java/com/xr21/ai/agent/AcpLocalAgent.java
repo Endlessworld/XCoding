@@ -19,6 +19,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 import java.util.*;
@@ -153,14 +154,21 @@ public class AcpLocalAgent {
 
         // 注册可取消的请求
         Thread currentThread = Thread.currentThread();
-        registerCancellableRequest(requestId, sessionId, currentThread, flux);
+        CancellableRequest cancellableRequest = registerCancellableRequest(requestId, sessionId, currentThread, flux);
 
-        flux.doOnNext(output -> {
+        // 使用可取消的 Flux 订阅
+        Disposable disposable = flux.takeUntil(cancelSignal -> isRequestCancelled(requestId)).doOnCancel(() -> {
+            log.info("[AcpLocalAgent] Request {} Flux subscription was cancelled", requestId);
+            if (isRequestCancelled(requestId)) {
+                context.sendThought("\n请求已被用户取消");
+            }
+        }).doOnNext(output -> {
             // 检查请求是否已被取消
             if (isRequestCancelled(requestId)) {
-                log.info("[AcpLocalAgent] Request {} was cancelled, stopping processing", requestId);
-                throw new RuntimeException("Request cancelled");
+                log.info("[AcpLocalAgent] Request {} was cancelled, discarding output", requestId);
+                return; // 直接返回，不处理输出
             }
+
             // 处理文本输出
             if (output.getChunk() != null) {
                 String chunk = output.getChunk();
@@ -222,8 +230,7 @@ public class AcpLocalAgent {
 
                         // 发送工具调用更新通知 (status: COMPLETED/FAILED)
                         context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations,  // 位置信息
-                                null,
-                                responseData,  // rawOutput
+                                null, responseData,  // rawOutput
                                 null));
 
                         // 从请求跟踪中移除工具调用
@@ -252,17 +259,43 @@ public class AcpLocalAgent {
                 }
             }
         }).doOnError(error -> {
-            log.warn("[AcpLocalAgent] Request {} failed with error: {}", requestId, error.getMessage());
-            if (error.getMessage() != null && error.getMessage().contains("cancelled")) {
-                context.sendThought("请求已被用户取消");
+            if (isRequestCancelled(requestId)) {
+                log.info("[AcpLocalAgent] Request {} cancelled with error: {}", requestId, error.getMessage());
+                // 取消时不需要发送错误消息，已经发送了取消通知
             } else {
+                log.warn("[AcpLocalAgent] Request {} failed with error: {}", requestId, error.getMessage());
                 context.sendThought("处理请求时发生错误: " + error.getMessage());
             }
         }).doFinally(signal -> {
             // 无论成功还是失败，都注销请求
             unregisterCancellableRequest(requestId);
             log.info("[AcpLocalAgent] Request {} completed with signal: {}", requestId, signal);
-        }).blockLast();
+        }).subscribe();
+
+        // 设置 Disposable 以便取消
+        cancellableRequest.setFluxDisposable(disposable);
+
+        try {
+            // 等待 Flux 完成或取消
+            Thread.sleep(100); // 给 Flux 一点时间开始
+            while (!disposable.isDisposed() && !isRequestCancelled(requestId)) {
+                Thread.sleep(50);
+            }
+
+            if (isRequestCancelled(requestId)) {
+                log.info("[AcpLocalAgent] Request {} was cancelled during execution", requestId);
+                // 确保 Disposable 被清理
+                if (!disposable.isDisposed()) {
+                    disposable.dispose();
+                }
+            }
+        } catch (InterruptedException e) {
+            log.info("[AcpLocalAgent] Request {} thread interrupted", requestId);
+            Thread.currentThread().interrupt(); // 恢复中断状态
+            if (!disposable.isDisposed()) {
+                disposable.dispose();
+            }
+        }
 
         String finalResponse = responseBuilder.toString();
         session.history.add("Assistant: " + finalResponse);
@@ -369,6 +402,14 @@ public class AcpLocalAgent {
                     log.warn("[AcpLocalAgent] Failed to kill shell {}: {}", shellId, e.getMessage());
                 }
             }
+
+            // 从所有活跃请求中移除该会话的 shell 进程
+            for (CancellableRequest request : activeRequests.values()) {
+                if (request.sessionId.equals(sessionId)) {
+                    // 请求的 cancel() 方法会清理自己的 shell 进程
+                    request.cancel();
+                }
+            }
         } catch (Exception e) {
             log.warn("[AcpLocalAgent] Failed to cleanup background processes: {}", e.getMessage());
         }
@@ -377,9 +418,10 @@ public class AcpLocalAgent {
     /**
      * 注册可取消的请求
      */
-    private void registerCancellableRequest(String requestId, String sessionId, Thread executionThread, Flux<?> flux) {
+    private CancellableRequest registerCancellableRequest(String requestId, String sessionId, Thread executionThread, Flux<?> flux) {
         CancellableRequest request = new CancellableRequest(requestId, sessionId, executionThread, flux);
         activeRequests.put(requestId, request);
+        return request;
     }
 
     /**
@@ -406,6 +448,26 @@ public class AcpLocalAgent {
         CancellableRequest request = activeRequests.get(requestId);
         if (request != null) {
             request.removeToolCall(toolCallId);
+        }
+    }
+
+    /**
+     * 为请求添加 shell 进程
+     */
+    private void addShellProcessToRequest(String requestId, String shellId, ShellTools.BackgroundProcess process) {
+        CancellableRequest request = activeRequests.get(requestId);
+        if (request != null) {
+            request.addShellProcess(shellId, process);
+        }
+    }
+
+    /**
+     * 从请求中移除 shell 进程
+     */
+    private void removeShellProcessFromRequest(String requestId, String shellId) {
+        CancellableRequest request = activeRequests.get(requestId);
+        if (request != null) {
+            request.removeShellProcess(shellId);
         }
     }
 
@@ -447,6 +509,9 @@ public class AcpLocalAgent {
         final List<String> activeToolCallIds;
         final long startTime;
         volatile boolean cancelled;
+        private final Map<String, ShellTools.BackgroundProcess> activeShellProcesses;
+        private final Object lock = new Object();
+        private Disposable fluxDisposable;
 
         CancellableRequest(String requestId, String sessionId, Thread executionThread, Flux<?> flux) {
             this.requestId = requestId;
@@ -454,26 +519,69 @@ public class AcpLocalAgent {
             this.executionThread = executionThread;
             this.flux = flux;
             this.activeToolCallIds = new ArrayList<>();
+            this.activeShellProcesses = new ConcurrentHashMap<>();
             this.startTime = System.currentTimeMillis();
             this.cancelled = false;
+            this.fluxDisposable = null;
+        }
+
+        void setFluxDisposable(Disposable disposable) {
+            this.fluxDisposable = disposable;
+        }
+
+        void addShellProcess(String shellId, ShellTools.BackgroundProcess process) {
+            activeShellProcesses.put(shellId, process);
+        }
+
+        void removeShellProcess(String shellId) {
+            activeShellProcesses.remove(shellId);
         }
 
         void cancel() {
-            this.cancelled = true;
+            synchronized (lock) {
+                if (cancelled) {
+                    return; // 已经取消过
+                }
 
-            // 中断执行线程
-            if (executionThread != null && executionThread.isAlive()) {
-                executionThread.interrupt();
+                this.cancelled = true;
+                log.info("[CancellableRequest] Cancelling request: {}", requestId);
+
+                // 1. 取消所有活跃的工具调用（特别是 shell 进程）
+                cancelActiveToolCalls();
+
+                // 2. 取消 Flux 订阅
+                if (fluxDisposable != null && !fluxDisposable.isDisposed()) {
+                    log.info("[CancellableRequest] Disposing Flux subscription for request: {}", requestId);
+                    fluxDisposable.dispose();
+                }
+
+                // 3. 中断执行线程
+                if (executionThread != null && executionThread.isAlive()) {
+                    log.info("[CancellableRequest] Interrupting execution thread for request: {}", requestId);
+                    executionThread.interrupt();
+                }
+
+                // 4. 清理资源
+                activeToolCallIds.clear();
+                activeShellProcesses.clear();
+
+                log.info("[CancellableRequest] Request {} cancelled successfully", requestId);
             }
+        }
 
-            // 取消 Flux
-            if (flux != null) {
+        private void cancelActiveToolCalls() {
+            // 取消所有活跃的 shell 进程
+            for (Map.Entry<String, ShellTools.BackgroundProcess> entry : activeShellProcesses.entrySet()) {
+                String shellId = entry.getKey();
+                ShellTools.BackgroundProcess process = entry.getValue();
                 try {
-                    flux.blockFirst();
+                    log.info("[CancellableRequest] Killing shell process: {} for request: {}", shellId, requestId);
+                    ShellTools.builder().build().killShell(shellId);
                 } catch (Exception e) {
-                    // 忽略取消异常
+                    log.warn("[CancellableRequest] Failed to kill shell process {}: {}", shellId, e.getMessage());
                 }
             }
+            activeShellProcesses.clear();
         }
 
         void addToolCall(String toolCallId) {
