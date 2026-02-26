@@ -20,6 +20,8 @@ import reactor.core.publisher.Flux;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.xr21.ai.agent.utils.ToolsUtil.describeMcpServer;
+
 /**
  * ACP 协议包装的 LocalAgent
  * 支持通过 ACP (Agent Client Protocol) 与客户端通信
@@ -29,6 +31,8 @@ public class AcpLocalAgent {
 
     private final Map<String, AcpSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, Agent> agents = new ConcurrentHashMap<>();
+    // Store MCP servers per session
+    private static final Map<String, List<McpServer>> sessionMcpServers = new ConcurrentHashMap<>();
 
     private final SessionModeState sessionModeState = new SessionModeState("chat", List.of(new SessionMode("Agent", "Agent", "智能体模式"), new SessionMode("Plan", "Plan", "规划执行模式")));
     private final SessionModelState sessionModelState = new SessionModelState(AiModels.KIMI_K2_5.getModelName(), AiModels.availableModes());
@@ -59,7 +63,19 @@ public class AcpLocalAgent {
                     sessions.put(sessionId, new AcpSession(sessionId, threadId));
                     System.err.println("[AcpLocalAgent] New session created: " + sessionId);
                     System.err.println("[AcpLocalAgent] Working directory: " + req.cwd());
-                    agents.put(sessionId, LocalAgent.createAgent(req.cwd()));
+
+                    // Store MCP servers for this session
+                    List<McpServer> mcpServers = req.mcpServers();
+                    if (mcpServers != null && !mcpServers.isEmpty()) {
+                        sessionMcpServers.put(sessionId, new ArrayList<>(mcpServers));
+                        System.err.println("[McpAgent] Received " + mcpServers.size() + " MCP server(s)");
+                        for (McpServer server : mcpServers) {
+                            System.err.println("[McpAgent]   - " + describeMcpServer(server));
+                        }
+                    } else {
+                        System.err.println("[McpAgent] No MCP servers provided");
+                    }
+                    agents.put(sessionId, LocalAgent.createAgent(req.cwd(),mcpServers));
                     return new NewSessionResponse(sessionId, sessionModeState, sessionModelState);
                 })
                 // 加载会话处理器
@@ -207,4 +223,5 @@ public class AcpLocalAgent {
             this.history = new ArrayList<>();
         }
     }
+
 }

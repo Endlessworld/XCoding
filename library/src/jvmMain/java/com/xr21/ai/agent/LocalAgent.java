@@ -1,5 +1,6 @@
 package com.xr21.ai.agent;
 
+import com.agentclientprotocol.sdk.spec.AcpSchema.McpServer;
 import com.alibaba.cloud.ai.graph.agent.Agent;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.file.LocalFilesystemBackend;
@@ -9,17 +10,20 @@ import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
-import com.alibaba.cloud.ai.graph.agent.tools.ShellTool;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
+import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
+import com.xr21.ai.agent.utils.ToolsUtil;
 import org.slf4j.Logger;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.lang.NonNull;
+import org.springframework.util.CollectionUtils;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -47,9 +51,9 @@ public class LocalAgent {
         this.initializeChatModel();
     }
 
-    public static Agent createAgent(String cwd) {
+    public static Agent createAgent(String cwd, List<McpServer> mcpServers) {
         LocalAgent localAgent = new LocalAgent();
-        return localAgent.buildAgent(cwd);
+        return localAgent.buildAgent(cwd, mcpServers);
     }
 
     private static List<ToolCallback> getTools() {
@@ -60,8 +64,13 @@ public class LocalAgent {
                 .stream()
                 .filter(toolCallback -> includes.contains(toolCallback.getToolDefinition().name()))
                 .toList());
+        var methodToolCallbackProvider = MethodToolCallbackProvider.builder()
+                .toolObjects(ShellTools.builder().build())
+                .build();
+        tools.addAll(List.of(methodToolCallbackProvider.getToolCallbacks()));
         return tools;
     }
+
 
     private static @NonNull List<Interceptor> getInterceptors() {
         ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder()
@@ -90,25 +99,6 @@ public class LocalAgent {
                 .jitter(true)        // 启用抖动)
                 .build());
         return interceptors;
-    }
-
-    public static ToolCallback executeShellCommand() {
-        // Use ShellTool with a temporary workspace directory
-        String shellDescription = """
-                Execute a shell command inside a persistent session. Before running a command, \
-                confirm the working directory is correct (e.g., inspect with `ls` or `pwd`) and ensure \
-                any parent directories exist. Prefer absolute paths and quote paths containing spaces, \
-                such as `cd "/path/with spaces"`. Chain multiple commands with `&&` or `;` instead of \
-                embedding newlines. Avoid unnecessary `cd` usage unless explicitly required so the \
-                session remains stable. Outputs may be truncated when they become very large, and long \
-                running commands will be terminated once their configured timeout elapses.\
-                """;
-        return ShellTool.builder(WORKSPACE_ROOT)
-                .withName("execute_shell_command")
-                .withEnvironment(System.getenv())
-                .withShellCommand(List.of("cmd.exe"))
-                .withDescription(shellDescription)
-                .build();
     }
 
     /**
@@ -140,8 +130,20 @@ public class LocalAgent {
 
 
     public Agent buildAgent(String cwd) {
+        return buildAgent(cwd, null);
+    }
+
+    public Agent buildAgent(String cwd, List<McpServer> mcpServers) {
         WORKSPACE_ROOT = cwd;
         var tools = getTools();
+
+        // 添加 MCP 工具
+        if (!CollectionUtils.isEmpty(mcpServers)) {
+            List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
+            tools.addAll(mcpTools);
+            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
+        }
+
         List<Interceptor> interceptors = getInterceptors();
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
                 .description("请确认信息收集工具执行")
@@ -165,9 +167,10 @@ public class LocalAgent {
                         使用edit_file修改文件内容（内容修改以行为单位，如果需要修改的内容较多分成多次修改，每次最多修改3行内容）
                         使用write_file创建并写入文件内容
                         使用ls查看指定目录的文件列表
+                        使用Bash执行命令,使用BashOutput获取执行结果，使用KillShell结束命令 当前系统：%s
                         禁止使用ls逐步探索目录
                         直接使用grep搜索文件内容
-                        """.formatted(cwd, LocalDateTime.now().toString()))
+                        """.formatted(cwd, LocalDateTime.now().toString(), System.getProperty("os.name").toLowerCase()))
                 .interceptors(interceptors)
                 .outputKey("agent_output")
                 .returnReasoningContents(true)
