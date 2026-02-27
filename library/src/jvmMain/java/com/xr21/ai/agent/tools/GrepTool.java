@@ -49,7 +49,7 @@ public class GrepTool {
                     .getPathMatcher("glob:" + glob) : null;
 
             // Create gitignore utility for filtering
-            GitignoreUtil gitignoreUtil = new GitignoreUtil(searchPath);
+            GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(searchPath);
 
             Files.walk(searchPath)
                     .filter(Files::isRegularFile)

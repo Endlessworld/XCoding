@@ -42,7 +42,7 @@ public class GlobTool {
             List<ToolCallLocation> locations = new ArrayList<>();
 
             // Create gitignore utility for filtering
-            GitignoreUtil gitignoreUtil = new GitignoreUtil(basePathObj);
+            GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(basePathObj);
 
             Files.walk(basePathObj)
                     .filter(Files::isRegularFile)

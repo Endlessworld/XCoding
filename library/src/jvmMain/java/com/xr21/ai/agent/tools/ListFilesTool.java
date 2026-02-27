@@ -117,9 +117,9 @@ public class ListFilesTool {
 
     /**
      * Gets a GitignoreUtil instance for the given base path.
-     * If the path is within the workspace, uses the workspace root for consistent .gitignore handling.
+     * Uses the static factory method for better performance and caching.
      */
     private GitignoreUtil getGitignoreUtil(Path basePath) {
-        return new GitignoreUtil(basePath);
+        return GitignoreUtil.getInstance(basePath);
     }
 }

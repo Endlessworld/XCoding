@@ -101,7 +101,7 @@ public class ReadFileTool {
         boolean isEmpty = true;
 
         // Create gitignore utility for filtering files in this directory
-        GitignoreUtil gitignoreUtil = new GitignoreUtil(dir);
+        GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(dir);
 
         try (var paths = Files.walk(dir)) {
             for (Path path : paths.sorted().toList()) {
