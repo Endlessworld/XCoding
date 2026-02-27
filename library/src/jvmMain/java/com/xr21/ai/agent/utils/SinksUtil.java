@@ -29,6 +29,7 @@ import com.xr21.ai.agent.entity.AgentOutput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
@@ -146,15 +147,7 @@ public class SinksUtil {
     }
 
 
-    public static Flux<AgentOutput<Object>> toFlux(Agent agent, String input, String threadId, InterruptionMetadata feedbackMetadata, Map<String, Object> stateUpdate) {
-        var builder = RunnableConfig.builder().threadId(threadId);
-        if (feedbackMetadata != null) {
-            builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, feedbackMetadata);
-        }
-        if (stateUpdate != null && !stateUpdate.isEmpty()) {
-            builder.addStateUpdate(stateUpdate);
-        }
-        RunnableConfig runnableConfig = builder.build();
+    public static Flux<AgentOutput<Object>> toFlux(Agent agent, UserMessage input, RunnableConfig runnableConfig) {
         Flux<NodeOutput> nodeOutputFlux = null;
         try {
             nodeOutputFlux = agent.stream(input, runnableConfig);

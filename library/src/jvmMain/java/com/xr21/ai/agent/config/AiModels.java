@@ -11,6 +11,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 @Getter
@@ -18,11 +19,11 @@ import java.util.function.Supplier;
 public enum AiModels {
     DEEPSEEK_V3_2_TERMINUS("Pro/deepseek-ai/DeepSeek-V3.2", 0.75, 5000, () -> System.getenv("AI_OPENAPI_BASE_URL"), () -> System.getenv("AI_OPENAPI_API_KEY")), //
     PRO_GLM_4_7("Pro/zai-org/GLM-4.7", 0.5, 4000, () -> System.getenv("AI_OPENAPI_BASE_URL"), () -> System.getenv("AI_OPENAPI_API_KEY")),//
-    MINIMAX_M2_1("MiniMax-M2.1", 0.65, 50000, () -> System.getenv("AI_MINIMAX_BASE_URL"), () -> System.getenv("AI_MINIMAX_API_KEY")),//
+    MINIMAX_M2_1("MiniMax-M2.5", 0.65, 50000, () -> System.getenv("AI_MINIMAX_BASE_URL"), () -> System.getenv("AI_MINIMAX_API_KEY")),//
     MINIMAX_M2_1_LIGHTNING("MiniMax-M2.1-lightning", 0.65, 50000, () -> System.getenv("AI_MINIMAX_BASE_URL"), () -> System.getenv("AI_MINIMAX_API_KEY")),//
     MIMO_V2_FLASH("mimo-v2-flash", 0.65, 3000, () -> System.getenv("AI_XIAOMI_BASE_URL"), () -> System.getenv("AI_XIAOMI_API_KEY")),//
     DEEPSEEK_FUNCTION_CALL("deepseek-function_call", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
-    DOUBAO_SEED_CODE("doubao-seed-code", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
+    DOUBAO_SEED_CODE_2_0("doubao-seed-2.0-code", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
     GLM_4_7("glm-4.7", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
     DEEPSEEK_V3_2("deepseek-v3.2", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
     KIMI_K2_THINKING("kimi-k2-thinking", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
@@ -115,6 +116,9 @@ public enum AiModels {
                         .model(effectiveModelName)
                         .temperature(temperature)
                         .maxTokens(maxTokens)
+                        .parallelToolCalls(true)
+                        .extraBody(Map.of("thinking", Map.of("type", "enabled")))
+                        .reasoningEffort("medium")
                         .build())
                 .openAiApi(api)
                 .build();
