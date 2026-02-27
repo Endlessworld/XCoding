@@ -92,16 +92,9 @@ public class AcpAgent {
         log.info("[AcpAgent] Load session:  {}", request.sessionId());
         if (sessions.containsKey(request.sessionId())) {
             log.info("[AcpAgent] Session found");
-            Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder()
-                    .threadId(sessions.get(request.sessionId()).threadId)
-                    .build());
-            String modelId = checkpointOpt.get()
-                    .getState()
-                    .getOrDefault("model", AiModels.KIMI_K2_5.getModelName())
-                    .toString();
-            var modelState = checkpointOpt.map(Checkpoint::getState)
-                    .map(e -> new SessionModelState(modelId, AiModels.availableModes()))
-                    .orElse(sessionModelStateSupplier.get());
+            Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder().threadId(sessions.get(request.sessionId()).threadId).build());
+            String modelId = checkpointOpt.get().getState().getOrDefault("model", AiModels.KIMI_K2_5.getModelName()).toString();
+            var modelState = checkpointOpt.map(Checkpoint::getState).map(e -> new SessionModelState(modelId, AiModels.availableModes())).orElse(sessionModelStateSupplier.get());
             return new LoadSessionResponse(sessionModeState, modelState);
         }
         log.info("[AcpAgent] Session not found");
@@ -168,6 +161,10 @@ public class AcpAgent {
         session.history.add("User: " + userMessage);
         // 发送思考过程
         context.sendThought("✨✨✨XAgent正在处理中...✨✨✨");
+
+        var availableCommand = List.of(new AvailableCommand("/init", "初始化AGENT.md", new AvailableCommandInput("/init")));
+        context.sendUpdate(sessionId, new AvailableCommandsUpdate("available_commands_update", availableCommand));
+
         var runnableConfig = sessionsRunnableConfig.get(sessionId);
         runnableConfig.context().put("PromptRequest", promptRequest);
         runnableConfig.context().put("SyncPromptContext", context);
@@ -179,6 +176,8 @@ public class AcpAgent {
         CancellableRequest cancellableRequest = registerCancellableRequest(requestId, sessionId, currentThread, flux);
         StringBuilder responseBuilder = new StringBuilder();
         AtomicBoolean isFirst = new AtomicBoolean(true);
+        // 用于追踪是否是首次发送消息（用于添加换行符）
+        AtomicBoolean isFirstMessage = new AtomicBoolean(true);
         // 使用可取消的 Flux 订阅
         Disposable disposable = flux.takeUntil(cancelSignal -> isRequestCancelled(requestId)).doOnCancel(() -> {
             log.info("[AcpAgent] Request {} Flux subscription was cancelled", requestId);
@@ -196,8 +195,12 @@ public class AcpAgent {
             if (output.getChunk() != null) {
                 String chunk = output.getChunk();
                 responseBuilder.append(chunk);
-                // 流式发送消息片段给客户端
-                context.sendMessage(chunk);
+                // 流式发送消息片段给客户端，首次发送前加换行
+                if (isFirstMessage.getAndSet(false)) {
+                    context.sendMessage("\n" + chunk);
+                } else {
+                    context.sendMessage(chunk);
+                }
             }
 
             // 处理思考过程
