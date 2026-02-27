@@ -15,6 +15,7 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorIntercept
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.xr21.ai.agent.config.AiModels;
+import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.tools.*;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
@@ -117,8 +118,17 @@ public class LocalAgent {
         if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context()
                 .get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
             if (setSessionModeRequest.modeId().equalsIgnoreCase("plan")) {
-                interceptors.add(TodoListInterceptor.builder().build());
-                log.info("plan mode use TodoListInterceptor");
+                // Check if we're in ACP context
+                boolean isAcpContext = runnableConfig.context().containsKey("SyncPromptContext");
+                if (isAcpContext) {
+                    // Use ACP-compatible TodoList interceptor for ACP context
+                    interceptors.add(AcpTodoListInterceptor.builder().build());
+                    log.info("plan mode use AcpTodoListInterceptor (ACP context)");
+                } else {
+                    // Use regular TodoList interceptor for non-ACP context
+                    interceptors.add(TodoListInterceptor.builder().build());
+                    log.info("plan mode use TodoListInterceptor (non-ACP context)");
+                }
             }
         }
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()

@@ -269,14 +269,14 @@ public class AcpAgent {
                 }
             }
 
-            // 处理工具调用反馈 (来自 HumanInTheLoop 等机�?
+            // 处理工具调用反馈 (来自 HumanInTheLoop 等机制)
             if (!CollectionUtils.isEmpty(output.getToolFeedbacks())) {
                 for (var toolFeedback : output.getToolFeedbacks()) {
                     String toolName = toolFeedback.getName();
                     String description = toolFeedback.getDescription();
                     String feedbackMsg = String.format("[工具] %s: %s", toolName, description);
 
-                    // 发送思考过
+                    // 发送思考过程
                     context.sendThought(feedbackMsg);
 
                     // 如果toolCallId，发送更新通知
@@ -284,6 +284,16 @@ public class AcpAgent {
                     if (toolCallId != null) {
                         context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKind.THINK, ToolCallStatus.COMPLETED, List.of(new ToolCallContentBlock("content", new TextContent(description))), null, null, null, null));
                     }
+                }
+            }
+
+            // 处理Plan更新 (来自AcpWriteTodosTool等工具)
+            if (output.getMetadata() != null && output.getMetadata().containsKey("acp_plan")) {
+                Object planObj = output.getMetadata().get("acp_plan");
+                if (planObj instanceof Plan plan) {
+                    // 发送Plan更新到客户端
+                    context.sendUpdate(sessionId, plan);
+                    log.info("[AcpAgent] Sent Plan update with {} entries", plan.entries().size());
                 }
             }
         }).doOnError(error -> {

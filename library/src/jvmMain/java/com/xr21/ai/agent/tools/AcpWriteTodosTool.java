@@ -1,0 +1,206 @@
+/*
+ * Copyright 2024-2025 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.xr21.ai.agent.tools;
+
+import com.agentclientprotocol.sdk.spec.AcpSchema.*;
+import com.fasterxml.jackson.annotation.JsonClassDescription;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import org.springframework.ai.chat.model.ToolContext;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.function.FunctionToolCallback;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+
+import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_STATE_FOR_UPDATE_CONTEXT_KEY;
+
+/**
+ * ACP-compatible Tool for writing and managing todos in the agent workflow.
+ * This tool allows agents to create, update, and track task lists using ACP protocol.
+ */
+public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, ToolContext, AcpWriteTodosTool.Response> {
+
+    public static final String DEFAULT_TOOL_DESCRIPTION = """
+            Use this tool to create and manage a structured task list using ACP protocol.
+            This sends real-time Plan updates to the client showing your progress.
+            
+            When to use:
+            1. Complex multi-step tasks (3+ steps)
+            2. Non-trivial tasks requiring planning
+            3. User explicitly requests todo list
+            4. User provides multiple tasks
+            5. Plan may need revisions based on results
+            
+            How to use:
+            1. Mark tasks as IN_PROGRESS before starting
+            2. Mark as COMPLETED immediately after finishing
+            3. Update tasks as needed (add/remove/change)
+            4. Each update sends ACP Plan update
+            
+            Task States (ACP PlanEntryStatus):
+            - PENDING: Not started
+            - IN_PROGRESS: Currently working
+            - COMPLETED: Finished
+            
+            Task Priorities (ACP PlanEntryPriority):
+            - HIGH: Critical
+            - MEDIUM: Important  
+            - LOW: Nice-to-have
+            
+            Important: Don't use for simple tasks (<3 steps). Update status immediately.
+            """;
+
+    public AcpWriteTodosTool() {
+    }
+
+    @Override
+    public Response apply(Request request, ToolContext toolContext) {
+        try {
+            // Extract state from ToolContext
+            Map<String, Object> contextData = toolContext.getContext();
+            if (contextData == null) {
+                return new Response("Error: Tool context is not available");
+            }
+
+            Object extraStateObj = contextData.get(AGENT_STATE_FOR_UPDATE_CONTEXT_KEY);
+            if (extraStateObj == null) {
+                return new Response("Error: Extra state is not initialized");
+            }
+
+            if (!(extraStateObj instanceof Map)) {
+                return new Response("Error: Extra state has invalid type");
+            }
+
+            @SuppressWarnings("unchecked") Map<String, Object> extraState = (Map<String, Object>) extraStateObj;
+
+            // Convert request entries to ACP PlanEntries
+            List<PlanEntry> planEntries = convertToPlanEntries(request.entries);
+
+            // Create ACP Plan
+            Plan plan = new Plan("plan", planEntries);
+
+            // Store the plan in the state
+            extraState.put("acp_plan", plan);
+            extraState.put("todos", request.entries);
+
+            // Try to send ACP Plan update
+            sendAcpPlanUpdate(toolContext, plan);
+
+            return new Response("Updated todo list with " + request.entries.size() + " entries using ACP Plan");
+
+        } catch (ClassCastException e) {
+            return new Response("Error: Invalid state type - " + e.getMessage());
+        } catch (Exception e) {
+            return new Response("Error: Failed to update todos - " + e.getMessage());
+        }
+    }
+
+    /**
+     * Convert tool request entries to ACP PlanEntries
+     */
+    private List<PlanEntry> convertToPlanEntries(List<RequestEntry> entries) {
+        List<PlanEntry> planEntries = new ArrayList<>();
+
+        for (int i = 0; i < entries.size(); i++) {
+            RequestEntry entry = entries.get(i);
+            PlanEntry planEntry = new PlanEntry(i + ". " + entry.content(), entry.priority(), entry.status());
+            planEntries.add(planEntry);
+        }
+
+        return planEntries;
+    }
+
+    /**
+     * Send ACP Plan update through SyncPromptContext if available
+     */
+    private void sendAcpPlanUpdate(ToolContext toolContext, Plan plan) {
+        try {
+            Map<String, Object> contextData = toolContext.getContext();
+            if (contextData != null) {
+                Object syncPromptContext = contextData.get("SyncPromptContext");
+                if (syncPromptContext != null) {
+                    // Use reflection to call sendUpdate method
+                    Class<?> syncPromptContextClass = syncPromptContext.getClass();
+                    java.lang.reflect.Method sendUpdateMethod = syncPromptContextClass.getMethod("sendUpdate", String.class, SessionUpdate.class);
+
+                    // Get session ID from context
+                    String sessionId = (String) contextData.getOrDefault("sessionId", "default-session");
+
+                    // Send the plan update
+                    sendUpdateMethod.invoke(syncPromptContext, sessionId, plan);
+                }
+            }
+        } catch (Exception e) {
+            // Log but don't fail if we can't send the update
+            System.err.println("Warning: Could not send ACP Plan update: " + e.getMessage());
+        }
+    }
+
+    @JsonClassDescription("Request to write or update todos using ACP protocol")
+    public record Request(
+            @JsonProperty(required = true, value = "entries") @JsonPropertyDescription("List of todo entries with content, status and priority") List<RequestEntry> entries) {
+    }
+
+    @JsonClassDescription("A single todo entry for ACP protocol")
+    public record RequestEntry(
+            @JsonProperty(required = true, value = "content") @JsonPropertyDescription("Content/description of the todo item") String content,
+
+            @JsonProperty(value = "priority") @JsonPropertyDescription("Priority of the todo item (HIGH, MEDIUM, LOW)") PlanEntryPriority priority,
+
+            @JsonProperty(required = true, value = "status") @JsonPropertyDescription("Status of the todo item (PENDING, IN_PROGRESS, COMPLETED)") PlanEntryStatus status
+
+
+    ) {
+        public RequestEntry(String content, PlanEntryStatus status) {
+            this(content, PlanEntryPriority.MEDIUM, status);
+        }
+    }
+
+    public record Response(String message) {
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static class Builder {
+
+        private String name = "write_todos";
+
+        private String description = DEFAULT_TOOL_DESCRIPTION;
+
+        public Builder() {
+        }
+
+        public Builder withName(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public Builder withDescription(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public ToolCallback build() {
+            return FunctionToolCallback.builder(name, new AcpWriteTodosTool()).description(description).inputType(Request.class).build();
+        }
+
+    }
+}
