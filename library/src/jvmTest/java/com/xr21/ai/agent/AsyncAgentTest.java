@@ -55,7 +55,7 @@ public class AsyncAgentTest {
             var session = client.newSession(new NewSessionRequest(cwd, List.of()));
             System.out.println("Session: " + session.sessionId() + "\n");
             // Send prompts
-            String[] messages = {"这张图片是什么"};
+            String[] messages = {"你是谁 这张图片是什么"};
             for (String message : messages) {
                 System.out.println("Sending: " + message);
                 Path imagePath = Paths.get("C:\\Users\\Endless\\Desktop\\ScreenShot_2026-02-27_091706_421.png");

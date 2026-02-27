@@ -1,6 +1,8 @@
 package com.xr21.ai.agent.agent;
 
+import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.McpServer;
+import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.Agent;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.file.LocalFilesystemBackend;
@@ -8,6 +10,7 @@ import com.alibaba.cloud.ai.graph.agent.extension.interceptor.LargeResultEvictio
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
+import com.alibaba.cloud.ai.graph.agent.interceptor.todolist.TodoListInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
@@ -17,7 +20,7 @@ import com.xr21.ai.agent.tools.*;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.ToolsUtil;
-import org.slf4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
@@ -34,14 +37,13 @@ import java.util.Map;
 /**
  * 本地智能体
  */
+@Slf4j
 public class LocalAgent {
 
     public static final String fileSystemSaverFolder = System.getProperty("user.home") + File.separator + ".agi_working" + File.separator + "SystemSaver";
     public static final FileSystemSaver fileSystemSaver = FileSystemSaver.builder()
             .targetFolder(Path.of(fileSystemSaverFolder))
             .build();
-
-    private static final Logger log = org.slf4j.LoggerFactory.getLogger(LocalAgent.class);
 
     public static String WORKSPACE_ROOT = "D:\\IdeaProjects\\agi_working";
     private ChatModel chatModel;
@@ -50,9 +52,9 @@ public class LocalAgent {
         this.initializeChatModel();
     }
 
-    public static Agent createAgent(String cwd, List<McpServer> mcpServers) {
+    public static Agent createAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
         LocalAgent localAgent = new LocalAgent();
-        return localAgent.buildAgent(cwd, mcpServers);
+        return localAgent.buildAgent(cwd, mcpServers, runnableConfig);
     }
 
     private static List<ToolCallback> getTools() {
@@ -94,9 +96,16 @@ public class LocalAgent {
         return interceptors;
     }
 
-    public Agent buildAgent(String cwd, List<McpServer> mcpServers) {
+    public Agent buildAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
+
         WORKSPACE_ROOT = cwd;
         var tools = getTools();
+        if (runnableConfig.context().containsKey("SetSessionModelRequest") && runnableConfig.context()
+                .get("SetSessionModelRequest") instanceof AcpSchema.SetSessionModelRequest setSessionModelRequest) {
+            chatModel = AiModels.createByModelName(setSessionModelRequest.modelId());
+            log.info("use model: {}", setSessionModelRequest.modelId());
+        }
+
 
         // 添加 MCP 工具
         if (!CollectionUtils.isEmpty(mcpServers)) {
@@ -105,12 +114,19 @@ public class LocalAgent {
             log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
         }
         List<Interceptor> interceptors = getInterceptors();
+        if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context()
+                .get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
+            if (setSessionModeRequest.modeId().equalsIgnoreCase("plan")) {
+                interceptors.add(TodoListInterceptor.builder().build());
+                log.info("plan mode use TodoListInterceptor");
+            }
+        }
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
                 .description("请确认信息收集工具执行")
                 .build());
         var instruction = """
-                你是一个本地文件操作智能体，主要负责文件/内容查找，读取，文件创建，编辑,
-                当前工作目录: %s 所有文件操作仅限与工作目录之内
+                你是一个编码智能体 XAgent，通过文件/内容查找，读取，文件创建，编辑等工具进行项目代码编辑
+                当前工作目录: %s 所有文件操作仅限与工作目录之内 定义改值为 cwd
                 当前时间: %s
                 使用grep查找内容并定位问题(禁止执行**/*类似搜索，使用明确的关键字进行检索)
                 使用read_file读取详细内容
@@ -145,20 +161,7 @@ public class LocalAgent {
         } catch (Exception e) {
             log.error("Failed to initialize ChatModel: {}", e.getMessage());
             // 创建一个简单的回退模型，不依赖外部API
-            this.chatModel = createFallbackChatModel();
-        }
-    }
-
-    /**
-     * 创建回退聊天模型
-     */
-    private ChatModel createFallbackChatModel() {
-        try {
-            return AiModels.KIMI_K2_5.createChatModel();
-        } catch (Exception e) {
-            log.error("Failed to create fallback ChatModel: {}", e.getMessage());
-            throw new RuntimeException(e);
-
+            this.chatModel = AiModels.KIMI_K2_5.createChatModel();
         }
     }
 

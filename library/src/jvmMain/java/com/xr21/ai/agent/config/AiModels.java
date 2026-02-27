@@ -49,6 +49,16 @@ public enum AiModels {
     }
 
 
+    public static ChatModel createByModelName(String modelName) {
+        for (AiModels value : values()) {
+            if (value.modelName.equals(modelName)) {
+                return value.createChatModel();
+            }
+        }
+        throw new RuntimeException("模型id不存在" + modelName);
+    }
+
+
     /**
      * 设置默认模型配置（优先级高于环境变量）
      */
