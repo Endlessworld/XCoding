@@ -5,7 +5,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallContent;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.xr21.ai.agent.tools.ToolResult;
+import com.xr21.ai.agent.entity.ToolResult;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;

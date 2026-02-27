@@ -13,8 +13,7 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryIntercept
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
-import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
-import com.xr21.ai.agent.tools.ShellTools;
+import com.xr21.ai.agent.tools.*;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.ToolsUtil;
@@ -57,15 +56,10 @@ public class LocalAgent {
     }
 
     private static List<ToolCallback> getTools() {
-        List<String> includes = List.of("grep", "glob", "edit_file", "write_file", "read_file", "ls");
         var tools = new ArrayList<ToolCallback>();
-        var filesystemInterceptor = FilesystemInterceptor.builder().build();
-        tools.addAll(filesystemInterceptor.getTools()
-                .stream()
-                .filter(toolCallback -> includes.contains(toolCallback.getToolDefinition().name()))
-                .toList());
         var methodToolCallbackProvider = MethodToolCallbackProvider.builder()
-                .toolObjects(ShellTools.builder().build())
+                .toolObjects(ShellTools.builder()
+                        .build(), new EditFileTool(), new FeedBackTool(), new GlobTool(), new GrepTool(), new ListFilesTool(), new ReadFileTool(), new WebSearchTool(), new WriteFileTool())
                 .build();
         tools.addAll(List.of(methodToolCallbackProvider.getToolCallbacks()));
         return tools;

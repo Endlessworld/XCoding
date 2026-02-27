@@ -1,12 +1,10 @@
 package com.xr21.ai.agent.tools;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.entity.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.function.FunctionToolCallback;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,27 +14,38 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, ToolContext, Map<String, Object>> {
+/**
+ * 编辑文件的工具
+ */
+public class EditFileTool {
 
     private static final Logger logger = LoggerFactory.getLogger(EditFileTool.class);
 
-    public static ToolCallback createEditFileToolCallback(String description) {
-        return FunctionToolCallback.builder("edit_file", new EditFileTool())
-                .description(description)
-                .inputType(EditFileRequest.class)
-                .build();
-    }
+    // @formatter:off
+    @Tool(name = "edit_file", description = """
+        编辑现有文件中的文本内容。通过查找并替换指定字符串来修改文件。
+        这个工具用于对现有文件进行精确编辑，可以替换特定的文本片段。
 
-    @Override
-    public Map<String, Object> apply(EditFileRequest request, ToolContext toolContext) {
-        Path path = Paths.get(request.filePath);
+        Usage:
+            - file_path参数必须是绝对路径
+            - old_string参数是要查找和替换的文本
+            - new_string参数是用于替换的新文本
+            - replace_all参数控制是否替换所有出现（默认false，仅替换第一个）
+            - 如果old_string在文件中多次出现且replace_all=false，会返回错误
+        """)
+    public Map<String, Object> editFile(
+        @ToolParam(description = "The absolute path of the file to edit") String filePath,
+        @ToolParam(description = "The exact string to find and replace") String oldString,
+        @ToolParam(description = "The new string to replace with") String newString,
+        @ToolParam(description = "If true, replace all occurrences; if false, only replace if unique (default: false)", required = false) Boolean replaceAll
+    ) { // @formatter:on
+        Path path = Paths.get(filePath);
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             return ToolResult.builder()
-                    .error("File not found: " + request.filePath)
+                    .error("File not found: " + filePath)
                     .build();
         }
 
@@ -51,19 +60,19 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
 
         // 归一换行符，减少因 CRLF/LF 差异导致的匹配失败
         String normalizedContent = normalizeLineEndings(content);
-        String normalizedOld = normalizeLineEndings(request.oldString);
+        String normalizedOld = normalizeLineEndings(oldString);
 
         // 如果归一化后仍找不到，尝试直接匹配原始内容（兼容未归一化写法）
         boolean found = normalizedContent.contains(normalizedOld);
-        if (!found && !content.contains(request.oldString)) {
+        if (!found && !content.contains(oldString)) {
             return ToolResult.builder()
-                    .error("String not found in file: " + request.oldString)
-                    .put("stringSearched", request.oldString)
+                    .error("String not found in file: " + oldString)
+                    .put("stringSearched", oldString)
                     .build();
         }
 
         // 使用正则进行字面量匹配（跨行 DOTALL），确保对特殊字符安全
-        Pattern pattern = Pattern.compile(Pattern.quote(request.oldString), Pattern.DOTALL | Pattern.UNICODE_CHARACTER_CLASS);
+        Pattern pattern = Pattern.compile(Pattern.quote(oldString), Pattern.DOTALL | Pattern.UNICODE_CHARACTER_CLASS);
         Matcher matcher = pattern.matcher(content);
         String contentToUse = content;
         if (!matcher.find()) {
@@ -72,8 +81,8 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
             Matcher normalizedMatcher = normalizedPattern.matcher(normalizedContent);
             if (!normalizedMatcher.find()) {
                 return ToolResult.builder()
-                        .error("String not found in file (even after normalization): " + request.oldString)
-                        .put("stringSearched", request.oldString)
+                        .error("String not found in file (even after normalization): " + oldString)
+                        .put("stringSearched", oldString)
                         .build();
             } else {
                 // 如果在归一化后才找到，提示用户可能存在换行/空白差异
@@ -94,8 +103,10 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
             matchLines.add(findLineNumber(contentToUse, matcher.start()));
         }
 
+        boolean replaceAllFlag = replaceAll != null && replaceAll;
+
         // 如果不允许全局替换且出现多次，返回提示
-        if (!request.replaceAll && count > 1) {
+        if (!replaceAllFlag && count > 1) {
             return ToolResult.builder()
                     .error("String appears multiple times in file. Use replace_all=true or provide more context. Occurrences: " + count)
                     .build();
@@ -103,12 +114,12 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
 
         // 执行替换
         String newContent;
-        if (request.replaceAll) {
-            newContent = contentToUse.replaceAll(Pattern.quote(request.oldString),
-                    Matcher.quoteReplacement(request.newString));
+        if (replaceAllFlag) {
+            newContent = contentToUse.replaceAll(Pattern.quote(oldString),
+                    Matcher.quoteReplacement(newString));
         } else {
-            newContent = contentToUse.replaceFirst(Pattern.quote(request.oldString),
-                    Matcher.quoteReplacement(request.newString));
+            newContent = contentToUse.replaceFirst(Pattern.quote(oldString),
+                    Matcher.quoteReplacement(newString));
         }
 
         // 保存文件时保留原有权限
@@ -134,7 +145,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
                     .build();
         }
 
-        int replacements = request.replaceAll ? count : 1;
+        int replacements = replaceAllFlag ? count : 1;
         String absolutePath = path.toAbsolutePath().toString();
 
         // 构建结果
@@ -142,16 +153,16 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
                 .success(true)
                 .content("File edited successfully")
                 .put("message", "File edited successfully")
-                .put("filePath", request.filePath)
+                .put("filePath", filePath)
                 .put("replacements", replacements)
                 .put("totalOccurrences", count)
-                .put("replacedAll", request.replaceAll);
+                .put("replacedAll", replaceAllFlag);
 
         // 添加 ToolCallDiff 内容类型
-        result.toolCallContent(ToolResult.createDiffContent(absolutePath, request.oldString, request.newString));
+        result.toolCallContent(ToolResult.createDiffContent(absolutePath, oldString, newString));
 
         // 添加 locations - 每个匹配的行号
-        if (request.replaceAll) {
+        if (replaceAllFlag) {
             for (Integer line : matchLines) {
                 result.location(absolutePath, line);
             }
@@ -178,7 +189,7 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
 
     /**
      * 将字符串中的 CRLF 统一转换为 LF，减少因换行符差异导致的匹配失败。
-     * 如需更强的“空白归一”，可以在此扩展对制表符、尾随空格的处理。
+     * 如需更强的"空白归一"，可以在此扩展对制表符、尾随空格的处理。
      */
     private String normalizeLineEndings(String s) {
         if (s == null) {
@@ -186,33 +197,5 @@ public class EditFileTool implements BiFunction<EditFileTool.EditFileRequest, To
         }
         // 将 \r\n 或 \r 统统替换为 \n
         return s.replace("\r\n", "\n").replace("\r", "\n");
-    }
-
-    public static class EditFileRequest {
-        @JsonProperty(value = "file_path", required = true)
-        @JsonPropertyDescription("The absolute path of the file to edit")
-        public String filePath;
-
-        @JsonProperty(value = "old_string", required = true)
-        @JsonPropertyDescription("The exact string to find and replace")
-        public String oldString;
-
-        @JsonProperty(value = "new_string", required = true)
-        @JsonPropertyDescription("The new string to replace with")
-        public String newString;
-
-        @JsonProperty("replace_all")
-        @JsonPropertyDescription("If true, replace all occurrences; if false, only replace if unique (default: false)")
-        public boolean replaceAll = false;
-
-        public EditFileRequest() {
-        }
-
-        public EditFileRequest(String filePath, String oldString, String newString, boolean replaceAll) {
-            this.filePath = filePath;
-            this.oldString = oldString;
-            this.newString = newString;
-            this.replaceAll = replaceAll;
-        }
     }
 }

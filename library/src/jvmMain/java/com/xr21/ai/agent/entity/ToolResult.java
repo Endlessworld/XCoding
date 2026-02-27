@@ -1,4 +1,4 @@
-package com.xr21.ai.agent.tools;
+package com.xr21.ai.agent.entity;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallContent;

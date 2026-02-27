@@ -1,16 +1,10 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by Fernflower decompiler)
-//
-
 package com.xr21.ai.agent.tools;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.function.FunctionToolCallback;
+import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.utils.GitignoreUtil;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -18,64 +12,76 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
-public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, Map<String, Object>> {
-    public static final String DESCRIPTION = "Search for a pattern in files.\n\nUsage:\n- The pattern parameter is the text to search for (literal string, not regex)\n- The path parameter filters which directory to search in\n- The glob parameter accepts a glob pattern to filter which files to search\n\nExamples:\n- Search all files: `grep(pattern=\"TODO\")`\n- The search is case-sensitive by default.\n";
+/**
+ * 在文件中搜索文本模式的工具
+ */
+public class GrepTool {
 
-    public static ToolCallback createGrepToolCallback(String description) {
-        return FunctionToolCallback.builder("grep", new GrepTool())
-                .description(description)
-                .inputType(GrepRequest.class)
-                .build();
-    }
+    // @formatter:off
+    @Tool(name = "grep", description = """
+        Search for a pattern in files.
 
-    public Map<String, Object> apply(GrepRequest request, ToolContext toolContext) {
+        Usage:
+        - The pattern parameter is the text to search for (literal string, not regex)
+        - The path parameter filters which directory to search in
+        - The glob parameter accepts a glob pattern to filter which files to search
+
+        Examples:
+        - Search all files: `grep(pattern="TODO")`
+        - The search is case-sensitive by default.
+        """)
+    public Map<String, Object> grep(
+        @ToolParam(description = "The text pattern to search for") String pattern,
+        @ToolParam(description = "The directory path to search in (default: base path)", required = false) String path,
+        @ToolParam(description = "File pattern to filter which files to search (e.g., '*.java')", required = false) String glob,
+        @ToolParam(description = "Output format: 'files_with_matches', 'content', or 'count' (default: 'files_with_matches')", required = false) String outputMode
+    ) { // @formatter:on
         try {
-            Path searchPath = request.path != null ? Paths.get(request.path) : Paths.get(WORKSPACE_ROOT);
+            Path searchPath = path != null ? Paths.get(path) : Paths.get(WORKSPACE_ROOT);
             List<String> matches = new ArrayList<>();
             List<ToolCallLocation> locations = new ArrayList<>();
             Map<String, Integer> fileMatchCounts = new HashMap<>();
 
-            PathMatcher globMatcher = request.glob != null ? FileSystems.getDefault()
-                    .getPathMatcher("glob:" + request.glob) : null;
+            PathMatcher globMatcher = glob != null ? FileSystems.getDefault()
+                    .getPathMatcher("glob:" + glob) : null;
 
             // Create gitignore utility for filtering
             GitignoreUtil gitignoreUtil = new GitignoreUtil(searchPath);
 
             Files.walk(searchPath)
-                    .filter((x$0) -> Files.isRegularFile(x$0))
-                    .filter((path) -> !gitignoreUtil.isIgnored(path))
-                    .filter((path) -> globMatcher == null || globMatcher.matches(path.getFileName()))
-                    .forEach((path) -> {
+                    .filter(Files::isRegularFile)
+                    .filter(p -> !gitignoreUtil.isIgnored(p))
+                    .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))
+                    .forEach(p -> {
                         try {
-                            List<String> lines = Files.readAllLines(path);
-                            String absolutePath = path.toAbsolutePath().toString();
+                            List<String> lines = Files.readAllLines(p);
+                            String absolutePath = p.toAbsolutePath().toString();
                             boolean fileAdded = false;
 
                             for (int i = 0; i < lines.size(); ++i) {
-                                if (lines.get(i).contains(request.pattern)) {
+                                if (lines.get(i).contains(pattern)) {
                                     String matchEntry;
-                                    switch (request.outputMode) {
+                                    switch (outputMode != null ? outputMode : "files_with_matches") {
                                         case "files_with_matches":
                                             if (!fileAdded) {
-                                                matchEntry = path.toString();
+                                                matchEntry = p.toString();
                                                 fileAdded = true;
                                             } else {
                                                 continue;
                                             }
                                             break;
                                         case "content":
-                                            matchEntry = path + ":" + (i + 1) + ": " + lines.get(i);
+                                            matchEntry = p + ":" + (i + 1) + ": " + lines.get(i);
                                             break;
                                         case "count":
-                                            fileMatchCounts.merge(path.toString(), 1, Integer::sum);
+                                            fileMatchCounts.merge(p.toString(), 1, Integer::sum);
                                             continue;
                                         default:
                                             if (!fileAdded) {
-                                                matchEntry = path.toString();
+                                                matchEntry = p.toString();
                                                 fileAdded = true;
                                             } else {
                                                 continue;
@@ -87,7 +93,7 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
                                     // Add location for this match
                                     locations.add(new ToolCallLocation(absolutePath, i + 1));
 
-                                    if ("files_with_matches".equals(request.outputMode)) {
+                                    if ("files_with_matches".equals(outputMode)) {
                                         break;
                                     }
                                 }
@@ -99,7 +105,7 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
 
             ToolResult result = ToolResult.builder();
 
-            if ("count".equals(request.outputMode) && !fileMatchCounts.isEmpty()) {
+            if ("count".equals(outputMode) && !fileMatchCounts.isEmpty()) {
                 List<String> countEntries = new ArrayList<>();
                 for (Map.Entry<String, Integer> entry : fileMatchCounts.entrySet()) {
                     countEntries.add(entry.getKey() + ": " + entry.getValue() + " matches");
@@ -107,8 +113,8 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
                 result.put("matches", String.join("\n", countEntries));
                 result.content(String.join("\n", countEntries));
             } else if (matches.isEmpty()) {
-                result.put("matches", "No matches found for pattern: " + request.pattern);
-                result.content("No matches found for pattern: " + request.pattern);
+                result.put("matches", "No matches found for pattern: " + pattern);
+                result.content("No matches found for pattern: " + pattern);
             } else {
                 result.put("matches", String.join("\n", matches));
                 result.content(String.join("\n", matches));
@@ -125,33 +131,6 @@ public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, M
             return ToolResult.builder()
                     .error("Error searching files: " + e.getMessage())
                     .build();
-        }
-    }
-
-    public static class GrepRequest {
-        @JsonProperty(
-                required = true
-        )
-        @JsonPropertyDescription("The text pattern to search for")
-        public String pattern;
-        @JsonProperty("path")
-        @JsonPropertyDescription("The directory path to search in (default: base path)")
-        public String path;
-        @JsonProperty("glob")
-        @JsonPropertyDescription("File pattern to filter which files to search (e.g., '*.java')")
-        public String glob;
-        @JsonProperty("output_mode")
-        @JsonPropertyDescription("Output format: 'files_with_matches', 'content', or 'count' (default: 'files_with_matches')")
-        public String outputMode = "files_with_matches";
-
-        public GrepRequest() {
-        }
-
-        public GrepRequest(String pattern, String path, String glob, String outputMode) {
-            this.pattern = pattern;
-            this.path = path;
-            this.glob = glob;
-            this.outputMode = outputMode;
         }
     }
 }
