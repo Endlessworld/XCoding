@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.xr21"
-version = "1.0.0"
+version = "0.0.1"
 
 java {
     toolchain {
@@ -98,7 +98,7 @@ mavenPublishing {
 
     signAllPublications()
 
-    coordinates(group.toString(), "ai-agents", version.toString())
+    coordinates(group.toString(), "XAgent", version.toString())
 
     pom {
         name = "AI Agents"
@@ -145,6 +145,7 @@ tasks.register<Jar>("fatJar") {
         if (it.isDirectory) it else zipTree(it)
     })
 
+    archiveBaseName.set("XAgent")
     archiveClassifier.set("all")
 }
 
@@ -152,7 +153,7 @@ tasks.register<Jar>("fatJar") {
 graalvmNative {
     binaries {
         named("main") {
-            imageName.set("ai-agents")
+            imageName.set("XAgent")
             mainClass.set("com.xr21.ai.agent.AgentApplication")
             javaLauncher.set(javaToolchains.launcherFor {
                 languageVersion.set(JavaLanguageVersion.of(17))
