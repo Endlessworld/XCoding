@@ -15,10 +15,16 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema.*;
+import com.agentclientprotocol.sdk.agent.SyncPromptContext;
+import com.agentclientprotocol.sdk.spec.AcpSchema.Plan;
+import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntry;
+import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryPriority;
+import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryStatus;
+import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -34,6 +40,7 @@ import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_
  * ACP-compatible Tool for writing and managing todos in the agent workflow.
  * This tool allows agents to create, update, and track task lists using ACP protocol.
  */
+@Slf4j
 public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, ToolContext, AcpWriteTodosTool.Response> {
 
     public static final String DEFAULT_TOOL_DESCRIPTION = """
@@ -59,9 +66,9 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
             - COMPLETED: Finished
             
             Task Priorities (ACP PlanEntryPriority):
-            - HIGH: Critical
-            - MEDIUM: Important  
-            - LOW: Nice-to-have
+            - high: Critical
+            - medium: Important  
+            - low: Nice-to-have
             
             Important: Don't use for simple tasks (<3 steps). Update status immediately.
             """;
@@ -87,7 +94,7 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
                 return new Response("Error: Extra state has invalid type");
             }
 
-            @SuppressWarnings("unchecked") Map<String, Object> extraState = (Map<String, Object>) extraStateObj;
+//            @SuppressWarnings("unchecked") Map<String, Object> extraState = (Map<String, Object>) extraStateObj;
 
             // Convert request entries to ACP PlanEntries
             List<PlanEntry> planEntries = convertToPlanEntries(request.entries);
@@ -95,11 +102,6 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
             // Create ACP Plan
             Plan plan = new Plan("plan", planEntries);
 
-            // Store the plan in the state
-            extraState.put("acp_plan", plan);
-            extraState.put("todos", request.entries);
-
-            // Try to send ACP Plan update
             sendAcpPlanUpdate(toolContext, plan);
 
             return new Response("Updated todo list with " + request.entries.size() + " entries using ACP Plan");
@@ -119,7 +121,8 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
 
         for (int i = 0; i < entries.size(); i++) {
             RequestEntry entry = entries.get(i);
-            PlanEntry planEntry = new PlanEntry(i + ". " + entry.content(), entry.priority(), entry.status());
+
+            PlanEntry planEntry = new PlanEntry(i + ". " + entry.content(), PlanEntryPriority.valueOf(entry.priority()), PlanEntryStatus.valueOf(entry.status()));
             planEntries.add(planEntry);
         }
 
@@ -131,21 +134,20 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
      */
     private void sendAcpPlanUpdate(ToolContext toolContext, Plan plan) {
         try {
-            Map<String, Object> contextData = toolContext.getContext();
-            if (contextData != null) {
-                Object syncPromptContext = contextData.get("SyncPromptContext");
-                if (syncPromptContext != null) {
-                    // Use reflection to call sendUpdate method
-                    Class<?> syncPromptContextClass = syncPromptContext.getClass();
-                    java.lang.reflect.Method sendUpdateMethod = syncPromptContextClass.getMethod("sendUpdate", String.class, SessionUpdate.class);
 
+            if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
+                log.info("config context {}", config.context());
+                log.info("config context PromptRequest {}", config.context().get("PromptRequest"));
+                log.info("config context SyncPromptContext {}", config.context().get("SyncPromptContext"));
+                if (config.context().get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
                     // Get session ID from context
-                    String sessionId = (String) contextData.getOrDefault("sessionId", "default-session");
-
+                    String sessionId = (String) config.context().getOrDefault("sessionId", "default-session");
                     // Send the plan update
-                    sendUpdateMethod.invoke(syncPromptContext, sessionId, plan);
+                    syncPromptContext.sendUpdate(sessionId, plan);
+                    log.info("sendUpdate plan: {}", plan);
                 }
             }
+
         } catch (Exception e) {
             // Log but don't fail if we can't send the update
             System.err.println("Warning: Could not send ACP Plan update: " + e.getMessage());
@@ -161,14 +163,14 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
     public record RequestEntry(
             @JsonProperty(required = true, value = "content") @JsonPropertyDescription("Content/description of the todo item") String content,
 
-            @JsonProperty(value = "priority") @JsonPropertyDescription("Priority of the todo item (HIGH, MEDIUM, LOW)") PlanEntryPriority priority,
+            @JsonProperty(value = "priority") @JsonPropertyDescription("Priority of the todo item (HIGH, MEDIUM, LOW)") String priority,
 
-            @JsonProperty(required = true, value = "status") @JsonPropertyDescription("Status of the todo item (PENDING, IN_PROGRESS, COMPLETED)") PlanEntryStatus status
+            @JsonProperty(required = true, value = "status") @JsonPropertyDescription("Status of the todo item (PENDING, IN_PROGRESS, COMPLETED)") String status
 
 
     ) {
-        public RequestEntry(String content, PlanEntryStatus status) {
-            this(content, PlanEntryPriority.MEDIUM, status);
+        public RequestEntry(String content, String status) {
+            this(content, "MEDIUM", status);
         }
     }
 
