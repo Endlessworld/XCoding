@@ -1,6 +1,7 @@
 package com.xr21.ai.agent.utils;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -56,7 +57,7 @@ public class GitignoreUtil {
             return patterns;
         }
 
-        try (Stream<String> lines = Files.lines(gitignorePath)) {
+        try (Stream<String> lines = Files.lines(gitignorePath, StandardCharsets.UTF_8)) {
             lines.map(String::trim)
                     .filter(line -> !line.isEmpty() && !line.startsWith("#"))
                     .forEach(pattern -> {
@@ -68,7 +69,21 @@ public class GitignoreUtil {
                         }
                     });
         } catch (IOException e) {
-            // If we can't read the file, just use default patterns
+            // If UTF-8 fails, try ISO-8859-1
+            try (Stream<String> lines = Files.lines(gitignorePath, StandardCharsets.ISO_8859_1)) {
+                lines.map(String::trim)
+                        .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                        .forEach(pattern -> {
+                            try {
+                                Pattern regex = convertGitignorePatternToRegex(pattern);
+                                patterns.add(regex);
+                            } catch (Exception e2) {
+                                // Skip invalid patterns
+                            }
+                        });
+            } catch (IOException e2) {
+                // If we can't read the file, just use default patterns
+            }
         }
 
         return patterns;
