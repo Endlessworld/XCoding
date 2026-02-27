@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
 public class GlobTool implements BiFunction<GlobTool.GlobPattern, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = "Find files matching a glob pattern.\n\nUsage:\n- Supports standard glob patterns: `*` (any characters), `**` (any directories), `?` (single character)\n- Returns a list of absolute file paths that match the pattern\n\nExamples:\n- `**/*.java` - Find all Java files\n- `*.txt` - Find all text files in root\n- `/src/**/*.xml` - Find all XML files under /src\n";

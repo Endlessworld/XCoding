@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
 public class GrepTool implements BiFunction<GrepTool.GrepRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = "Search for a pattern in files.\n\nUsage:\n- The pattern parameter is the text to search for (literal string, not regex)\n- The path parameter filters which directory to search in\n- The glob parameter accepts a glob pattern to filter which files to search\n\nExamples:\n- Search all files: `grep(pattern=\"TODO\")`\n- The search is case-sensitive by default.\n";

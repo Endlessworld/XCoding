@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
 public class ReadFileTool implements BiFunction<ReadFileTool.ReadFileRequest, ToolContext, Map<String, Object>> {
     public static final String DESCRIPTION = """

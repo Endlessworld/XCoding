@@ -18,7 +18,7 @@ import java.nio.file.Paths;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
 public class WriteFileTool implements BiFunction<WriteFileTool.WriteFileRequest, ToolContext, Map<String, Object>> {
 

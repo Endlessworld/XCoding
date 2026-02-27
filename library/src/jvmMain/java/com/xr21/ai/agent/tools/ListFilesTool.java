@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static com.xr21.ai.agent.LocalAgent.WORKSPACE_ROOT;
+import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
 public class ListFilesTool implements BiFunction<ListFilesTool.ListFilesRequest, ToolContext, Map<String, Object>> {
 

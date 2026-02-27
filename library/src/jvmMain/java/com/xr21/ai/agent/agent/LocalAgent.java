@@ -1,4 +1,4 @@
-package com.xr21.ai.agent;
+package com.xr21.ai.agent.agent;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema.McpServer;
 import com.alibaba.cloud.ai.graph.agent.Agent;
@@ -146,7 +146,7 @@ public class LocalAgent {
      */
     public void initializeChatModel() {
         try {
-            this.chatModel = AiModels.DEEPSEEK_V3_2.createChatModel();
+            this.chatModel = AiModels.KIMI_K2_5.createChatModel();
             log.info("ChatModel initialized successfully");
         } catch (Exception e) {
             log.error("Failed to initialize ChatModel: {}", e.getMessage());

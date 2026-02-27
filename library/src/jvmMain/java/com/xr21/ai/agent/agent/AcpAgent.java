@@ -1,21 +1,20 @@
-package com.xr21.ai.agent;
+package com.xr21.ai.agent.agent;
 
-import com.agentclientprotocol.sdk.agent.AcpAgent;
-import com.agentclientprotocol.sdk.agent.AcpSyncAgent;
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
-import com.agentclientprotocol.sdk.agent.transport.StdioAcpAgentTransport;
+import com.agentclientprotocol.sdk.annotation.*;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.*;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.Agent;
 import com.alibaba.cloud.ai.graph.checkpoint.Checkpoint;
 import com.xr21.ai.agent.config.AiModels;
+import com.xr21.ai.agent.entity.AcpSession;
 import com.xr21.ai.agent.entity.AgentOutput;
+import com.xr21.ai.agent.entity.CancellableRequest;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.ToolKindFind;
 import com.xr21.ai.agent.utils.SinksUtil;
 import com.xr21.ai.agent.utils.ToolsUtil;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -32,14 +31,10 @@ import java.util.function.Supplier;
 
 import static com.xr21.ai.agent.utils.ToolsUtil.describeMcpServer;
 
-/**
- * ACP 协议包装LocalAgent
- * 支持通过 ACP (Agent Client Protocol) 与客户端通信
- */
 @Slf4j
-public class AcpLocalAgent {
+@com.agentclientprotocol.sdk.annotation.AcpAgent
+public class AcpAgent {
 
-    // Store MCP servers per session
     private static final Map<String, List<McpServer>> sessionMcpServers = new ConcurrentHashMap<>();
     private final Map<String, AcpSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, RunnableConfig> sessionsRunnableConfig = new ConcurrentHashMap<>();
@@ -47,117 +42,110 @@ public class AcpLocalAgent {
     private final Map<String, CancellableRequest> activeRequests = new ConcurrentHashMap<>();
     private final SessionModeState sessionModeState = new SessionModeState("chat", List.of(new SessionMode("Agent", "Agent", "智能体模式"), new SessionMode("Plan", "Plan", "规划执行模式")));
     private final Supplier<SessionModelState> sessionModelStateSupplier = () -> new SessionModelState(AiModels.KIMI_K2_5.getModelName(), AiModels.availableModes());
-    private final SessionModelState sessionModelState = new SessionModelState(AiModels.KIMI_K2_5.getModelName(), AiModels.availableModes());
 
-    public static void main(String[] args) {
-        AcpLocalAgent acpAgent = new AcpLocalAgent();
+    @Initialize
+    InitializeResponse init(AcpSchema.InitializeRequest request) {
+        log.info("[AcpLocalAgent] Client initialized, protocol version:  {}", request.protocolVersion());
+        log.info("[AcpLocalAgent] Client capabilities:  {}", request.clientCapabilities());
+        var mcpCapabilities = new McpCapabilities(true, true);
+        var promptCapabilities = new PromptCapabilities(true, true, true);
+        var authMethods = new AuthMethod("login", "login", "登录鉴权");
+        var agentCapabilities = new AgentCapabilities(true, mcpCapabilities, promptCapabilities);
+        return new InitializeResponse(1, agentCapabilities, List.of(authMethods), null);
+
+    }
+
+    @NewSession
+    NewSessionResponse newSession(AcpSchema.NewSessionRequest request) {
+        String sessionId = UUID.randomUUID().toString();
+        String threadId = "acp-session-" + System.currentTimeMillis();
+        String cwd = request.cwd() != null ? request.cwd() : System.getProperty("user.dir");
+        sessions.put(sessionId, new AcpSession(sessionId, threadId, cwd));
+        log.info("[AcpLocalAgent] New session created:  {}", sessionId);
+        log.info("[AcpLocalAgent] Working directory:  {}", cwd);
+
+        // Store MCP servers for this session
+        List<McpServer> mcpServers = request.mcpServers();
+        if (mcpServers != null && !mcpServers.isEmpty()) {
+            sessionMcpServers.put(sessionId, new ArrayList<>(mcpServers));
+            log.info("[McpAgent] Received  {}", mcpServers.size() + " MCP server(s)");
+            for (McpServer server : mcpServers) {
+                log.info("[McpAgent]   -  {}", describeMcpServer(server));
+            }
+        } else {
+            log.info("[McpAgent] No MCP servers provided");
+        }
         try {
-            acpAgent.start();
-        } catch (Throwable e) {
+            var builder = RunnableConfig.builder().threadId(sessionId);
+//                        builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, null);
+            builder.addStateUpdate(new HashMap<>());
+            RunnableConfig runnableConfig = builder.build();
+            sessionsRunnableConfig.put(sessionId, runnableConfig);
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
+        agents.put(sessionId, LocalAgent.createAgent(request.cwd(), mcpServers));
+        return new NewSessionResponse(sessionId, sessionModeState, sessionModelStateSupplier.get());
     }
 
-    /**
-     * 构建并启动 ACP Agent
-     */
-    public void start() {
-        log.info("[AcpLocalAgent] Starting...");
-
-        var transport = new StdioAcpAgentTransport();
-
-        AcpSyncAgent acpAgent = AcpAgent.sync(transport)
-                // 初始化处理器
-                .initializeHandler(req -> {
-                    log.info("[AcpLocalAgent] Client initialized, protocol version:  {}", req.protocolVersion());
-                    log.info("[AcpLocalAgent] Client capabilities:  {}", req.clientCapabilities());
-                    var mcpCapabilities = new McpCapabilities(true, true);
-                    var promptCapabilities = new PromptCapabilities(true, true, true);
-                    var authMethods = new AuthMethod("login", "login", "登录鉴权");
-                    var agentCapabilities = new AgentCapabilities(true, mcpCapabilities, promptCapabilities);
-                    return new InitializeResponse(1, agentCapabilities, List.of(authMethods), null);
-                })
-                // 新会话处理器
-                .newSessionHandler(req -> {
-                    String sessionId = UUID.randomUUID().toString();
-                    String threadId = "acp-session-" + System.currentTimeMillis();
-                    String cwd = req.cwd() != null ? req.cwd() : System.getProperty("user.dir");
-                    sessions.put(sessionId, new AcpSession(sessionId, threadId, cwd));
-                    log.info("[AcpLocalAgent] New session created:  {}", sessionId);
-                    log.info("[AcpLocalAgent] Working directory:  {}", cwd);
-
-                    // Store MCP servers for this session
-                    List<McpServer> mcpServers = req.mcpServers();
-                    if (mcpServers != null && !mcpServers.isEmpty()) {
-                        sessionMcpServers.put(sessionId, new ArrayList<>(mcpServers));
-                        log.info("[McpAgent] Received  {}", mcpServers.size() + " MCP server(s)");
-                        for (McpServer server : mcpServers) {
-                            log.info("[McpAgent]   -  {}", describeMcpServer(server));
-                        }
-                    } else {
-                        log.info("[McpAgent] No MCP servers provided");
-                    }
-                    try {
-                        var builder = RunnableConfig.builder().threadId(sessionId);
-//                        builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, null);
-                        builder.addStateUpdate(new HashMap<>());
-                        RunnableConfig runnableConfig = builder.build();
-                        sessionsRunnableConfig.put(sessionId, runnableConfig);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                    agents.put(sessionId, LocalAgent.createAgent(req.cwd(), mcpServers));
-                    return new NewSessionResponse(sessionId, sessionModeState, sessionModelState);
-                })
-                // 加载会话处理
-                .loadSessionHandler((LoadSessionRequest req) -> {
-                    log.info("[AcpLocalAgent] Load session:  {}", req.sessionId());
-                    if (sessions.containsKey(req.sessionId())) {
-                        log.info("[AcpLocalAgent] Session found");
-                        Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder()
-                                .threadId(sessions.get(req.sessionId()).threadId)
-                                .build());
-                        String modelId = checkpointOpt.get()
-                                .getState()
-                                .getOrDefault("model", AiModels.KIMI_K2_5.getModelName())
-                                .toString();
-                        var modelState = checkpointOpt.map(Checkpoint::getState)
-                                .map(e -> new SessionModelState(modelId, AiModels.availableModes()))
-                                .orElse(sessionModelState);
-                        return new LoadSessionResponse(sessionModeState, modelState);
-                    }
-                    log.info("[AcpLocalAgent] Session not found");
-                    return new LoadSessionResponse(sessionModeState, sessionModelState);
-                })
-                // 提示处理- 核心逻辑
-                .promptHandler(this::handlePrompt)
-                // 取消处理
-                .cancelHandler(this::handleCancel)
-                //设置模式
-                .setSessionModeHandler(request -> {
-                    RunnableConfig runnableConfig = sessionsRunnableConfig.get(request.sessionId());
-                    runnableConfig.metadata().ifPresent(metadata -> metadata.put("SetSessionModeRequest", request));
-                    return new SetSessionModeResponse();
-                })
-                //切换模型
-                .setSessionModelHandler(request -> {
-                    RunnableConfig runnableConfig = sessionsRunnableConfig.get(request.sessionId());
-                    runnableConfig.metadata().ifPresent(metadata -> metadata.put("SetSessionModelRequest", request));
-                    return new SetSessionModelResponse();
-                })
-                .build();
-
-        log.info("[AcpLocalAgent] Ready, waiting for messages...");
-        acpAgent.run();
-        log.info("[AcpLocalAgent] Shutdown.");
+    @LoadSession
+    LoadSessionResponse loadSession(AcpSchema.LoadSessionRequest request) {
+        log.info("[AcpLocalAgent] Load session:  {}", request.sessionId());
+        if (sessions.containsKey(request.sessionId())) {
+            log.info("[AcpLocalAgent] Session found");
+            Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder()
+                    .threadId(sessions.get(request.sessionId()).threadId)
+                    .build());
+            String modelId = checkpointOpt.get()
+                    .getState()
+                    .getOrDefault("model", AiModels.KIMI_K2_5.getModelName())
+                    .toString();
+            var modelState = checkpointOpt.map(Checkpoint::getState)
+                    .map(e -> new SessionModelState(modelId, AiModels.availableModes()))
+                    .orElse(sessionModelStateSupplier.get());
+            return new LoadSessionResponse(sessionModeState, modelState);
+        }
+        log.info("[AcpLocalAgent] Session not found");
+        return new LoadSessionResponse(sessionModeState, sessionModelStateSupplier.get());
     }
 
-    /**
-     * 处理用户提示
-     */
-    @SneakyThrows
-    private PromptResponse handlePrompt(PromptRequest promptRequest, SyncPromptContext context) {
+    @Cancel
+    void cancelSession(@SessionId String sessionId) {
+        log.info("[AcpLocalAgent] Cancel request for session:  {}", sessionId);
+        // 取消该会话的所有活跃请求
+        List<CancellableRequest> requestsToCancel = new ArrayList<>();
+        for (Map.Entry<String, CancellableRequest> entry : activeRequests.entrySet()) {
+            if (entry.getValue().sessionId.equals(sessionId)) {
+                requestsToCancel.add(entry.getValue());
+            }
+        }
+        // 执行取消操作
+        for (CancellableRequest request : requestsToCancel) {
+            log.info("[AcpLocalAgent] Cancelling request: {} for session: {}", request.requestId, sessionId);
+            request.cancel();
+            activeRequests.remove(request.requestId);
+        }
+        // 清理会话资源
+        cleanupSessionResources(sessionId);
+        log.info("[AcpLocalAgent] Cancelled {} active requests for session: {}", requestsToCancel.size(), sessionId);
+    }
+
+    @SetSessionMode
+    SetSessionModeResponse setSessionMode(AcpSchema.SetSessionModeRequest request) {
+        RunnableConfig runnableConfig = sessionsRunnableConfig.get(request.sessionId());
+        runnableConfig.metadata().ifPresent(metadata -> metadata.put("SetSessionModeRequest", request));
+        return new SetSessionModeResponse();
+    }
+
+    @SetSessionModel
+    SetSessionModelResponse setSessionModel(AcpSchema.SetSessionModelRequest request) {
+        RunnableConfig runnableConfig = sessionsRunnableConfig.get(request.sessionId());
+        runnableConfig.metadata().ifPresent(metadata -> metadata.put("SetSessionModelRequest", request));
+        return new SetSessionModelResponse();
+    }
+
+    @Prompt
+    PromptResponse prompt(PromptRequest promptRequest, SyncPromptContext context) {
         String sessionId = promptRequest.sessionId();
         AcpSession session = sessions.get(sessionId);
 
@@ -180,7 +168,7 @@ public class AcpLocalAgent {
         // 记录到历史对话
         session.history.add("User: " + userMessage);
         // 发送思考过程
-        context.sendThought("正在处理您的请求... (●'◡'●)");
+        context.sendThought("注解版agent 正在处理您的请求... (●'◡'●) ");
         var runnableConfig = sessionsRunnableConfig.get(sessionId);
         runnableConfig.metadata().ifPresent(metadata -> {
             metadata.put("PromptRequest", promptRequest);
@@ -339,6 +327,7 @@ public class AcpLocalAgent {
         return PromptResponse.endTurn();
     }
 
+
     /**
      * 构建多模态用户消息
      *
@@ -445,33 +434,6 @@ public class AcpLocalAgent {
         }
     }
 
-    /**
-     * 处理取消请求
-     */
-    private void handleCancel(AcpSchema.CancelNotification req) {
-        String sessionId = req.sessionId();
-        log.info("[AcpLocalAgent] Cancel request for session:  {}", sessionId);
-
-        // 取消该会话的所有活跃请求
-        List<CancellableRequest> requestsToCancel = new ArrayList<>();
-        for (Map.Entry<String, CancellableRequest> entry : activeRequests.entrySet()) {
-            if (entry.getValue().sessionId.equals(sessionId)) {
-                requestsToCancel.add(entry.getValue());
-            }
-        }
-
-        // 执行取消操作
-        for (CancellableRequest request : requestsToCancel) {
-            log.info("[AcpLocalAgent] Cancelling request: {} for session: {}", request.requestId, sessionId);
-            request.cancel();
-            activeRequests.remove(request.requestId);
-        }
-
-        // 清理会话资源
-        cleanupSessionResources(sessionId);
-
-        log.info("[AcpLocalAgent] Cancelled {} active requests for session: {}", requestsToCancel.size(), sessionId);
-    }
 
     /**
      * 清理会话资源
@@ -590,130 +552,4 @@ public class AcpLocalAgent {
         return request != null && request.cancelled;
     }
 
-    /**
-     * ACP 会话状态
-     */
-    private static class AcpSession {
-        final String sessionId;
-        final String threadId;
-        final String cwd;
-        final List<String> history;
-
-        AcpSession(String sessionId, String threadId, String cwd) {
-            this.sessionId = sessionId;
-            this.threadId = threadId;
-            this.cwd = cwd;
-            this.history = new ArrayList<>();
-        }
-
-
-    }
-
-    /**
-     * 可取消的请求信息
-     */
-    private static class CancellableRequest {
-        final String requestId;
-        final String sessionId;
-        final Thread executionThread;
-        final Flux<?> flux;
-        final List<String> activeToolCallIds;
-        final long startTime;
-        private final Map<String, ShellTools.BackgroundProcess> activeShellProcesses;
-        private final Object lock = new Object();
-        volatile boolean cancelled;
-        private Disposable fluxDisposable;
-
-        CancellableRequest(String requestId, String sessionId, Thread executionThread, Flux<?> flux) {
-            this.requestId = requestId;
-            this.sessionId = sessionId;
-            this.executionThread = executionThread;
-            this.flux = flux;
-            this.activeToolCallIds = new ArrayList<>();
-            this.activeShellProcesses = new ConcurrentHashMap<>();
-            this.startTime = System.currentTimeMillis();
-            this.cancelled = false;
-            this.fluxDisposable = null;
-        }
-
-        void setFluxDisposable(Disposable disposable) {
-            this.fluxDisposable = disposable;
-        }
-
-        void addShellProcess(String shellId, ShellTools.BackgroundProcess process) {
-            activeShellProcesses.put(shellId, process);
-        }
-
-        void removeShellProcess(String shellId) {
-            activeShellProcesses.remove(shellId);
-        }
-
-        void cancel() {
-            synchronized (lock) {
-                if (cancelled) {
-                    return; // 已经取消过
-                }
-
-                this.cancelled = true;
-                log.info("[CancellableRequest] Cancelling request: {}", requestId);
-
-                // 1. 取消所有活跃的工具调用（特别是 shell 进程）
-                cancelActiveToolCalls();
-
-                // 2. 取消 Flux 订阅
-                if (fluxDisposable != null && !fluxDisposable.isDisposed()) {
-                    log.info("[CancellableRequest] Disposing Flux subscription for request: {}", requestId);
-                    fluxDisposable.dispose();
-                }
-
-                // 3. 中断执行线程
-                if (executionThread != null && executionThread.isAlive()) {
-                    log.info("[CancellableRequest] Interrupting execution thread for request: {}", requestId);
-                    executionThread.interrupt();
-                }
-
-                // 4. 清理资源
-                activeToolCallIds.clear();
-                activeShellProcesses.clear();
-
-                log.info("[CancellableRequest] Request {} cancelled successfully", requestId);
-            }
-        }
-
-        private void cancelActiveToolCalls() {
-            // 取消所有活跃的 shell 进程
-            for (Map.Entry<String, ShellTools.BackgroundProcess> entry : activeShellProcesses.entrySet()) {
-                String shellId = entry.getKey();
-                ShellTools.BackgroundProcess process = entry.getValue();
-                try {
-                    log.info("[CancellableRequest] Killing shell process: {} for request: {}", shellId, requestId);
-                    ShellTools.builder().build().killShell(shellId);
-                } catch (Exception e) {
-                    log.warn("[CancellableRequest] Failed to kill shell process {}: {}", shellId, e.getMessage());
-                }
-            }
-            activeShellProcesses.clear();
-        }
-
-        void addToolCall(String toolCallId) {
-            synchronized (activeToolCallIds) {
-                activeToolCallIds.add(toolCallId);
-            }
-        }
-
-        void removeToolCall(String toolCallId) {
-            synchronized (activeToolCallIds) {
-                activeToolCallIds.remove(toolCallId);
-            }
-        }
-
-        List<String> getActiveToolCalls() {
-            synchronized (activeToolCallIds) {
-                return new ArrayList<>(activeToolCallIds);
-            }
-        }
-    }
-
 }
-
-

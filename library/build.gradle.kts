@@ -136,7 +136,7 @@ tasks.register<Jar>("fatJar") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     manifest {
-        attributes["Main-Class"] = "com.xr21.ai.agent.AcpLocalAgent"
+        attributes["Main-Class"] = "com.xr21.ai.agent.AgentApplication"
     }
 
     from(sourceSets.main.get().output)
@@ -153,7 +153,7 @@ graalvmNative {
     binaries {
         named("main") {
             imageName.set("ai-agents")
-            mainClass.set("com.xr21.ai.agent.AcpLocalAgent")
+            mainClass.set("com.xr21.ai.agent.AgentApplication")
             javaLauncher.set(javaToolchains.launcherFor {
                 languageVersion.set(JavaLanguageVersion.of(17))
                 vendor.set(JvmVendorSpec.matching("GraalVM Community"))
