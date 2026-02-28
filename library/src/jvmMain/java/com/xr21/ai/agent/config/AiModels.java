@@ -1,9 +1,10 @@
 package com.xr21.ai.agent.config;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
+import com.xr21.ai.agent.config.ModelsConfig.ModelConfig;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -12,27 +13,15 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 @Getter
 @AllArgsConstructor
+@Slf4j
 public enum AiModels {
-    DEEPSEEK_V3_2_TERMINUS("Pro/deepseek-ai/DeepSeek-V3.2", 0.75, 5000, () -> System.getenv("AI_OPENAPI_BASE_URL"), () -> System.getenv("AI_OPENAPI_API_KEY")), //
-    PRO_GLM_4_7("Pro/zai-org/GLM-4.7", 0.5, 4000, () -> System.getenv("AI_OPENAPI_BASE_URL"), () -> System.getenv("AI_OPENAPI_API_KEY")),//
-    MINIMAX_M2_1("MiniMax-M2.5", 0.65, 50000, () -> System.getenv("AI_MINIMAX_BASE_URL"), () -> System.getenv("AI_MINIMAX_API_KEY")),//
-    MINIMAX_M2_1_LIGHTNING("MiniMax-M2.1-lightning", 0.65, 50000, () -> System.getenv("AI_MINIMAX_BASE_URL"), () -> System.getenv("AI_MINIMAX_API_KEY")),//
-    MIMO_V2_FLASH("mimo-v2-flash", 0.65, 3000, () -> System.getenv("AI_XIAOMI_BASE_URL"), () -> System.getenv("AI_XIAOMI_API_KEY")),//
-    DEEPSEEK_FUNCTION_CALL("deepseek-function_call", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
-    DOUBAO_SEED_CODE_2_0("doubao-seed-2.0-code", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
-    GLM_4_7("glm-4.7", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
-    DEEPSEEK_V3_2("deepseek-v3.2", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
-    KIMI_K2_THINKING("kimi-k2-thinking", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
-    KIMI_K2_5("kimi-k2.5", 0.65, 3000, () -> System.getenv("AI_VOLC_BASE_URL"), () -> System.getenv("AI_VOLC_API_KEY")),//
-    QWEN3_CODER_NEXT("qwen/qwen3-coder-next", 0.75, 3000, () -> System.getenv("AI_OPEN_ROUTER_BASE_URL"), () -> System.getenv("AI_OPEN_ROUTER_API_KEY")), STEP_3_5_FLASH("stepfun/step-3.5-flash:free", 0.75, null, () -> System.getenv("AI_OPEN_ROUTER_BASE_URL"), () -> System.getenv("AI_OPEN_ROUTER_API_KEY"));//
-
-    // 默认模型设置（可通过 setDefaultModelSettings 设置）
-    private static volatile ModelSettings defaultModelSettings = null;
-
+    ;
+    private final String modelId;
     private final String modelName;
     private final double temperature;
     private final Integer maxTokens;
@@ -40,111 +29,51 @@ public enum AiModels {
     private final Supplier<String> apiKeySupplier;
 
 
-    public static List<AcpSchema.ModelInfo> availableModes() {
+    public static List<AcpSchema.ModelInfo> availableModels() {
         List<AcpSchema.ModelInfo> list = new ArrayList<>();
-        for (AiModels model : AiModels.values()) {
-            list.add(new AcpSchema.ModelInfo(model.modelName, model.modelName, model.modelName));
+        List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
+        for (ModelConfig model : configs) {
+            list.add(new AcpSchema.ModelInfo(model.getModelId(), model.getModelName(), model.getModelName()));
         }
         return list;
     }
 
+    public static String defaultModel() {
+        List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
+        return Objects.requireNonNull(ModelConfigLoader.getDefaultConfig(configs)).getModelId();
+    }
 
-    public static ChatModel createByModelName(String modelName) {
-        for (AiModels value : values()) {
-            if (value.modelName.equals(modelName)) {
-                return value.createChatModel();
-            }
+    /**
+     * 从 JSON 配置文件创建 ChatModel
+     * @param modelName 模型名称
+     * @return ChatModel 实例
+     */
+    public static ChatModel createChatModelFromJson(String modelName) {
+        List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
+        ModelConfig config = ModelConfigLoader.findConfigByModelName(modelName, configs);
+        if (config != null) {
+            String effectiveBaseUrl = config.getBaseUrl();
+            String effectiveApiKey = config.getApiKey();
+            String effectiveModelName = config.getModelName();
+            Double temperature = config.getTemperature() != null ? config.getTemperature() : 0.65;
+            Integer maxTokens = config.getMaxTokens();
+            OpenAiApi api = OpenAiApi.builder()
+                    .baseUrl(effectiveBaseUrl)
+                    .completionsPath(effectiveBaseUrl.endsWith("v3") ? "/chat/completions" : "v1/chat/completions")
+                    .apiKey(effectiveApiKey)
+                    .build();
+            return OpenAiChatModel.builder()
+                    .defaultOptions(OpenAiChatOptions.builder()
+                            .model(effectiveModelName)
+                            .temperature(temperature)
+                            .maxTokens(maxTokens)
+                            .parallelToolCalls(true)
+                            .extraBody(Map.of("thinking", Map.of("type", "enabled")))
+                            .reasoningEffort("medium")
+                            .build())
+                    .openAiApi(api)
+                    .build();
         }
-        throw new RuntimeException("模型id不存在" + modelName);
-    }
-
-
-    /**
-     * 设置默认模型配置（优先级高于环境变量）
-     */
-    public static void setDefaultModelSettings(ModelSettings settings) {
-        defaultModelSettings = settings;
-    }
-
-
-
-    /**
-     * 获取实际使用的 baseUrl（优先使用设置，否则使用环境变量）
-     */
-    public String getBaseUrl() {
-        if (defaultModelSettings != null && defaultModelSettings.getBaseUrl() != null && !defaultModelSettings.getBaseUrl()
-                .isEmpty()) {
-            return defaultModelSettings.getBaseUrl();
-        }
-        return baseUrlSupplier.get();
-    }
-
-    /**
-     * 获取实际使用的 apiKey（优先使用设置，否则使用环境变量）
-     */
-    public String getApiKey() {
-        if (defaultModelSettings != null && defaultModelSettings.getApiKey() != null && !defaultModelSettings.getApiKey()
-                .isEmpty()) {
-            return defaultModelSettings.getApiKey();
-        }
-        return apiKeySupplier.get();
-    }
-
-    /**
-     * 获取实际使用的模型名称（优先使用设置，否则使用枚举定义的名称）
-     */
-    public String getEffectiveModelName() {
-        if (defaultModelSettings != null && defaultModelSettings.getModelName() != null && !defaultModelSettings.getModelName()
-                .isEmpty()) {
-            return defaultModelSettings.getModelName();
-        }
-        return modelName;
-    }
-
-    public ChatModel createChatModel() {
-        String effectiveBaseUrl = getBaseUrl();
-        String effectiveApiKey = getApiKey();
-        String effectiveModelName = getEffectiveModelName();
-        return createChatModelWithSettings(effectiveModelName, effectiveBaseUrl, effectiveApiKey);
-    }
-
-    /**
-     * 使用自定义设置创建 ChatModel
-     */
-    public ChatModel createChatModelWithSettings(String customModelName, String customBaseUrl, String customApiKey) {
-        String effectiveBaseUrl = (customBaseUrl != null && !customBaseUrl.isEmpty()) ? customBaseUrl : getBaseUrl();
-        String effectiveApiKey = (customApiKey != null && !customApiKey.isEmpty()) ? customApiKey : getApiKey();
-        String effectiveModelName = (customModelName != null && !customModelName.isEmpty()) ? customModelName : getEffectiveModelName();
-
-        OpenAiApi api = OpenAiApi.builder()
-                .baseUrl(effectiveBaseUrl)
-                .completionsPath(effectiveBaseUrl.endsWith("v3") ? "/chat/completions" : "v1/chat/completions")
-                .apiKey(effectiveApiKey)
-                .build();
-        return OpenAiChatModel.builder()
-                .defaultOptions(OpenAiChatOptions.builder()
-                        .model(effectiveModelName)
-                        .temperature(temperature)
-                        .maxTokens(maxTokens)
-                        .parallelToolCalls(true)
-                        .extraBody(Map.of("thinking", Map.of("type", "enabled")))
-                        .reasoningEffort("medium")
-                        .build())
-                .openAiApi(api)
-                .build();
-    }
-
-    /**
-     * 模型设置数据类
-     */
-    @Data
-    @AllArgsConstructor
-    public static class ModelSettings {
-        private final String modelName;
-        private final String baseUrl;
-        private final String apiKey;
-        public boolean isEmpty() {
-            return (modelName == null || modelName.isEmpty()) && (baseUrl == null || baseUrl.isEmpty()) && (apiKey == null || apiKey.isEmpty());
-        }
+        throw new RuntimeException("Model configuration not found in JSON for:  " + modelName);
     }
 }

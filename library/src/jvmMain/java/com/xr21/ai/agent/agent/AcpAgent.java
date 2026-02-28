@@ -40,7 +40,7 @@ public class AcpAgent {
     private final Map<String, RunnableConfig> sessionsRunnableConfig = new ConcurrentHashMap<>();
     private final Map<String, CancellableRequest> activeRequests = new ConcurrentHashMap<>();
     private final SessionModeState sessionModeState = new SessionModeState("chat", List.of(new SessionMode("Agent", "Agent", "智能体模式"), new SessionMode("Plan", "Plan", "规划执行模式")));
-    private final Supplier<SessionModelState> sessionModelStateSupplier = () -> new SessionModelState(AiModels.KIMI_K2_5.getModelName(), AiModels.availableModes());
+    private final Supplier<SessionModelState> sessionModelStateSupplier = () -> new SessionModelState(AiModels.defaultModel(), AiModels.availableModels());
 
     @Initialize
     InitializeResponse init(AcpSchema.InitializeRequest request) {
@@ -92,9 +92,13 @@ public class AcpAgent {
         log.info("[AcpAgent] Load session:  {}", request.sessionId());
         if (sessions.containsKey(request.sessionId())) {
             log.info("[AcpAgent] Session found");
-            Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder().threadId(sessions.get(request.sessionId()).threadId).build());
-            String modelId = checkpointOpt.get().getState().getOrDefault("model", AiModels.KIMI_K2_5.getModelName()).toString();
-            var modelState = checkpointOpt.map(Checkpoint::getState).map(e -> new SessionModelState(modelId, AiModels.availableModes())).orElse(sessionModelStateSupplier.get());
+            Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder()
+                    .threadId(sessions.get(request.sessionId()).threadId)
+                    .build());
+            String modelId = checkpointOpt.get().getState().getOrDefault("model", AiModels.defaultModel()).toString();
+            var modelState = checkpointOpt.map(Checkpoint::getState)
+                    .map(e -> new SessionModelState(modelId, AiModels.availableModels()))
+                    .orElse(sessionModelStateSupplier.get());
             return new LoadSessionResponse(sessionModeState, modelState);
         }
         log.info("[AcpAgent] Session not found");
@@ -455,10 +459,10 @@ public class AcpAgent {
      */
     private void cleanupSessionResources(String sessionId) {
         // 清理 MCP 服务器
-        sessionMcpServers.remove(sessionId);
-
-        // 清理会话
-        sessions.remove(sessionId);
+//        sessionMcpServers.remove(sessionId);
+//
+//        // 清理会话
+//        sessions.remove(sessionId);
 
         // 清理后台进程（从 ShellTools）
         cleanupBackgroundProcesses(sessionId);

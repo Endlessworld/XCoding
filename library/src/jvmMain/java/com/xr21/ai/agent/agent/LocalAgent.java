@@ -47,11 +47,6 @@ public class LocalAgent {
             .build();
 
     public static String WORKSPACE_ROOT = "D:\\IdeaProjects\\agi_working";
-    private ChatModel chatModel;
-
-    public LocalAgent() {
-        this.initializeChatModel();
-    }
 
     public static Agent createAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
         LocalAgent localAgent = new LocalAgent();
@@ -99,12 +94,13 @@ public class LocalAgent {
 
     public Agent buildAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
 
+        ChatModel chatModel = null;
         WORKSPACE_ROOT = cwd;
         var tools = getTools();
         if (runnableConfig.context().containsKey("SetSessionModelRequest") && runnableConfig.context()
                 .get("SetSessionModelRequest") instanceof AcpSchema.SetSessionModelRequest setSessionModelRequest) {
-            chatModel = AiModels.createByModelName(setSessionModelRequest.modelId());
-            log.info("use model: {}", setSessionModelRequest.modelId());
+            chatModel = AiModels.createChatModelFromJson(setSessionModelRequest.modelId());
+            log.info("use model from JSON config: {}", setSessionModelRequest.modelId());
         }
 
 
@@ -160,21 +156,6 @@ public class LocalAgent {
                 .returnReasoningContents(true)
                 .build();
     }
-
-    /**
-     * 初始化聊天模型，延迟加载以避免启动时依赖环境变量
-     */
-    public void initializeChatModel() {
-        try {
-            this.chatModel = AiModels.KIMI_K2_5.createChatModel();
-            log.info("ChatModel initialized successfully");
-        } catch (Exception e) {
-            log.error("Failed to initialize ChatModel: {}", e.getMessage());
-            // 创建一个简单的回退模型，不依赖外部API
-            this.chatModel = AiModels.KIMI_K2_5.createChatModel();
-        }
-    }
-
 
 }
 

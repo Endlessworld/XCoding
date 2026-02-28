@@ -1,0 +1,95 @@
+{
+  "providers": [
+    {
+      "providerId": "volcengine",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
+      "apiKey": "your-volcengine-api-key-here"
+    },
+    {
+      "providerId": "deepseek",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKey": "your-deepseek-api-key-here"
+    },
+    {
+      "providerId": "xiaomi",
+      "baseUrl": "https://api.xiaomimimo.com",
+      "apiKey": "your-xiaomi-api-key-here"
+    },
+    {
+      "providerId": "openrouter",
+      "baseUrl": "https://openrouter.ai/api",
+      "apiKey": "your-openrouter-api-key-here"
+    },
+    {
+      "providerId": "siliconflow",
+      "baseUrl": "https://api.siliconflow.cn",
+      "apiKey": "your-siliconflow-api-key-here"
+    },
+    {
+      "providerId": "cucloud",
+      "baseUrl": "https://aigw-gzgy2.cucloud.cn:8443",
+      "apiKey": "your-cucloud-api-key-here"
+    }
+  ],
+  "models": [
+    {
+      "modelId": "deepseek-v3.2",
+      "modelName": "deepseek-v3.2",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "volcengine",
+      "isDefault": true
+    },
+    {
+      "modelId": "doubao-seed-2.0-code",
+      "modelName": "doubao-seed-2.0-code",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "volcengine",
+      "isDefault": true
+    },
+    {
+      "modelId": "kimi-k2.5",
+      "modelName": "kimi-k2.5",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "volcengine",
+      "isDefault": false
+    },
+    {
+      "modelId": "glm-4.7",
+      "modelName": "glm-4.7",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "volcengine",
+      "isDefault": false
+    },
+    {
+      "modelId": "deepseek-v3-2",
+      "modelName": "deepseek-v3.2",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "deepseek",
+      "isDefault": false
+    },
+    {
+      "modelId": "mimo-v2-flash",
+      "modelName": "mimo-v2-flash",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "xiaomi",
+      "isDefault": false
+    },
+    {
+      "modelId": "MiniMax-M2.5",
+      "modelName": "MiniMax-M2.5",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "cucloud",
+      "isDefault": false
+    }
+  ]
+}
+
+
+ 
