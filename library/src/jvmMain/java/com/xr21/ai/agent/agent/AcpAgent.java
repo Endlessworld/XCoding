@@ -6,6 +6,8 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.*;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.checkpoint.Checkpoint;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.entity.AcpSession;
 import com.xr21.ai.agent.entity.AgentOutput;
@@ -16,6 +18,7 @@ import com.xr21.ai.agent.utils.SinksUtil;
 import com.xr21.ai.agent.utils.ToolsUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.content.Media;
 import org.springframework.util.CollectionUtils;
@@ -24,6 +27,11 @@ import org.springframework.util.StringUtils;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
+import java.net.URI;
+import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -50,8 +58,7 @@ public class AcpAgent {
         var promptCapabilities = new PromptCapabilities(true, true, true);
         var authMethods = new AuthMethod("login", "login", "登录鉴权");
         var agentCapabilities = new AgentCapabilities(true, mcpCapabilities, promptCapabilities);
-        return new InitializeResponse(1, agentCapabilities, List.of(authMethods), null);
-
+        return new InitializeResponse(request.protocolVersion(), agentCapabilities, List.of(authMethods), null);
     }
 
     @NewSession
@@ -156,7 +163,7 @@ public class AcpAgent {
 
         // 构建多模态用户输入
         UserMessage userMessage = buildUserMessage(promptRequest.prompt());
-        log.info("[AcpAgent] Received:  {}", userMessage);
+        log.info("[AcpAgent] Received:  {}", promptRequest);
 
         // 生成请求ID
         String requestId = "req_" + System.currentTimeMillis() + "_" + sessionId;
@@ -228,26 +235,34 @@ public class AcpAgent {
                         ToolKind toolKind = ToolKindFind.find(toolName);
                         // 构建工具调用内容
                         List<ToolCallContent> contentList = new ArrayList<>();
+                        List<ToolCallLocation> locations = new ArrayList<>();
                         if (StringUtils.hasText(arguments)) {
-                            contentList.add(new ToolCallContentBlock("content", new TextContent(arguments)));
+                            if ("edit_file".equals(toolName)) {
+                                JSONObject json = JSON.parseObject(arguments);
+                                locations.add(new ToolCallLocation(json.getString("filePath"), 1));
+                                contentList.add(new ToolCallDiff("diff", json.getString("filePath"), json.getString("oldString"), json.getString("newString")));
+                            } else {
+                                contentList.add(new ToolCallContentBlock("content", new TextContent(arguments)));
+                            }
                         }
                         // 发送工具调用开始通知 (status: PENDING)
                         // ToolCall 是完整的工具调用记录，包含输入参
-                        context.sendUpdate(sessionId, new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, null,  // locations
+                        ToolCall toolCallNotification = new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, null,  // locations
                                 arguments,  // rawInput
                                 null,  // rawOutput - 执行后才有
-                                message.getMetadata()));
+                                message.getMetadata());
+                        context.sendUpdate(sessionId, toolCallNotification);
 
                         // 将工具调用添加到请求跟踪
                         addToolCallToRequest(requestId, toolCallId);
 
-                        log.info("[AcpAgent] Tool call started:  {} arguments：{} id: {},", toolName, arguments, toolCallId);
+                        log.info("[AcpAgent] Tool call started: {} arguments：{} id: {}", toolName, arguments, toolCallId);
                     }
                 }
             }
 
             // 处理工具调用响应 (ToolResponseMessage - 工具执行完成)
-            if (output.getMessage() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) {
+            if (output.getMessage() instanceof ToolResponseMessage message) {
                 if (!CollectionUtils.isEmpty(message.getResponses())) {
                     for (var response : message.getResponses()) {
                         String toolCallId = response.id();
@@ -268,7 +283,7 @@ public class AcpAgent {
 
                         // 从请求跟踪中移除工具调用
                         removeToolCallFromRequest(requestId, toolCallId);
-                        log.info("[AcpAgent] Tool call completed:  {} id: {} status: {} responseData: {}", toolName, toolCallId, status, responseData);
+                        log.info("[AcpAgent] Tool call completed: {} id: {} status: {} responseData: {}", toolName, toolCallId, status, responseData);
                     }
                 }
             }
@@ -377,11 +392,18 @@ public class AcpAgent {
                     mediaList.add(media);
                 }
             } else if (contentBlock instanceof ResourceLink resourceLink) {
-                // 处理资源链接
-                Media media = buildMediaFromContent(resourceLink.mimeType(), null, resourceLink.uri());
-                if (media != null) {
-                    mediaList.add(media);
+                MimeType mimeType = MimeType.valueOf(URLConnection.guessContentTypeFromName(resourceLink.uri()));
+                if (mimeType.getType().contains("image")) {
+                    // 处理资源链接
+                    Media media = buildMediaFromContent(mimeType.getType(), null, resourceLink.uri());
+                    if (media != null) {
+                        mediaList.add(media);
+                    }
+                    else {
+                        textBuilder.append(resourceLink.uri());
+                    }
                 }
+
             } else if (contentBlock instanceof Resource resource) {
                 // 处理嵌入资源
                 EmbeddedResourceResource embeddedResource = resource.resource();
@@ -391,6 +413,7 @@ public class AcpAgent {
                     }
                 } else if (embeddedResource instanceof BlobResourceContents blobResource) {
                     Media media = buildMediaFromContent(blobResource.mimeType(), blobResource.blob(), blobResource.uri());
+                    textBuilder.append(blobResource.uri());
                     if (media != null) {
                         mediaList.add(media);
                     }
@@ -421,34 +444,36 @@ public class AcpAgent {
      */
     private Media buildMediaFromContent(String mimeTypeStr, String data, String uri) {
         try {
+            log.warn("[AcpAgent] buildMediaFromContent {} {} {}", mimeTypeStr, data, uri);
             // 解析 MIME 类型
             MimeType mimeType = null;
             if (StringUtils.hasText(mimeTypeStr)) {
                 mimeType = MimeType.valueOf(mimeTypeStr);
-            }
-
-            if (mimeType == null) {
-                log.warn("[AcpAgent] Cannot build media: missing or invalid MIME type");
-                return null;
+            } else {
+                mimeType = MimeType.valueOf(URLConnection.guessContentTypeFromName(uri));
             }
 
             Media.Builder mediaBuilder = Media.builder().mimeType(mimeType);
-
             // 优先使用 Base64 数据
             if (StringUtils.hasText(data)) {
-                byte[] decodedData = java.util.Base64.getDecoder().decode(data);
+                byte[] decodedData = Base64.getDecoder().decode(data);
                 mediaBuilder.data(decodedData);
             } else if (StringUtils.hasText(uri)) {
-                // 使用 URI
-                mediaBuilder.data(java.net.URI.create(uri));
+                if (mimeType.getType().contains("image")) {
+                    log.info("[AcpAgent] mimeType is image: {}", mimeType);
+                    Path imagePath = Paths.get(URI.create(uri));
+                    byte[] imageBytes = Files.readAllBytes(imagePath);
+                    String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+                    byte[] decodedData = Base64.getDecoder().decode(base64Image);
+                    mediaBuilder.data(decodedData);
+                }
             } else {
                 log.warn("[AcpAgent] Cannot build media: both data and uri are empty");
                 return null;
             }
-
             return mediaBuilder.build();
-        } catch (IllegalArgumentException e) {
-            log.warn("[AcpAgent] Failed to build media: {}", e.getMessage());
+        } catch (Throwable e) {
+            log.error("[AcpAgent] Failed to build media: {}", e);
             return null;
         }
     }

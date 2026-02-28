@@ -19,7 +19,7 @@ import java.util.List;
 
 public class AsyncAgentTest {
 
-    private static final String JAR_PATH = "D:\\local-github\\ai-agents\\library\\build\\libs\\library-1.0.0-all.jar";
+    private static final String JAR_PATH = "D:\\local-github\\ai-agents\\library\\build\\libs\\XAgent-0.0.1-all.jar";
 
     public static void main(String[] args) {
         // 设置控制台输出编码为 UTF-8
@@ -53,6 +53,7 @@ public class AsyncAgentTest {
             // Create session
             String cwd = System.getProperty("user.dir");
             var session = client.newSession(new NewSessionRequest(cwd, List.of()));
+            client.setSessionModel(new AcpSchema.SetSessionModelRequest(session.sessionId(), "kimi-k2.5"));
             System.out.println("Session: " + session.sessionId() + "\n");
             // Send prompts
             String[] messages = {"你是谁 这张图片是什么"};
@@ -61,7 +62,10 @@ public class AsyncAgentTest {
                 Path imagePath = Paths.get("C:\\Users\\Endless\\Desktop\\ScreenShot_2026-02-27_091706_421.png");
                 byte[] imageBytes = Files.readAllBytes(imagePath);
                 String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-                var response = client.prompt(new PromptRequest(session.sessionId(), List.of(new TextContent(message), new AcpSchema.ImageContent("image", base64Image, "image/png", null, null, null))));
+                var imageContent = new AcpSchema.ImageContent("image", base64Image, "image/png", null, null, null);
+                var resourceLink = new AcpSchema.ResourceLink("resource_link", imagePath.getFileName()
+                        .toString(), imagePath.toUri().toString(), null, null, "image/png", null, null,null);
+                var response = client.prompt(new PromptRequest(session.sessionId(), List.of(new TextContent(message), resourceLink)));
                 System.out.println("Stop reason: " + response.stopReason() + "\n");
             }
 

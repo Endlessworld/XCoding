@@ -65,9 +65,9 @@ public class LocalAgent {
 
     private static @NonNull List<Interceptor> getInterceptors() {
         ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder()
-                .trigger(500500)  // 设置触发清理的令牌数阈值
+                .trigger(100000)  // 设置触发清理的令牌数阈值
                 .clearAtLeast(2000)  // 每次清理至少清除2000个令牌
-                .keep(8)  // 保留最近3条工具消息
+                .keep(10)  // 保留最近3条工具消息
                 .tokenCounter(new DefaultTokenCounter())
                 .clearToolInputs(true)  // 清理工具输入（虽然当前未实现）
                 .build();
@@ -75,7 +75,7 @@ public class LocalAgent {
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(contextEditingInterceptor);
         var largeResultEvictionInterceptor = LargeResultEvictionInterceptor.builder()
-                .toolTokenLimitBeforeEvict(100000)
+                .toolTokenLimitBeforeEvict(30000)
                 .backend(new LocalFilesystemBackend(WORKSPACE_ROOT))
                 .build();
         interceptors.add(largeResultEvictionInterceptor);
