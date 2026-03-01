@@ -123,7 +123,7 @@ public class ContextCacheTool {
         指针数据读取器，上下文编辑器会将你超长的工具调用参数或工具调用执行结果转换成指针,
         指针地址格式：$ref+工具调用id，你可以在需要的时候重新根据指针地址重新获取具体内容
         """)
-    public Map<String, Object> retrieveRef(
+    public static Map<String, Object> retrieveRef(
         @ToolParam(description = "指针地址列表，指针格式：$ref+工具调用id，根据指针地址重新获取具体内容") List<String> refs
     ) { // @formatter:on
         // 输入验证

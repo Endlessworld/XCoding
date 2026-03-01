@@ -99,13 +99,9 @@ public class AcpAgent {
         log.info("[AcpAgent] Load session:  {}", request.sessionId());
         if (sessions.containsKey(request.sessionId())) {
             log.info("[AcpAgent] Session found");
-            Optional<Checkpoint> checkpointOpt = LocalAgent.fileSystemSaver.get(RunnableConfig.builder()
-                    .threadId(sessions.get(request.sessionId()).threadId)
-                    .build());
+            Optional<Checkpoint> checkpointOpt = LocalAgent.FILE_SYSTEM_SAVER.get(RunnableConfig.builder().threadId(sessions.get(request.sessionId()).threadId).build());
             String modelId = checkpointOpt.get().getState().getOrDefault("model", AiModels.defaultModel()).toString();
-            var modelState = checkpointOpt.map(Checkpoint::getState)
-                    .map(e -> new SessionModelState(modelId, AiModels.availableModels()))
-                    .orElse(sessionModelStateSupplier.get());
+            var modelState = checkpointOpt.map(Checkpoint::getState).map(e -> new SessionModelState(modelId, AiModels.availableModels())).orElse(sessionModelStateSupplier.get());
             return new LoadSessionResponse(sessionModeState, modelState);
         }
         log.info("[AcpAgent] Session not found");
@@ -230,6 +226,7 @@ public class AcpAgent {
                     for (var toolCall : message.getToolCalls()) {
                         String toolCallId = toolCall.id();
                         String toolName = toolCall.name();
+
                         String arguments = toolCall.arguments();
                         // 获取工具类型
                         ToolKind toolKind = ToolKindFind.find(toolName);
@@ -251,8 +248,11 @@ public class AcpAgent {
                                 arguments,  // rawInput
                                 null,  // rawOutput - 执行后才有
                                 message.getMetadata());
-                        context.sendUpdate(sessionId, toolCallNotification);
-
+                        if ("write_todos".equals(toolName)) {
+                            context.sendThought("✨✨✨让我更新任务进度...");
+                        } else {
+                            context.sendUpdate(sessionId, toolCallNotification);
+                        }
                         // 将工具调用添加到请求跟踪
                         addToolCallToRequest(requestId, toolCallId);
 
@@ -275,11 +275,13 @@ public class AcpAgent {
                         // 构建位置信息
                         List<ToolCallLocation> locations = resultData.locations;
                         ToolCallStatus status = resultData.success ? ToolCallStatus.COMPLETED : (resultData.error != null ? ToolCallStatus.FAILED : ToolCallStatus.COMPLETED);
+                        if (!"write_todos".equals(toolName)) {
+                            // 发送工具调用更新通知 (status: COMPLETED/FAILED)
+                            context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations,  // 位置信息
+                                    null, responseData,  // rawOutput
+                                    null));
+                        }
 
-                        // 发送工具调用更新通知 (status: COMPLETED/FAILED)
-                        context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations,  // 位置信息
-                                null, responseData,  // rawOutput
-                                null));
 
                         // 从请求跟踪中移除工具调用
                         removeToolCallFromRequest(requestId, toolCallId);
@@ -398,8 +400,7 @@ public class AcpAgent {
                     Media media = buildMediaFromContent(mimeType.getType(), null, resourceLink.uri());
                     if (media != null) {
                         mediaList.add(media);
-                    }
-                    else {
+                    } else {
                         textBuilder.append(resourceLink.uri());
                     }
                 }

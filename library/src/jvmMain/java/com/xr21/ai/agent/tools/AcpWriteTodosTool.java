@@ -16,6 +16,7 @@
 package com.xr21.ai.agent.tools;
 
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
+import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.Plan;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntry;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryPriority;
@@ -26,13 +27,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.function.FunctionToolCallback;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
 
 import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_STATE_FOR_UPDATE_CONTEXT_KEY;
 
@@ -41,9 +41,12 @@ import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_
  * This tool allows agents to create, update, and track task lists using ACP protocol.
  */
 @Slf4j
-public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, ToolContext, AcpWriteTodosTool.Response> {
+public class AcpWriteTodosTool {
 
-    public static final String DEFAULT_TOOL_DESCRIPTION = """
+    public AcpWriteTodosTool() {
+    }
+
+    @Tool(name = "write_todos", description = """
             Use this tool to create and manage a structured task list using ACP protocol.
             This sends real-time Plan updates to the client showing your progress.
             
@@ -60,56 +63,49 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
             3. Update tasks as needed (add/remove/change)
             4. Each update sends ACP Plan update
             
-            Task States (ACP PlanEntryStatus):
+            Task States (Must be uppercase):
             - PENDING: Not started
             - IN_PROGRESS: Currently working
             - COMPLETED: Finished
             
-            Task Priorities (ACP PlanEntryPriority):
-            - high: Critical
-            - medium: Important  
-            - low: Nice-to-have
+            Task Priorities (Must be uppercase):
+            - HIGH: Critical
+            - MEDIUM: Important  
+            - LOW: Nice-to-have
             
             Important: Don't use for simple tasks (<3 steps). Update status immediately.
-            """;
-
-    public AcpWriteTodosTool() {
-    }
-
-    @Override
-    public Response apply(Request request, ToolContext toolContext) {
+            """)
+    public Map<String, Object> writeTodos(@ToolParam(description = "List of todo entries with content, status and priority") List<RequestEntry> entries, ToolContext toolContext) {
         try {
             // Extract state from ToolContext
             Map<String, Object> contextData = toolContext.getContext();
             if (contextData == null) {
-                return new Response("Error: Tool context is not available");
+                return Map.of("error", "Tool context is not available");
             }
 
             Object extraStateObj = contextData.get(AGENT_STATE_FOR_UPDATE_CONTEXT_KEY);
             if (extraStateObj == null) {
-                return new Response("Error: Extra state is not initialized");
+                return Map.of("error", "Extra state is not initialized");
             }
 
             if (!(extraStateObj instanceof Map)) {
-                return new Response("Error: Extra state has invalid type");
+                return Map.of("error", "Extra state has invalid type");
             }
 
-//            @SuppressWarnings("unchecked") Map<String, Object> extraState = (Map<String, Object>) extraStateObj;
-
             // Convert request entries to ACP PlanEntries
-            List<PlanEntry> planEntries = convertToPlanEntries(request.entries);
+            List<PlanEntry> planEntries = convertToPlanEntries(entries);
 
             // Create ACP Plan
             Plan plan = new Plan("plan", planEntries);
 
             sendAcpPlanUpdate(toolContext, plan);
 
-            return new Response("Updated todo list with " + request.entries.size() + " entries using ACP Plan");
+            return Map.of("success", true, "message", "Updated todo list with " + entries.size() + " entries using ACP Plan");
 
         } catch (ClassCastException e) {
-            return new Response("Error: Invalid state type - " + e.getMessage());
+            return Map.of("error", "Invalid state type - " + e.getMessage());
         } catch (Exception e) {
-            return new Response("Error: Failed to update todos - " + e.getMessage());
+            return Map.of("error", "Failed to update todos - " + e.getMessage());
         }
     }
 
@@ -134,17 +130,17 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
      */
     private void sendAcpPlanUpdate(ToolContext toolContext, Plan plan) {
         try {
-
+            log.info("config context {}", toolContext);
             if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
                 log.info("config context {}", config.context());
                 log.info("config context PromptRequest {}", config.context().get("PromptRequest"));
                 log.info("config context SyncPromptContext {}", config.context().get("SyncPromptContext"));
                 if (config.context().get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
-                    // Get session ID from context
-                    String sessionId = (String) config.context().getOrDefault("sessionId", "default-session");
-                    // Send the plan update
-                    syncPromptContext.sendUpdate(sessionId, plan);
-                    log.info("sendUpdate plan: {}", plan);
+                    if (config.context().get("PromptRequest") instanceof AcpSchema.PromptRequest promptRequest) {
+                        var sessionId = promptRequest.sessionId();
+                        syncPromptContext.sendUpdate(sessionId, plan);
+                        log.info("sendUpdate sessionId : {} plan: {}", sessionId, plan);
+                    }
                 }
             }
 
@@ -154,11 +150,9 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
         }
     }
 
-    @JsonClassDescription("Request to write or update todos using ACP protocol")
-    public record Request(
-            @JsonProperty(required = true, value = "entries") @JsonPropertyDescription("List of todo entries with content, status and priority") List<RequestEntry> entries) {
-    }
-
+    /**
+     * A single todo entry for ACP protocol
+     */
     @JsonClassDescription("A single todo entry for ACP protocol")
     public record RequestEntry(
             @JsonProperty(required = true, value = "content") @JsonPropertyDescription("Content/description of the todo item") String content,
@@ -172,37 +166,5 @@ public class AcpWriteTodosTool implements BiFunction<AcpWriteTodosTool.Request, 
         public RequestEntry(String content, String status) {
             this(content, "MEDIUM", status);
         }
-    }
-
-    public record Response(String message) {
-    }
-
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    public static class Builder {
-
-        private String name = "write_todos";
-
-        private String description = DEFAULT_TOOL_DESCRIPTION;
-
-        public Builder() {
-        }
-
-        public Builder withName(String name) {
-            this.name = name;
-            return this;
-        }
-
-        public Builder withDescription(String description) {
-            this.description = description;
-            return this;
-        }
-
-        public ToolCallback build() {
-            return FunctionToolCallback.builder(name, new AcpWriteTodosTool()).description(description).inputType(Request.class).build();
-        }
-
     }
 }

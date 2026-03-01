@@ -246,10 +246,10 @@ public class ContextEditingInterceptor extends ModelInterceptor {
         int currentTokens = this.tokenCounter.countTokens(messages);
         // 1. 只有超过trigger阈值才处理
         if (currentTokens <= this.trigger) {
-            log.info("Token count {}", currentTokens);
+            log.debug("Token count {} within limit (trigger: {})", currentTokens, this.trigger);
             return handler.call(request);
         }
-        log.info("Token count {} exceeds trigger {}, starting context optimization", currentTokens, this.trigger);
+        log.info("🚀 Token count {} exceeds trigger {}, starting context optimization", currentTokens, this.trigger);
 
         // 2. 找出所有可以被“物理删除”或“内容清空”的候选消息
         List<ClearableCandidate> candidates = this.findClearableCandidates(messages);
@@ -261,8 +261,8 @@ public class ContextEditingInterceptor extends ModelInterceptor {
         int requiredReduction = currentTokens - targetTokens;
         int finalMinReduction = Math.max(requiredReduction, this.clearAtLeast);
         log.debug("上下文优化: 预计清理tokens {}", finalMinReduction);
-        // 4. 贪心排序：优先清理 Token 占用最大的消息
-//        candidates.sort(Comparator.comparingInt((ClearableCandidate c) -> c.estimatedTokens).reversed());
+        // 4. 贪心排序：优先清理 Token 占用最大的消息（优化：启用贪心算法）
+        candidates.sort(Comparator.comparingInt((ClearableCandidate c) -> c.estimatedTokens).reversed());
         Set<Integer> indicesToClear = new HashSet<>();
         int projectedSavings = 0;
 
@@ -287,7 +287,10 @@ public class ContextEditingInterceptor extends ModelInterceptor {
             }
         }
         var clearedTokens = this.tokenCounter.countTokens(updatedMessages);
-        log.info("上下文优化: 总tokens: {} 本次清理tokens {} 本次请求使用tokens {}(Trigger: {})", currentTokens, (currentTokens - clearedTokens), clearedTokens, this.trigger);
+        int savings = currentTokens - clearedTokens;
+        double savingsPercent = (double) savings / currentTokens * 100;
+        log.info("✅ 上下文优化完成: 原始={} | 清理={} ({}%) | 剩余={} | 目标={}",
+                currentTokens, savings, savingsPercent, clearedTokens, this.trigger);
         return handler.call(ModelRequest.builder(request).messages(updatedMessages).build());
     }
 

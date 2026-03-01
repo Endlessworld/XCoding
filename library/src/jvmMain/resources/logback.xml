@@ -30,6 +30,23 @@
             <level>INFO</level>
         </filter>
     </appender>
+    
+    <!-- 调试日志输出 - DEBUG及以上级别 -->
+    <appender name="DEBUG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/debug.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 按天滚动 -->
+            <fileNamePattern>${LOG_HOME}/debug.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <!-- 保留7天的调试日志 -->
+            <maxHistory>7</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>DEBUG</level>
+        </filter>
+    </appender>
 
     <!-- 错误日志单独输出 -->
     <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -49,10 +66,11 @@
     </appender>
 
     <!-- 应用日志级别设置 -->
-    <logger name="com.xr21.ai.agent" level="INFO" additivity="false">
+    <logger name="com.xr21.ai.agent" level="DEBUG" additivity="false">
 <!--        <appender-ref ref="CONSOLE" />-->
         <appender-ref ref="FILE" />
         <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="DEBUG_FILE" />
     </logger>
 
     <!-- Spring AI 日志 -->

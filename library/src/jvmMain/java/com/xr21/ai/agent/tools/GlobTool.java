@@ -3,6 +3,7 @@ package com.xr21.ai.agent.tools;
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -17,6 +18,7 @@ import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 /**
  * 查找匹配 glob 模式的文件的工具
  */
+@Slf4j
 public class GlobTool {
 
     // @formatter:off
