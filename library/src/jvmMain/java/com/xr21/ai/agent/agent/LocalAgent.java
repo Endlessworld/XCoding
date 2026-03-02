@@ -187,8 +187,6 @@ public class LocalAgent {
             chatModel = AiModels.createChatModelFromJson(ModelConfigLoader.getDefaultConfig(configs).getModelId());
             log.info("No specific model configuration found, using default model");
         }
-
-
         // 添加 MCP 工具
         if (!CollectionUtils.isEmpty(mcpServers)) {
             List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);

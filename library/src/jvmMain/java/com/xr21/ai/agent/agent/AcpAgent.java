@@ -5,6 +5,8 @@ import com.agentclientprotocol.sdk.annotation.*;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.*;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
+import com.alibaba.cloud.ai.graph.action.InterruptionMetadata;
+import com.alibaba.cloud.ai.graph.agent.Agent;
 import com.alibaba.cloud.ai.graph.checkpoint.Checkpoint;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -14,6 +16,7 @@ import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.entity.CancellableRequest;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.ToolKindFind;
+import com.xr21.ai.agent.utils.PermissionSettings;
 import com.xr21.ai.agent.utils.SinksUtil;
 import com.xr21.ai.agent.utils.ToolsUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -99,9 +102,13 @@ public class AcpAgent {
         log.info("[AcpAgent] Load session:  {}", request.sessionId());
         if (sessions.containsKey(request.sessionId())) {
             log.info("[AcpAgent] Session found");
-            Optional<Checkpoint> checkpointOpt = LocalAgent.FILE_SYSTEM_SAVER.get(RunnableConfig.builder().threadId(sessions.get(request.sessionId()).threadId).build());
+            Optional<Checkpoint> checkpointOpt = LocalAgent.FILE_SYSTEM_SAVER.get(RunnableConfig.builder()
+                    .threadId(sessions.get(request.sessionId()).threadId)
+                    .build());
             String modelId = checkpointOpt.get().getState().getOrDefault("model", AiModels.defaultModel()).toString();
-            var modelState = checkpointOpt.map(Checkpoint::getState).map(e -> new SessionModelState(modelId, AiModels.availableModels())).orElse(sessionModelStateSupplier.get());
+            var modelState = checkpointOpt.map(Checkpoint::getState)
+                    .map(e -> new SessionModelState(modelId, AiModels.availableModels()))
+                    .orElse(sessionModelStateSupplier.get());
             return new LoadSessionResponse(sessionModeState, modelState);
         }
         log.info("[AcpAgent] Session not found");
@@ -156,7 +163,6 @@ public class AcpAgent {
             return PromptResponse.endTurn();
         }
 
-
         // 构建多模态用户输入
         UserMessage userMessage = buildUserMessage(promptRequest.prompt());
         log.info("[AcpAgent] Received:  {}", promptRequest);
@@ -175,161 +181,43 @@ public class AcpAgent {
         var runnableConfig = sessionsRunnableConfig.get(sessionId);
         runnableConfig.context().put("PromptRequest", promptRequest);
         runnableConfig.context().put("SyncPromptContext", context);
-        var agent = LocalAgent.createAgent(session.getCwd(), mcpServers, runnableConfig);
+        Agent agent = LocalAgent.createAgent(session.getCwd(), mcpServers, runnableConfig);
 
-        Flux<AgentOutput<Object>> flux = SinksUtil.toFlux(agent, userMessage, runnableConfig);
         // 注册可取消的请求
         Thread currentThread = Thread.currentThread();
-        CancellableRequest cancellableRequest = registerCancellableRequest(requestId, sessionId, currentThread, flux);
+
+        // 用于收集响应内容
         StringBuilder responseBuilder = new StringBuilder();
-        AtomicBoolean isFirst = new AtomicBoolean(true);
-        // 用于追踪是否是首次发送消息（用于添加换行符）
-        AtomicBoolean isFirstMessage = new AtomicBoolean(true);
+
+        // 创建共享的状态对象，用于递归调用时传递上下文
+        AgentFlowState flowState = new AgentFlowState(requestId, sessionId, context, responseBuilder);
+
+        // 使用 expand 实现递归的 Flux 流处理
+        Flux<AgentOutput<Object>> recursiveFlux = createRecursiveAgentFlux(agent, userMessage, runnableConfig, flowState);
+
+        CancellableRequest cancellableRequest = registerCancellableRequest(requestId, sessionId, currentThread, recursiveFlux);
+
         // 使用可取消的 Flux 订阅
-        Disposable disposable = flux.takeUntil(cancelSignal -> isRequestCancelled(requestId)).doOnCancel(() -> {
-            log.info("[AcpAgent] Request {} Flux subscription was cancelled", requestId);
-            if (isRequestCancelled(requestId)) {
-                context.sendThought("\n请求已被用户取消");
-            }
-        }).doOnNext(output -> {
-            // 检查请求是否已被取消
-            if (isRequestCancelled(requestId)) {
-                log.info("[AcpAgent] Request {} was cancelled, discarding output", requestId);
-                return; // 直接返回，不处理输出
-            }
-
-            // 处理文本输出
-            if (output.getChunk() != null) {
-                String chunk = output.getChunk();
-                responseBuilder.append(chunk);
-                // 流式发送消息片段给客户端，首次发送前加换行
-                if (isFirstMessage.getAndSet(false)) {
-                    context.sendMessage("\n" + chunk);
-                } else {
-                    context.sendMessage(chunk);
-                }
-            }
-
-            // 处理思考过程
-            if (output.getThink() != null) {
-                String think = output.getThink();
-                if (isFirst.getAndSet(false)) {
-                    context.sendMessage("> " + think);
-                } else {
-                    context.sendMessage(think.replaceAll("\n", "\n > "));
-                }
-            }
-
-            // 处理工具调用请求 (AssistantMessage with ToolCalls)
-            if (output.getMessage() instanceof AssistantMessage message) {
-                if (!CollectionUtils.isEmpty(message.getToolCalls())) {
-                    for (var toolCall : message.getToolCalls()) {
-                        String toolCallId = toolCall.id();
-                        String toolName = toolCall.name();
-
-                        String arguments = toolCall.arguments();
-                        // 获取工具类型
-                        ToolKind toolKind = ToolKindFind.find(toolName);
-                        // 构建工具调用内容
-                        List<ToolCallContent> contentList = new ArrayList<>();
-                        List<ToolCallLocation> locations = new ArrayList<>();
-                        if (StringUtils.hasText(arguments)) {
-                            if ("edit_file".equals(toolName)) {
-                                JSONObject json = JSON.parseObject(arguments);
-                                locations.add(new ToolCallLocation(json.getString("filePath"), 1));
-                                contentList.add(new ToolCallDiff("diff", json.getString("filePath"), json.getString("oldString"), json.getString("newString")));
-                            } else {
-                                contentList.add(new ToolCallContentBlock("content", new TextContent(arguments)));
-                            }
-                        }
-                        // 发送工具调用开始通知 (status: PENDING)
-                        // ToolCall 是完整的工具调用记录，包含输入参
-                        ToolCall toolCallNotification = new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, null,  // locations
-                                arguments,  // rawInput
-                                null,  // rawOutput - 执行后才有
-                                message.getMetadata());
-                        if ("write_todos".equals(toolName)) {
-                            context.sendThought("✨✨✨让我更新任务进度...");
-                        } else {
-                            context.sendUpdate(sessionId, toolCallNotification);
-                        }
-                        // 将工具调用添加到请求跟踪
-                        addToolCallToRequest(requestId, toolCallId);
-
-                        log.info("[AcpAgent] Tool call started: {} arguments：{} id: {}", toolName, arguments, toolCallId);
+        Disposable disposable = recursiveFlux.takeUntil(cancelSignal -> isRequestCancelled(requestId))
+                .doOnCancel(() -> {
+                    log.info("[AcpAgent] Request {} Flux subscription was cancelled", requestId);
+                    if (isRequestCancelled(requestId)) {
+                        context.sendThought("\n请求已被用户取消");
                     }
-                }
-            }
-
-            // 处理工具调用响应 (ToolResponseMessage - 工具执行完成)
-            if (output.getMessage() instanceof ToolResponseMessage message) {
-                if (!CollectionUtils.isEmpty(message.getResponses())) {
-                    for (var response : message.getResponses()) {
-                        String toolCallId = response.id();
-                        String toolName = response.name();
-                        String responseData = response.responseData();
-
-                        // 解析 ToolResult 格式的响应数据
-                        ToolsUtil.ToolResultData resultData = ToolsUtil.parseToolResult(responseData);
-
-                        // 构建位置信息
-                        List<ToolCallLocation> locations = resultData.locations;
-                        ToolCallStatus status = resultData.success ? ToolCallStatus.COMPLETED : (resultData.error != null ? ToolCallStatus.FAILED : ToolCallStatus.COMPLETED);
-                        if (!"write_todos".equals(toolName)) {
-                            // 发送工具调用更新通知 (status: COMPLETED/FAILED)
-                            context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations,  // 位置信息
-                                    null, responseData,  // rawOutput
-                                    null));
-                        }
-
-
-                        // 从请求跟踪中移除工具调用
-                        removeToolCallFromRequest(requestId, toolCallId);
-                        log.info("[AcpAgent] Tool call completed: {} id: {} status: {} responseData: {}", toolName, toolCallId, status, responseData);
+                })
+                .doOnError(error -> {
+                    if (isRequestCancelled(requestId)) {
+                        log.info("[AcpAgent] Request {} cancelled with error: {}", requestId, error.getMessage());
+                    } else {
+                        log.warn("[AcpAgent] Request {} failed with error: {}", requestId, error.getMessage());
+                        context.sendThought("处理请求时发生错误: " + error.getMessage());
                     }
-                }
-            }
-
-            // 处理工具调用反馈 (来自 HumanInTheLoop 等机制)
-            if (!CollectionUtils.isEmpty(output.getToolFeedbacks())) {
-                for (var toolFeedback : output.getToolFeedbacks()) {
-                    String toolName = toolFeedback.getName();
-                    String description = toolFeedback.getDescription();
-                    String feedbackMsg = String.format("[工具] %s: %s", toolName, description);
-
-                    // 发送思考过程
-                    context.sendThought(feedbackMsg);
-
-                    // 如果toolCallId，发送更新通知
-                    String toolCallId = toolFeedback.getId();
-                    if (toolCallId != null) {
-                        context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKind.THINK, ToolCallStatus.COMPLETED, List.of(new ToolCallContentBlock("content", new TextContent(description))), null, null, null, null));
-                    }
-                }
-            }
-
-            // 处理Plan更新 (来自AcpWriteTodosTool等工具)
-            if (output.getMetadata() != null && output.getMetadata().containsKey("acp_plan")) {
-                Object planObj = output.getMetadata().get("acp_plan");
-                if (planObj instanceof Plan plan) {
-                    // 发送Plan更新到客户端
-                    context.sendUpdate(sessionId, plan);
-                    log.info("[AcpAgent] Sent Plan update with {} entries", plan.entries().size());
-                }
-            }
-        }).doOnError(error -> {
-            if (isRequestCancelled(requestId)) {
-                log.info("[AcpAgent] Request {} cancelled with error: {}", requestId, error.getMessage());
-                // 取消时不需要发送错误消息，已经发送了取消通知
-            } else {
-                log.warn("[AcpAgent] Request {} failed with error: {}", requestId, error.getMessage());
-                context.sendThought("处理请求时发生错误: " + error.getMessage());
-            }
-        }).doFinally(signal -> {
-            // 无论成功还是失败，都注销请求
-            unregisterCancellableRequest(requestId);
-            log.info("[AcpAgent] Request {} completed with signal: {}", requestId, signal);
-        }).subscribe();
+                })
+                .doFinally(signal -> {
+                    unregisterCancellableRequest(requestId);
+                    log.info("[AcpAgent] Request {} completed with signal: {}", requestId, signal);
+                })
+                .subscribe();
 
         // 设置 Disposable 以便取消
         cancellableRequest.setFluxDisposable(disposable);
@@ -343,14 +231,13 @@ public class AcpAgent {
 
             if (isRequestCancelled(requestId)) {
                 log.info("[AcpAgent] Request {} was cancelled during execution", requestId);
-                // 确保 Disposable 被清理
                 if (!disposable.isDisposed()) {
                     disposable.dispose();
                 }
             }
         } catch (InterruptedException e) {
             log.info("[AcpAgent] Request {} thread interrupted", requestId);
-            Thread.currentThread().interrupt(); // 恢复中断状态
+            Thread.currentThread().interrupt();
             if (!disposable.isDisposed()) {
                 disposable.dispose();
             }
@@ -363,6 +250,278 @@ public class AcpAgent {
         return PromptResponse.endTurn();
     }
 
+    /**
+     * 创建递归的 Agent Flux 流处理
+     * 使用 expand 操作符实现递归的会话恢复，每次遇到人介入审核时，会请求权限后继续执行
+     * 递归的每一次会话流都使用相同的 flux 流处理逻辑
+     *
+     * @param agent          Agent 实例
+     * @param userMessage    用户消息
+     * @param runnableConfig 运行配置
+     * @param flowState      流处理状态
+     * @return 递归处理的 Flux 流
+     */
+    private Flux<AgentOutput<Object>> createRecursiveAgentFlux(Agent agent, UserMessage userMessage, RunnableConfig runnableConfig, AgentFlowState flowState) {
+        // 创建初始的 Flux
+        Flux<AgentOutput<Object>> initialFlux = SinksUtil.toFlux(agent, userMessage, runnableConfig);
+
+        // 使用 expand 实现递归处理
+        // 每次递归都会执行相同的流处理逻辑 processAgentOutput
+        return initialFlux.expand(output -> {
+            // ===== 统一的 Flux 流处理逻辑开始 =====
+            // 用于追踪是否是首次发送消息（用于添加换行符）
+
+            // 处理输出 - 使用统一的流处理逻辑
+            processAgentOutput(output, flowState);
+            // ===== 统一的 Flux 流处理逻辑结束 =====
+
+            // 检查是否是中断元数据（人介入审核）
+            if (output.getInterruptionMetadata() != null) {
+                log.info("[AcpAgent] Detected human intervention, requesting permission...");
+
+                // 处理人介入审核，获取批准决策
+                InterruptionMetadata approvalMetadata = processHumanIntervention(flowState, runnableConfig, output.getInterruptionMetadata());
+
+                // 检查是否被用户拒绝所有操作
+                boolean allRejected = approvalMetadata.toolFeedbacks()
+                        .stream()
+                        .allMatch(fb -> fb.getResult() == InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED);
+
+                if (allRejected) {
+                    log.info("[AcpAgent] All tool calls were rejected, ending flow");
+                    return Flux.empty();
+                }
+
+                // 使用批准决策创建新的 Flux 继续执行（会话恢复）
+                log.info("[AcpAgent] Resuming agent flow with approval metadata");
+                return SinksUtil.toFlux(agent, userMessage, runnableConfig);
+            }
+
+            // 正常输出，不是中断点，返回空 Flux 结束此分支
+            return Flux.empty();
+        });
+    }
+
+    /**
+     * 处理人介入审核流程
+     *
+     * @param flowState             流处理状态
+     * @param runnableConfig        运行配置
+     * @param interruptionMetadata  中断元数据
+     * @return 包含批准决策的 InterruptionMetadata
+     */
+    private InterruptionMetadata processHumanIntervention(AgentFlowState flowState, RunnableConfig runnableConfig, InterruptionMetadata interruptionMetadata) {
+        // 获取工作目录
+        AcpSession session = sessions.get(flowState.sessionId);
+        String cwd = session != null ? session.getCwd() : System.getProperty("user.dir");
+
+        // 加载权限设置
+        PermissionSettings.Settings permissionSettings = PermissionSettings.load(cwd);
+
+        // 构建批准反馈
+        InterruptionMetadata.Builder feedbackBuilder = InterruptionMetadata.builder()
+                .nodeId(interruptionMetadata.node())
+                .state(interruptionMetadata.state());
+
+        // 对每个工具调用设置批准决策
+        for (InterruptionMetadata.ToolFeedback toolFeedback : interruptionMetadata.toolFeedbacks()) {
+            List<ToolCallContent> contentBlocks = List.of(new ToolCallContentBlock("content", new TextContent(toolFeedback.getDescription())));
+
+            var toolCallUpdate = new ToolCallUpdate(toolFeedback.getId(), toolFeedback.getName(), ToolKindFind.find(toolFeedback.getName()), ToolCallStatus.PENDING, contentBlocks, null, toolFeedback.getArguments(), null);
+
+            // 构建工具标识符，用于持久化 (格式: "ToolName(arguments)" 或 "ToolName")
+            String toolPattern = buildToolPattern(toolFeedback.getName(), toolFeedback.getArguments());
+
+            // 首先检查持久化的权限
+            PermissionSettings.PermissionAction persistedAction = PermissionSettings.checkPermission(toolFeedback.getName(), toolFeedback.getArguments());
+
+            InterruptionMetadata.ToolFeedback.Builder approvedFeedbackBuilder = InterruptionMetadata.ToolFeedback.builder(toolFeedback);
+            InterruptionMetadata.ToolFeedback approvedFeedback;
+
+            if (persistedAction != null) {
+                // 使用持久化的权限决策
+                if (persistedAction == PermissionSettings.PermissionAction.ALLOW) {
+                    approvedFeedback = approvedFeedbackBuilder.result(InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED).build();
+                    log.info("[AcpAgent] Auto-approved (persisted) for tool: {}", toolFeedback.getName());
+                } else {
+                    approvedFeedback = approvedFeedbackBuilder.result(InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED).build();
+                    log.info("[AcpAgent] Auto-rejected (persisted) for tool: {}", toolFeedback.getName());
+                }
+                feedbackBuilder.addToolFeedback(approvedFeedback);
+                continue;
+            }
+
+            // 没有持久化权限，请求用户选择
+            var permissionOptions = Arrays.stream(PermissionOptionKind.values())
+                    .map(kind -> new PermissionOption(kind.name(), kind.name(), kind))
+                    .toList();
+
+            var requestPermissionRequest = new RequestPermissionRequest(flowState.sessionId, toolCallUpdate, permissionOptions);
+
+            AcpSchema.RequestPermissionResponse permissionResponse = flowState.context.requestPermission(requestPermissionRequest);
+
+            if (permissionResponse.outcome() instanceof PermissionCancelled) {
+                approvedFeedback = approvedFeedbackBuilder.result(InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED).build();
+                feedbackBuilder.addToolFeedback(approvedFeedback);
+            } else if (permissionResponse.outcome() instanceof PermissionSelected selected) {
+                PermissionOptionKind permissionOptionKind = PermissionOptionKind.valueOf(selected.optionId());
+                InterruptionMetadata.ToolFeedback.FeedbackResult feedbackResult = InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED;
+
+                switch (permissionOptionKind) {
+                    case ALLOW_ONCE -> {
+                        feedbackResult = InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED;
+                        log.info("[AcpAgent] Permission granted (once) for tool: {}", toolFeedback.getName());
+                    }
+                    case ALLOW_ALWAYS -> {
+                        feedbackResult = InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED;
+                        // 持久化 ALLOW 权限
+                        PermissionSettings.addAllowPermission(cwd, toolPattern);
+                        log.info("[AcpAgent] Permission granted (always) for tool: {}", toolFeedback.getName());
+                    }
+                    case REJECT_ONCE -> {
+                        feedbackResult = InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED;
+                        log.info("[AcpAgent] Permission rejected (once) for tool: {}", toolFeedback.getName());
+                    }
+                    case REJECT_ALWAYS -> {
+                        feedbackResult = InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED;
+                        // 持久化 REJECT 权限
+                        PermissionSettings.addRejectPermission(cwd, toolPattern);
+                        log.info("[AcpAgent] Permission rejected (always) for tool: {}", toolFeedback.getName());
+                    }
+                }
+
+                approvedFeedback = approvedFeedbackBuilder.result(feedbackResult).build();
+                feedbackBuilder.addToolFeedback(approvedFeedback);
+            }
+        }
+
+        InterruptionMetadata approvalMetadata = feedbackBuilder.build();
+        runnableConfig.metadata().ifPresent(metadata -> {
+            metadata.put(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, approvalMetadata);
+        });
+
+        return approvalMetadata;
+    }
+
+    /**
+     * 构建工具标识符模式，用于持久化存储
+     * 格式: "ToolName(arguments)" 或 "ToolName"
+     */
+    private String buildToolPattern(String toolName, String arguments) {
+        if (arguments == null || arguments.isEmpty()) {
+            return toolName;
+        }
+        // 如果参数太长，只保留前100个字符
+        String truncatedArgs = arguments.length() > 100 ? arguments.substring(0, 100) + "..." : arguments;
+        return toolName + "(" + truncatedArgs + ")";
+    }
+
+    /**
+     * 处理 Agent 输出流的核心逻辑
+     * 提取为独立方法，确保在递归的每一次会话流中都能使用相同的处理逻辑
+     *
+     * @param output           Agent 输出
+     * @param flowState        流处理状态
+     */
+    private void processAgentOutput(AgentOutput<Object> output, AgentFlowState flowState) {
+        // 检查请求是否已被取消
+        if (isRequestCancelled(flowState.requestId)) {
+            log.info("[AcpAgent] Request {} was cancelled, discarding output", flowState.requestId);
+            return;
+        }
+        // 使用 flowState 中持久化的状态，确保递归后状态连续
+        AtomicBoolean isFirst = flowState.isFirst;
+        AtomicBoolean isFirstMessage = flowState.isFirstMessage;
+        SyncPromptContext context = flowState.context;
+        StringBuilder responseBuilder = flowState.responseBuilder;
+
+        // 处理文本输出
+        if (output.getChunk() != null) {
+            String chunk = output.getChunk();
+            responseBuilder.append(chunk);
+            // 流式发送消息片段给客户端，首次发送前加换行
+            if (isFirstMessage.getAndSet(false)) {
+                context.sendMessage("\n" + chunk);
+            } else {
+                context.sendMessage(chunk);
+            }
+        }
+
+        // 处理思考过程
+        if (output.getThink() != null) {
+            String think = output.getThink();
+            if (isFirst.getAndSet(false)) {
+                context.sendMessage("> " + think);
+            } else {
+                context.sendMessage(think);
+            }
+        }
+
+        // 处理工具调用请求 (AssistantMessage with ToolCalls)
+        if (output.getMessage() instanceof AssistantMessage message) {
+            if (!CollectionUtils.isEmpty(message.getToolCalls())) {
+                for (var toolCall : message.getToolCalls()) {
+                    String toolCallId = toolCall.id();
+                    String toolName = toolCall.name();
+                    String arguments = toolCall.arguments();
+
+                    // 获取工具类型
+                    ToolKind toolKind = ToolKindFind.find(toolName);
+                    // 构建工具调用内容
+                    List<ToolCallContent> contentList = new ArrayList<>();
+                    List<ToolCallLocation> locations = new ArrayList<>();
+
+                    if (StringUtils.hasText(arguments)) {
+                        if ("edit_file".equals(toolName)) {
+                            JSONObject json = JSON.parseObject(arguments);
+                            locations.add(new ToolCallLocation(json.getString("filePath"), 1));
+                            contentList.add(new ToolCallDiff("diff", json.getString("filePath"), json.getString("oldString"), json.getString("newString")));
+                        } else {
+                            contentList.add(new ToolCallContentBlock("content", new TextContent(arguments)));
+                        }
+                    }
+
+                    // 发送工具调用开始通知 (status: PENDING)
+                    ToolCall toolCallNotification = new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, null, arguments, null, message.getMetadata());
+
+                    if ("write_todos".equals(toolName)) {
+                        context.sendThought("✨✨✨让我更新任务进度...");
+                    } else {
+                        context.sendUpdate(flowState.sessionId, toolCallNotification);
+                    }
+
+                    // 将工具调用添加到请求跟踪
+                    addToolCallToRequest(flowState.requestId, toolCallId);
+                    log.info("[AcpAgent] Tool call started: {} arguments：{} id: {}", toolName, arguments, toolCallId);
+                }
+            }
+        }
+
+        // 处理工具调用响应 (ToolResponseMessage - 工具执行完成)
+        if (output.getMessage() instanceof ToolResponseMessage message) {
+            if (!CollectionUtils.isEmpty(message.getResponses())) {
+                for (var response : message.getResponses()) {
+                    String toolCallId = response.id();
+                    String toolName = response.name();
+                    String responseData = response.responseData();
+
+                    // 解析 ToolResult 格式的响应数据
+                    ToolsUtil.ToolResultData resultData = ToolsUtil.parseToolResult(responseData);
+
+                    // 构建位置信息
+                    List<ToolCallLocation> locations = resultData.locations;
+                    ToolCallStatus status = resultData.success ? ToolCallStatus.COMPLETED : (resultData.error != null ? ToolCallStatus.FAILED : ToolCallStatus.COMPLETED);
+                    if (!"write_todos".equals(toolName)) {
+                        // 发送工具调用更新通知 (status: COMPLETED/FAILED)
+                        context.sendUpdate(flowState.sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations, null, responseData, null));
+                    }
+                    // 从请求跟踪中移除工具调用
+                    removeToolCallFromRequest(flowState.requestId, toolCallId);
+                    log.info("[AcpAgent] Tool call completed: {} id: {} status: {} responseData: {}", toolName, toolCallId, status, responseData);
+                }
+            }
+        }
+    }
 
     /**
      * 构建多模态用户消息
@@ -479,7 +638,6 @@ public class AcpAgent {
         }
     }
 
-
     /**
      * 清理会话资源
      */
@@ -592,6 +750,42 @@ public class AcpAgent {
     private boolean isRequestCancelled(String requestId) {
         CancellableRequest request = activeRequests.get(requestId);
         return request != null && request.cancelled;
+    }
+
+    /**
+     * Agent 流处理状态类
+     * 用于在递归调用中共享上下文状态
+     */
+    private static class AgentFlowState {
+        final String requestId;
+        final String sessionId;
+        final SyncPromptContext context;
+        final StringBuilder responseBuilder;
+        // 持久化 isFirst 状态，用于追踪思考过程的首次输出
+        final AtomicBoolean isFirst;
+        // 持久化 isFirstMessage 状态，用于追踪消息的首次输出（添加换行符）
+        final AtomicBoolean isFirstMessage;
+
+        AgentFlowState(String requestId, String sessionId, SyncPromptContext context, StringBuilder responseBuilder) {
+            this.requestId = requestId;
+            this.sessionId = sessionId;
+            this.context = context;
+            this.responseBuilder = responseBuilder;
+            this.isFirst = new AtomicBoolean(true);
+            this.isFirstMessage = new AtomicBoolean(true);
+        }
+
+        /**
+         * 创建新的 AgentFlowState，继承 isFirst 和 isFirstMessage 状态
+         * 用于递归调用时保持状态的连续性
+         */
+        AgentFlowState copyWithNewRequestId(String newRequestId) {
+            AgentFlowState newState = new AgentFlowState(newRequestId, this.sessionId, this.context, this.responseBuilder);
+            // 继承之前的状态，确保递归后 isFirstMessage 不会重置
+            newState.isFirst.set(this.isFirst.get());
+            newState.isFirstMessage.set(this.isFirstMessage.get());
+            return newState;
+        }
     }
 
 }

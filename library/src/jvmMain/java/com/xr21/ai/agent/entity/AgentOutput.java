@@ -7,12 +7,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.metadata.Usage;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Data
@@ -67,11 +65,8 @@ public class AgentOutput<T> {
     @JsonProperty(value = "subGraph")
     private boolean subGraph = false;
 
-    @JsonProperty(value = "toolsAutomaticallyApproved")
-    private List<AssistantMessage.ToolCall> toolsAutomaticallyApproved;
 
-    @JsonProperty(value = "toolFeedbacks")
-    private List<InterruptionMetadata.ToolFeedback> toolFeedbacks;
+    private InterruptionMetadata interruptionMetadata;
 
     public static <T> AgentOutputBuilder<T> builder() {
         return new AgentOutputBuilder<T>();
@@ -91,8 +86,7 @@ public class AgentOutput<T> {
         private String agent;
         private Usage tokenUsage;
         private boolean subGraph;
-        private List<AssistantMessage.ToolCall> toolsAutomaticallyApproved;
-        private List<InterruptionMetadata.ToolFeedback> toolFeedbacks;
+        private InterruptionMetadata interruptionMetadata;
 
         AgentOutputBuilder() {
         }
@@ -181,24 +175,18 @@ public class AgentOutput<T> {
             return this;
         }
 
-        @JsonProperty("toolsAutomaticallyApproved")
-        public AgentOutputBuilder<T> toolsAutomaticallyApproved(List<AssistantMessage.ToolCall> toolsAutomaticallyApproved) {
-            this.toolsAutomaticallyApproved = toolsAutomaticallyApproved;
-            return this;
-        }
-
-        @JsonProperty("toolFeedbacks")
-        public AgentOutputBuilder<T> toolFeedbacks(List<InterruptionMetadata.ToolFeedback> toolFeedbacks) {
-            this.toolFeedbacks = toolFeedbacks;
+        @JsonProperty("interruptionMetadata")
+        public AgentOutputBuilder<T> interruptionMetadata(InterruptionMetadata interruptionMetadata) {
+            this.interruptionMetadata = interruptionMetadata;
             return this;
         }
 
         public AgentOutput<T> build() {
-            return new AgentOutput<T>(this.node, this.timestamp, this.data, this.config, this.chunk, this.think, this.message, this.originData, this.metadata, this.agent, this.tokenUsage, this.subGraph, this.toolsAutomaticallyApproved, this.toolFeedbacks);
+            return new AgentOutput<T>(this.node, this.timestamp, this.data, this.config, this.chunk, this.think, this.message, this.originData, this.metadata, this.agent, this.tokenUsage, this.subGraph, this.interruptionMetadata);
         }
 
         public String toString() {
-            return "AgentOutput.AgentOutputBuilder(node=" + this.node + ", timestamp=" + this.timestamp + ", data=" + this.data + ", config=" + this.config + ", chunk=" + this.chunk + ",  think=" + this.think + ", message=" + this.message + ", originData=" + this.originData + ", metadata=" + this.metadata + ", agent=" + this.agent + ", tokenUsage=" + this.tokenUsage + ", subGraph=" + this.subGraph + ", toolsAutomaticallyApproved=" + this.toolsAutomaticallyApproved + ", toolFeedbacks=" + this.toolFeedbacks + ")";
+            return "AgentOutput.AgentOutputBuilder(node=" + this.node + ", timestamp=" + this.timestamp + ", data=" + this.data + ", config=" + this.config + ", chunk=" + this.chunk + ",  think=" + this.think + ", message=" + this.message + ", originData=" + this.originData + ", metadata=" + this.metadata + ", agent=" + this.agent + ", tokenUsage=" + this.tokenUsage + ", subGraph=" + this.subGraph + ", interruptionMetadata=" + this.interruptionMetadata + ")";
         }
     }
 }

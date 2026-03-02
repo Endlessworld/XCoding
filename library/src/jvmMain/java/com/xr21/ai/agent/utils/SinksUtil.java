@@ -35,8 +35,6 @@ import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
-import java.util.HashMap;
-
 public class SinksUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(SinksUtil.class);
@@ -121,9 +119,7 @@ public class SinksUtil {
             }
         }
         if (output instanceof InterruptionMetadata interruptionMetadata) {
-            builder.metadata(interruptionMetadata.metadata().orElse(new HashMap<>()));
-            builder.toolsAutomaticallyApproved(interruptionMetadata.getToolsAutomaticallyApproved());
-            builder.toolFeedbacks(interruptionMetadata.toolFeedbacks());
+            builder.interruptionMetadata(interruptionMetadata);
             builder.tokenUsage(interruptionMetadata.tokenUsage());
             builder.subGraph(interruptionMetadata.isSubGraph());
         }
