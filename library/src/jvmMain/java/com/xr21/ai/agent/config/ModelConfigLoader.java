@@ -151,7 +151,6 @@ public class ModelConfigLoader {
                 // 尝试从类路径资源中读取 models.json
                 InputStream resourceStream = ModelConfigLoader.class.getClassLoader()
                         .getResourceAsStream("models.json");
-
                 if (resourceStream != null) {
                     // 读取资源文件内容
                     byte[] resourceBytes = resourceStream.readAllBytes();
@@ -163,68 +162,12 @@ public class ModelConfigLoader {
             } catch (Exception e) {
                 log.warn("Failed to load models.json from project resources: {}, using hardcoded defaults", e.getMessage());
             }
-
-            // 如果从资源文件读取失败，使用硬编码的默认配置
-            if (jsonContent == null) {
-                // 创建供应商配置
-                List<ProviderConfig> providers = new ArrayList<>();
-                providers.add(new ProviderConfig(
-                        "volcengine",
-                        "https://ark.cn-beijing.volces.com/api/v3",
-                        "your-volcengine-api-key-here"
-                ));
-                providers.add(new ProviderConfig(
-                        "deepseek",
-                        "https://api.deepseek.com/v1",
-                        "your-deepseek-api-key-here"
-                ));
-
-                // 创建模型配置
-                List<ModelConfig> models = new ArrayList<>();
-                models.add(new ModelConfig(
-                        "kimi-k2-5",
-                        "kimi-k2.5",
-                        0.65,
-                        3000,
-                        "volcengine",
-                        null,
-                        null,
-                        true
-                ));
-                models.add(new ModelConfig(
-                        "kimi-k2-1",
-                        "kimi-k2.1",
-                        0.65,
-                        3000,
-                        "volcengine",
-                        null,
-                        null,
-                        false
-                ));
-                models.add(new ModelConfig(
-                        "deepseek-v3-2",
-                        "deepseek-v3.2",
-                        0.75,
-                        4000,
-                        "deepseek",
-                        null,
-                        null,
-                        false
-                ));
-
-                // 创建完整配置
-                ModelsConfig modelsConfig = new ModelsConfig(providers, models);
-
-                // 生成 JSON 内容
-                jsonContent = objectMapper.writerWithDefaultPrettyPrinter()
-                        .writeValueAsString(modelsConfig);
+            if (jsonContent != null) {
+                // 写入文件
+                Files.writeString(configPath, jsonContent, StandardCharsets.UTF_8);
+                log.info("Created default model config file at: {}", configPath);
+                log.info("Please edit the config file and update the apiKey field with your actual API key");
             }
-
-            // 写入文件
-            Files.writeString(configPath, jsonContent, StandardCharsets.UTF_8);
-
-            log.info("Created default model config file at: {}", configPath);
-            log.info("Please edit the config file and update the apiKey field with your actual API key");
         } catch (IOException e) {
             log.error("Failed to create default config file at {}: {}", configPath, e.getMessage());
         }
@@ -252,17 +195,17 @@ public class ModelConfigLoader {
 
     /**
      * 根据模型名称查找配置
-     * @param modelName 模型名称
+     * @param modelId 模型名称
      * @param configs 配置列表
      * @return 找到的配置，未找到返回 null
      */
-    public static ModelConfig findConfigByModelName(String modelName, List<ModelConfig> configs) {
-        if (configs.isEmpty() || modelName == null) {
+    public static ModelConfig findConfigByModelId(String modelId, List<ModelConfig> configs) {
+        if (configs.isEmpty() || modelId == null) {
             return null;
         }
 
         for (ModelConfig config : configs) {
-            if (modelName.equals(config.getModelName())) {
+            if (modelId.equals(config.getModelId())) {
                 return config;
             }
         }

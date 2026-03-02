@@ -45,16 +45,17 @@ public enum AiModels {
 
     /**
      * 从 JSON 配置文件创建 ChatModel
-     * @param modelName 模型名称
+     * @param modelId 模型名称
      * @return ChatModel 实例
      */
-    public static ChatModel createChatModelFromJson(String modelName) {
+    public static ChatModel createChatModelFromJson(String modelId) {
         List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
-        ModelConfig config = ModelConfigLoader.findConfigByModelName(modelName, configs);
+        ModelConfig config = ModelConfigLoader.findConfigByModelId(modelId, configs);
+        config = config == null ? ModelConfigLoader.getDefaultConfig(configs) : config;
         if (config != null) {
             String effectiveBaseUrl = config.getBaseUrl();
             String effectiveApiKey = config.getApiKey();
-            String effectiveModelName = config.getModelName();
+            String effectiveModelName = config.getModelId();
             Double temperature = config.getTemperature() != null ? config.getTemperature() : 0.65;
             Integer maxTokens = config.getMaxTokens();
             OpenAiApi api = OpenAiApi.builder()
@@ -74,6 +75,6 @@ public enum AiModels {
                     .openAiApi(api)
                     .build();
         }
-        throw new RuntimeException("Model configuration not found in JSON for:  " + modelName);
+        throw new RuntimeException("Model configuration not found in JSON for:  " + modelId);
     }
 }
