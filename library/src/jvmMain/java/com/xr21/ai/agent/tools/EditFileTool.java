@@ -28,9 +28,9 @@ public class EditFileTool {
     // @formatter:off
     @Tool(name = "edit_file", description = """
         Usage:
-            - file_path: 文件的绝对路径
-            - old_string: 要查找和替换的文本
-            - new_string: 用于替换的新文本
+            - filePath: 文件的绝对路径
+            - oldText: 要查找和替换的文本
+            - newText: 用于替换的新文本
             - replace_all: 是否替换所有出现（默认false，仅替换第一个）
             - normalize_line_endings: 是否自动归一化换行符（默认true）
         """)
@@ -38,10 +38,10 @@ public class EditFileTool {
             @JsonProperty(value = "filePath", required = true)
             @JsonPropertyDescription("The absolute path of the file to edit")
             String filePath,
-            @JsonProperty(value = "oldString", required = true)
+            @JsonProperty(value = "oldText", required = true)
             @JsonPropertyDescription("The exact string to find and replace")
             String oldString,
-            @JsonProperty(value = "newString", required = true)
+            @JsonProperty(value = "newText", required = true)
             @JsonPropertyDescription("The new string to replace with")
             String newString,
             @JsonProperty(value = "replaceAll")

@@ -67,7 +67,6 @@ public enum AiModels {
                     .defaultOptions(OpenAiChatOptions.builder()
                             .model(effectiveModelName)
                             .temperature(temperature)
-                            .maxTokens(maxTokens)
                             .parallelToolCalls(true)
                             .extraBody(Map.of("thinking", Map.of("type", "enabled")))
                             .reasoningEffort("medium")

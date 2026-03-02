@@ -482,7 +482,7 @@ public class AcpAgent {
                     }
 
                     // 发送工具调用开始通知 (status: PENDING)
-                    ToolCall toolCallNotification = new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, null, arguments, null, message.getMetadata());
+                    ToolCall toolCallNotification = new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, locations, arguments, null, message.getMetadata());
 
                     if ("write_todos".equals(toolName)) {
                         context.sendThought("✨✨✨让我更新任务进度...");
