@@ -33,24 +33,24 @@ public enum AiModels {
         List<AcpSchema.ModelInfo> list = new ArrayList<>();
         List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
         for (ModelConfig model : configs) {
-            list.add(new AcpSchema.ModelInfo(model.getModelId(), model.getModelName(), model.getModelName()));
+            list.add(new AcpSchema.ModelInfo(model.getModelName(), model.getModelName(), model.getModelName()));
         }
         return list;
     }
 
     public static String defaultModel() {
         List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
-        return Objects.requireNonNull(ModelConfigLoader.getDefaultConfig(configs)).getModelId();
+        return Objects.requireNonNull(ModelConfigLoader.getDefaultConfig(configs)).getModelName();
     }
 
     /**
      * 从 JSON 配置文件创建 ChatModel
-     * @param modelId 模型名称
+     * @param modelName 模型名称
      * @return ChatModel 实例
      */
-    public static ChatModel createChatModelFromJson(String modelId) {
+    public static ChatModel createChatModelFromJson(String modelName) {
         List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
-        ModelConfig config = ModelConfigLoader.findConfigByModelId(modelId, configs);
+        ModelConfig config = ModelConfigLoader.findConfigByModelName(modelName, configs);
         config = config == null ? ModelConfigLoader.getDefaultConfig(configs) : config;
         if (config != null) {
             String effectiveBaseUrl = config.getBaseUrl();
@@ -75,6 +75,6 @@ public enum AiModels {
                     .openAiApi(api)
                     .build();
         }
-        throw new RuntimeException("Model configuration not found in JSON for:  " + modelId);
+        throw new RuntimeException("Model configuration not found in JSON for:  " + modelName);
     }
 }

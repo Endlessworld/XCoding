@@ -36,63 +36,58 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
 import java.util.HashMap;
-import java.util.Map;
 
 public class SinksUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(SinksUtil.class);
 
+    private static final JsonMapper JSON_MAPPER = JsonMapper.builder().build();
+
     public static Flux<ServerSentEvent<String>> sinks(Flux<NodeOutput> outputFlux) {
         Sinks.Many<ServerSentEvent<String>> sink = Sinks.many().unicast().onBackpressureBuffer();
         processJsonStream(outputFlux, sink);
-        return sink.asFlux()
-                .doOnCancel(() -> logger.info("Client disconnected from stream"))
-                .doOnError(e -> logger.error("Error occurred during streaming", e))
-                .doOnComplete(() -> logger.info("Streaming output completed"));
+        return buildFlux(sink.asFlux());
     }
 
     public static void processJsonStream(Flux<NodeOutput> outputFlux, Sinks.Many<ServerSentEvent<String>> sink) {
-        outputFlux.doOnNext(output -> {
-//            logger.info("output = {}", output);
+        processStream(outputFlux, sink, output -> {
             try {
-                sink.tryEmitNext(ServerSentEvent.builder(buildJsonContent(output)).build());
+                return ServerSentEvent.builder(buildJsonContent(output)).build();
             } catch (JsonProcessingException e) {
                 logger.error("Error processing JSON for NodeOutput", e);
-//                        sink.t(e);
+                return null;
             }
-        }).doOnComplete(() -> {
-            // 正常完成
-            sink.tryEmitComplete();
-        }).doOnError(e -> {
-            logger.error("Error occurred during streaming", e);
-            sink.tryEmitError(e);
-        }).subscribe();
+        });
     }
 
     public static Flux<AgentOutput<Object>> sinksOutput(Flux<NodeOutput> outputFlux) {
         Sinks.Many<AgentOutput<Object>> sink = Sinks.many().unicast().onBackpressureBuffer();
-        processStream(outputFlux, sink);
-        return sink.asFlux()
+        processStream(outputFlux, sink, SinksUtil::buildContent);
+        return buildFlux(sink.asFlux());
+    }
+
+    private static <T> void processStream(Flux<NodeOutput> outputFlux, Sinks.Many<T> sink, java.util.function.Function<NodeOutput, T> mapper) {
+        outputFlux.doOnNext(output -> {
+            T result = mapper.apply(output);
+            if (result != null) {
+                sink.tryEmitNext(result);
+            }
+        }).doOnComplete(() -> sink.tryEmitComplete())
+                .doOnError(e -> {
+                    logger.error("Error occurred during streaming", e);
+                    sink.tryEmitError(e);
+                }).subscribe();
+    }
+
+    private static <T> Flux<T> buildFlux(Flux<T> flux) {
+        return flux
                 .doOnCancel(() -> logger.info("Client disconnected from stream"))
                 .doOnError(e -> logger.error("Error occurred during streaming", e))
                 .doOnComplete(() -> logger.info("Streaming output completed"));
     }
 
-    public static void processStream(Flux<NodeOutput> outputFlux, Sinks.Many<AgentOutput<Object>> sink) {
-        outputFlux.doOnNext(output -> {
-//            logger.info("output = {}", output);
-            sink.tryEmitNext(buildContent(output));
-        }).doOnComplete(() -> {
-            // 正常完成
-            sink.tryEmitComplete();
-        }).doOnError(e -> {
-            logger.error("Error occurred during streaming", e);
-            sink.tryEmitError(e);
-        }).subscribe();
-    }
-
     private static String buildJsonContent(NodeOutput output) throws JsonProcessingException {
-        return JsonMapper.builder().build().writeValueAsString(buildContent(output));
+        return JSON_MAPPER.writeValueAsString(buildContent(output));
     }
 
     private static AgentOutput<Object> buildContent(NodeOutput output) {
@@ -102,8 +97,6 @@ public class SinksUtil {
                 .data(output.state().data())
                 .node(output.node())
                 .timestamp(System.currentTimeMillis());
-        Map<String, Object> jsonMap = new HashMap<>();
-        jsonMap.put("timestamp", System.currentTimeMillis());
         if (output instanceof StreamingOutput<?> streamingOutput) {
             builder.message(streamingOutput.message());
             if (streamingOutput.message() != null) {

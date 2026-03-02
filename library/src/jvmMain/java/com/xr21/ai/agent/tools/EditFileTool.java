@@ -1,20 +1,17 @@
 package com.xr21.ai.agent.tools;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermission;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.WeakHashMap;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -30,14 +27,6 @@ public class EditFileTool {
 
     // @formatter:off
     @Tool(name = "edit_file", description = """
-        优化版编辑文件工具，提供高效的文本替换功能。
-        
-        主要优化：
-        1. 智能换行符处理，自动适配不同系统
-        2. 详细的错误提示，帮助快速定位问题
-        3. 性能优化，减少内存使用和IO操作
-        4. 支持大文件处理
-
         Usage:
             - file_path: 文件的绝对路径
             - old_string: 要查找和替换的文本
@@ -46,11 +35,21 @@ public class EditFileTool {
             - normalize_line_endings: 是否自动归一化换行符（默认true）
         """)
     public Map<String, Object> editFile(
-        @ToolParam(description = "The absolute path of the file to edit") String filePath,
-        @ToolParam(description = "The exact string to find and replace") String oldString,
-        @ToolParam(description = "The new string to replace with") String newString,
-        @ToolParam(description = "If true, replace all occurrences; if false, only replace if unique (default: false)", required = false) Boolean replaceAll,
-        @ToolParam(description = "If true, automatically normalize line endings before matching (default: true)", required = false) Boolean normalizeLineEndings
+            @JsonProperty(value = "filePath", required = true)
+            @JsonPropertyDescription("The absolute path of the file to edit")
+            String filePath,
+            @JsonProperty(value = "oldString", required = true)
+            @JsonPropertyDescription("The exact string to find and replace")
+            String oldString,
+            @JsonProperty(value = "newString", required = true)
+            @JsonPropertyDescription("The new string to replace with")
+            String newString,
+            @JsonProperty(value = "replaceAll")
+            @JsonPropertyDescription("If true, replace all occurrences; if false, only replace if unique (default: false)")
+            Boolean replaceAll,
+            @JsonProperty(value = "normalizeLineEndings")
+            @JsonPropertyDescription("If true, automatically normalize line endings before matching (default: true)")
+            Boolean normalizeLineEndings
     ) { // @formatter:on
         long startTime = System.currentTimeMillis();
         Path path = Paths.get(filePath);

@@ -48,38 +48,36 @@ public class FilesystemInterceptor extends ModelInterceptor {
 
     private String createDefaultSystemPrompt() {
         return """
-                ## Filesystem Access Tools
-                
-                You have access to a filesystem which you can interact with using these tools. 
-                All file paths must be absolute paths starting with `/`.
-                
-                ### Security Guidelines:
-                1. Avoid using the root (`/`) directory - use specific workspace paths
-                2. Never attempt path traversal using `..` or `~`
-                3. Be cautious when editing system files
-                4. Always validate paths before operations
-                
-                ### Available Tools:
-                - `ls`: List files in a directory with depth control
-                - `read_file`: Read file contents (supports pagination)
-                - `write_file`: Create or overwrite files (use with caution)
-                - `edit_file`: Edit existing files with precise string replacement
-                - `glob`: Find files matching patterns (e.g., `**/*.java`)
-                - `grep`: Search for text within files
-                
-                ### Best Practices:
-                1. Always use `ls` to explore directories before reading/editing
-                2. Use `read_file` with offset/limit for large files
-                3. Create backups before major edits
-                4. Use descriptive paths and avoid ambiguous names
-                
-                ### Path Validation:
-                - All paths are validated for security
-                - Path traversal attempts are blocked
-                - Dangerous system paths are restricted
-                - Paths are normalized automatically
-                
-                Remember: You are working in a ${readOnly ? "READ-ONLY" : "READ-WRITE"} mode.
+             ## 文件系统访问工具 
+                你可以访问一个文件系统，可以通过这些工具进行交互。
+                所有文件路径必须是以“/”开头的绝对路径。
+                ### 安全指南：
+                    1. 避免使用根目录（'/'）——使用特定的工作区路径
+                    2. 切勿尝试使用'..'或者'~'
+                    3. 编辑系统文件时要谨慎
+                    4. 始终在作前验证路径
+                                
+                ### 可用工具：
+                    - 'ls'：目录中带有深度控制的文件列表
+                    - 'read_file'：读取文件内容（支持分页）
+                    - “write_file”：创建或覆盖文件（请谨慎使用）
+                    - 'edit_file'：通过精确字符串替换编辑现有文件
+                    - 'glob'：查找与模式匹配的文件（例如，'**/*.java'）
+                    - “grep”：在文件中搜索文本，查找内容并定位问题（禁止执行**/*类似搜索，使用明确的关键字进行检索）
+
+            使用 ls 查看指定目录的文件列表
+                ### 最佳实践：
+                    1. 在阅读/编辑前，始终使用“ls”来探索目录
+                    2. 对于大文件使用带有偏移/限制的“read_file”
+                    3. 在重大编辑前创建备份
+                    4. 使用描述性路径，避免歧义名称
+                    5. 使用 edit_file、write_file 创建或编辑文件内容时 以行为单位，一次最多不可超过20行
+                ### 路径验证：
+                    - 所有路径都经过安全性验证
+                    - 路径穿越尝试被阻断
+                    - 危险系统路径受限
+                    - 路径会自动归一化
+                记住：你正在${readonly？“只读”：“读写”} 模式。
                 """;
     }
 

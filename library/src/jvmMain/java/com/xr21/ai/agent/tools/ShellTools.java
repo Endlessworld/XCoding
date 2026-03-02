@@ -1,8 +1,9 @@
 package com.xr21.ai.agent.tools;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -155,10 +156,18 @@ public class ShellTools {
 		- View comments on a Github PR: gh api repos/foo/bar/pulls/123/comments
 		""")
 	public Map<String, Object> bash(
-		@ToolParam(description = "The command to execute") String command,
-		@ToolParam(description = "Optional timeout in milliseconds (max 600000)", required = false) Long timeout,
-		@ToolParam(description = "Clear, concise description of what this command does in 5-10 words, in active voice. Examples:\nInput: ls\nOutput: List files in current directory\n\nInput: git status\nOutput: Show working tree status\n\nInput: npm install\nOutput: Install package dependencies\n\nInput: mkdir foo\nOutput: Create directory 'foo'", required = false) String description,
-		@ToolParam(description = "Set to true to run this command in the background. Use BashOutput to read the output later.", required = false) Boolean runInBackground) { // @formatter:on
+		@JsonProperty(value = "command", required = true)
+				@JsonPropertyDescription("The command to execute")
+				String command,
+		@JsonProperty(value = "timeout")
+				@JsonPropertyDescription("Optional timeout in milliseconds (max 600000)")
+				Long timeout,
+		@JsonProperty(value = "description")
+				@JsonPropertyDescription("Clear, concise description of what this command does in 5-10 words, in active voice. Examples:\nInput: ls\nOutput: List files in current directory\n\nInput: git status\nOutput: Show working tree status\n\nInput: npm install\nOutput: Install package dependencies\n\nInput: mkdir foo\nOutput: Create directory 'foo'")
+				String description,
+		@JsonProperty(value = "runInBackground")
+				@JsonPropertyDescription("Set to true to run this command in the background. Use BashOutput to read the output later.")
+				Boolean runInBackground) { // @formatter:on
 
         // Generate unique shell ID for all executions
         String shellId = "shell_" + System.currentTimeMillis();
@@ -310,8 +319,12 @@ public class ShellTools {
 		- Shell IDs can be found using the /bashes command
 		""")
 	public Map<String, Object> bashOutput(
-		@ToolParam(description = "The ID of the background shell to retrieve output from") String bash_id,
-		@ToolParam(description = "Optional regular expression to filter the output lines. Only lines matching this regex will be included in the result. Any lines that do not match will no longer be available to read.", required = false) String filter) { // @formatter:on
+		@JsonProperty(value = "bash_id", required = true)
+				@JsonPropertyDescription("The ID of the background shell to retrieve output from")
+				String bash_id,
+		@JsonProperty(value = "filter")
+				@JsonPropertyDescription("Optional regular expression to filter the output lines. Only lines matching this regex will be included in the result. Any lines that do not match will no longer be available to read.")
+				String filter) { // @formatter:on
 
         BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
 
@@ -358,7 +371,9 @@ public class ShellTools {
 		- Shell IDs can be found using the /bashes command
 		""")
 	public Map<String, Object> killShell(
-		@ToolParam(description = "The ID of the background shell to kill") String bash_id) { // @formatter:on
+		@JsonProperty(value = "bash_id", required = true)
+				@JsonPropertyDescription("The ID of the background shell to kill")
+				String bash_id) { // @formatter:on
 
         BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
 

@@ -1,10 +1,11 @@
 package com.xr21.ai.agent.tools;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -34,10 +35,18 @@ public class GrepTool {
         - The search is case-sensitive by default.
         """)
     public Map<String, Object> grep(
-        @ToolParam(description = "The text pattern to search for") String pattern,
-        @ToolParam(description = "The directory path to search in (default: base path)", required = false) String path,
-        @ToolParam(description = "File pattern to filter which files to search (e.g., '*.java')", required = false) String glob,
-        @ToolParam(description = "Output format: 'files_with_matches', 'content', or 'count' (default: 'files_with_matches')", required = false) String outputMode
+            @JsonProperty(value = "pattern", required = true)
+            @JsonPropertyDescription("The text pattern to search for")
+            String pattern,
+            @JsonProperty(value = "path")
+            @JsonPropertyDescription("The directory path to search in (default: base path)")
+            String path,
+            @JsonProperty(value = "glob")
+            @JsonPropertyDescription("File pattern to filter which files to search (e.g., '*.java')")
+            String glob,
+            @JsonProperty(value = "outputMode")
+            @JsonPropertyDescription("Output format: 'files_with_matches', 'content', or 'count' (default: 'files_with_matches')")
+            String outputMode
     ) { // @formatter:on
         try {
             Path searchPath = path != null ? Paths.get(path) : Paths.get(WORKSPACE_ROOT);

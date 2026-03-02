@@ -22,9 +22,10 @@
    - 错误处理和重试机制
 
 3. **AiModels** - AI 模型配置
-   - 多模型提供商支持（火山引擎、OpenRouter、MiniMax 等）
-   - 动态 API 密钥和基础 URL 配置
-   - 温度和最大令牌数自定义
+   - 基于 JSON 配置文件的模型管理
+   - 多供应商支持（通过 providerId 引用）
+   - 支持推理模型（thinking/reasoningEffort）
+   - 动态温度和最大令牌数配置
 
 ### 技术栈
 
@@ -49,9 +50,14 @@
 ### 终端命令工具
 | 工具名称 | 描述 | 使用场景 |
 |---------|------|---------|
-| `Bash` | 执行终端命令 | 运行构建命令、脚本 |
+| `Bash` | 执行终端命令 | 运行构建命令、脚本、Git操作 |
 | `BashOutput` | 获取后台命令输出 | 监控长时间运行进程 |
 | `KillShell` | 终止后台命令 | 停止不需要的进程 |
+
+### 上下文缓存工具
+| 工具名称 | 描述 | 使用场景 |
+|---------|------|---------|
+| `contextCacheTool` | 指针数据读取器 | 重新获取超长工具调用参数/结果 |
 
 ### 其他工具
 | 工具名称 | 描述 | 使用场景 |
@@ -72,9 +78,11 @@ ai-agents/
 │   │   │       │   ├── AcpAgent.java    # ACP 协议主入口
 │   │   │       │   └── LocalAgent.java  # 本地 Agent 实现
 │   │   │       ├── config/
-│   │   │       │   └── AiModels.java    # AI 模型配置
+│   │   │       │   ├── AiModels.java    # AI 模型配置入口
+│   │   │       │   ├── ModelConfigLoader.java  # 配置加载器
+│   │   │       │   └── ModelsConfig.java # 配置数据类
 │   │   │       ├── entity/              # 数据实体
-│   │   │       ├── interceptors/        # 拦截器实现
+│   │   │       ├── interceptors/       # 拦截器实现
 │   │   │       ├── tools/               # 工具实现
 │   │   │       └── utils/               # 工具类
 │   │   └── jvmTest/                    # 测试代码
@@ -83,8 +91,66 @@ ai-agents/
 │   └── native-resource-config.json    # GraalVM 资源配置
 ├── build.gradle.kts                   # 根构建配置
 ├── settings.gradle.kts                # 项目设置
-└── gradle/                           # Gradle 包装器
+└── gradle/                            # Gradle 包装器
 ```
+
+### 📦 Entity 数据实体
+
+| 类名 | 描述 |
+|-----|------|
+| `AcpSession` | ACP 会话状态，管理 sessionId、threadId、cwd 和历史记录 |
+| `AgentOutput` | Agent 输出结构，包含节点、时间戳、数据、消息、令牌使用量等 |
+| `CancellableRequest` | 可取消请求，支持中断执行中的工具调用（如后台进程） |
+| `ToolResult` | 标准化工具结果封装，支持 ACP Schema 特性（内容、位置、终端等） |
+
+### 🔧 Interceptors 拦截器
+
+| 拦截器 | 描述 |
+|-------|------|
+| `AcpTodoListInterceptor` | ACP 任务列表管理，支持 Plan 模式的任务状态更新 |
+| `ContextEditingInterceptor` | 上下文编辑，管理令牌数量，支持合并连续 UserMessage |
+| `FilesystemInterceptor` | 文件系统操作拦截，验证路径安全性 |
+| `ToolRetryInterceptor` | 工具调用重试，失败时自动重试最多 2 次 |
+
+### 🛠️ Tools 工具实现
+
+#### 文件操作工具
+| 工具 | 描述 |
+|-----|------|
+| `ReadFileTool` | 读取文件内容，支持分页读取 |
+| `WriteFileTool` | 创建或覆盖文件内容 |
+| `EditFileTool` | 编辑文件内容（小步修改） |
+| `GrepTool` | 文件内容搜索 |
+| `GlobTool` | 文件模式匹配 |
+| `ListFilesTool` | 列出目录内容 |
+
+#### 终端命令工具
+| 工具 | 描述 |
+|-----|------|
+| `ShellTools` | 终端命令执行（包含 Bash、BashOutput、KillShell） |
+
+#### 上下文管理工具
+| 工具 | 描述 |
+|-----|------|
+| `ContextCacheTool` | 指针数据读取器，用于重新获取超长工具调用参数/结果 |
+| `AcpWriteTodosTool` | ACP 任务管理，支持 Plan 模式 |
+
+#### 其他工具
+| 工具 | 描述 |
+|-----|------|
+| `FeedBackTool` | 用户反馈收集 |
+| `WebSearchTool` | 网络搜索 |
+| `ToolKindFind` | 工具类型查找 |
+
+### ⚙️ Utils 工具类
+
+| 类名 | 描述 |
+|-----|------|
+| `DefaultTokenCounter` | 默认令牌计数器 |
+| `GitignoreUtil` | .gitignore 文件解析和路径匹配，支持缓存和线程安全 |
+| `Json` | JSON 序列化/反序列化工具（基于 Jackson） |
+| `SinksUtil` | Reactive Streams 流处理工具，用于 SSE 推送 |
+| `ToolsUtil` | MCP 工具加载器，支持 STDIO 和 HTTP 模式 |
 
 ## 🚀 快速开始
 
@@ -136,19 +202,44 @@ ai-agents/
 
 ## ⚙️ 配置说明
 
-### AI 模型配置
-项目支持多个 AI 模型提供商，通过环境变量配置：
-```bash
-# 火山引擎
-export AI_VOLC_BASE_URL="https://..."
-export AI_VOLC_API_KEY="your-api-key"
+### AI 模型配置（JSON 配置文件）
 
-# OpenRouter
-export AI_OPEN_ROUTER_BASE_URL="https://..."
-export AI_OPEN_ROUTER_API_KEY="your-api-key"
+项目使用 JSON 配置文件管理 AI 模型，支持多供应商配置：
 
-# 默认使用 Kimi K2.5 模型
+**配置文件位置**: `library/src/main/resources/models-config.json`
+
+```json
+{
+  "providers": [
+    {
+      "providerId": "volcengine",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+      "apiKey": "${AI_VOLC_API_KEY}"
+    },
+    {
+      "providerId": "openrouter",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKey": "${AI_OPEN_ROUTER_API_KEY}"
+    }
+  ],
+  "models": [
+    {
+      "modelId": "kimi-k2.5",
+      "modelName": "moonshot-k2.5",
+      "temperature": 0.65,
+      "maxTokens": 500000,
+      "providerId": "volcengine",
+      "isDefault": true
+    }
+  ]
+}
 ```
+
+**配置说明**:
+- `providers`: 定义 API 供应商配置（baseUrl 和 apiKey）
+- `models`: 定义模型配置，通过 `providerId` 引用供应商
+- `isDefault`: 指定默认使用的模型
+- 支持环境变量引用（如 `${AI_VOLC_API_KEY}`）
 
 ### ACP 协议支持
 - 通过标准输入/输出与客户端通信
@@ -159,12 +250,11 @@ export AI_OPEN_ROUTER_API_KEY="your-api-key"
 
 项目包含以下拦截器，优化智能体行为：
 
-1. **ContextEditingInterceptor** - 上下文编辑，管理令牌数量
+1. **ContextEditingInterceptor** - 上下文编辑，管理令牌数量，支持合并连续UserMessage
 2. **ToolErrorInterceptor** - 工具错误处理
 3. **ToolRetryInterceptor** - 工具调用重试（最大 2 次）
-4. **LargeResultEvictionInterceptor** - 大结果驱逐
-5. **FilesystemInterceptor** - 文件系统操作拦截
-6. **AcpTodoListInterceptor** - ACP 任务列表管理（Plan 模式）
+4. **FilesystemInterceptor** - 文件系统操作拦截
+5. **AcpTodoListInterceptor** - ACP 任务列表管理（Plan 模式）
 
 ## 💡 使用技巧
 
@@ -198,6 +288,15 @@ BashOutput("shell_1234567890")
 KillShell("shell_1234567890")
 ```
 
+### 上下文缓存（处理超长输出）
+```java
+// 上下文编辑拦截器会自动将超长内容转换为指针
+// 指针格式: $ref+工具调用id
+
+// 使用 contextCacheTool 重新获取内容
+contextCacheTool(["$ref_tool_call_123", "$ref_tool_call_456"])
+```
+
 ### 任务规划
 ```java
 // 复杂任务使用 write_todos
@@ -221,10 +320,16 @@ write_todos([
 ### 3. 上下文限制
 - 上下文令牌限制：500,500 令牌
 - 超出时会自动清理，保留最近 8 条工具消息
+- 超长内容自动转换为指针，使用 `contextCacheTool` 重新获取
 
 ### 4. 工具调用重试
 - 工具失败时自动重试 2 次
 - 重试间隔：1 秒 → 1.5 秒 → 最大 5 秒
+
+### 5. Git 操作
+- 仅在用户明确请求时创建提交
+- 避免使用交互式命令（如 `git rebase -i`）
+- 不强制推送到 main/master 分支
 
 ## 📚 扩展开发
 
@@ -240,9 +345,19 @@ public class MyCustomTool {
 ```
 
 ### 添加新模型
-在 `AiModels` 枚举中添加新条目：
-```java
-MY_NEW_MODEL("model-name", temperature, maxTokens, baseUrlSupplier, apiKeySupplier)
+在 JSON 配置文件中添加模型配置：
+```json
+{
+  "models": [
+    {
+      "modelId": "my-new-model",
+      "modelName": "provider-model-name",
+      "temperature": 0.7,
+      "maxTokens": 4096,
+      "providerId": "my-provider"
+    }
+  ]
+}
 ```
 
 ## 🔒 安全注意事项
@@ -260,6 +375,6 @@ MY_NEW_MODEL("model-name", temperature, maxTokens, baseUrlSupplier, apiKeySuppli
 
 ---
 
-**最后更新**: 2026年2月  
-**项目状态**: 活跃开发中  
+**最后更新**: 2026年2月
+**项目状态**: 活跃开发中
 **协议**: Apache License 2.0

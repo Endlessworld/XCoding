@@ -246,7 +246,7 @@ public class ContextEditingInterceptor extends ModelInterceptor {
         int currentTokens = this.tokenCounter.countTokens(messages);
         // 1. 只有超过trigger阈值才处理
         if (currentTokens <= this.trigger) {
-            log.debug("Token count {} within limit (trigger: {})", currentTokens, this.trigger);
+            log.info("Token count {} within limit (trigger: {})", currentTokens, this.trigger);
             return handler.call(request);
         }
         log.info("🚀 Token count {} exceeds trigger {}, starting context optimization", currentTokens, this.trigger);

@@ -195,17 +195,17 @@ public class ModelConfigLoader {
 
     /**
      * 根据模型名称查找配置
-     * @param modelId 模型名称
+     * @param modelName 模型名称
      * @param configs 配置列表
      * @return 找到的配置，未找到返回 null
      */
-    public static ModelConfig findConfigByModelId(String modelId, List<ModelConfig> configs) {
-        if (configs.isEmpty() || modelId == null) {
+    public static ModelConfig findConfigByModelName(String modelName, List<ModelConfig> configs) {
+        if (configs.isEmpty() || modelName == null) {
             return null;
         }
 
         for (ModelConfig config : configs) {
-            if (modelId.equals(config.getModelId())) {
+            if (modelName.equals(config.getModelName())) {
                 return config;
             }
         }

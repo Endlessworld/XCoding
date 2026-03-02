@@ -1,6 +1,7 @@
 package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -8,7 +9,6 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
@@ -29,10 +29,18 @@ public class WebSearchTool {
     // @formatter:off
     @Tool(name = "webSearch", description = "从搜索引擎检索网络信息")
     public Map<String, Object> webSearch(
-        @ToolParam(description = "Search query List (required) Up to 5 queries") List<String> queryList,
-        @ToolParam(description = "The time range for the search results. (Available options noLimit, oneYear, oneMonth, oneWeek, oneDay. Default is noLimit)", required = false) String freshness,
-        @ToolParam(description = "Whether to return a summary. default true", required = false) Boolean summary,
-        @ToolParam(description = "Number of results (1-10, default 3)", required = false) Integer count
+            @JsonProperty(value = "queryList", required = true)
+            @JsonPropertyDescription("Search query List (required) Up to 5 queries")
+            List<String> queryList,
+            @JsonProperty(value = "freshness")
+            @JsonPropertyDescription("The time range for the search results. (Available options noLimit, oneYear, oneMonth, oneWeek, oneDay. Default is noLimit)")
+            String freshness,
+            @JsonProperty(value = "summary")
+            @JsonPropertyDescription("Whether to return a summary. default true")
+            Boolean summary,
+            @JsonProperty(value = "count")
+            @JsonPropertyDescription("Number of results (1-10, default 3)")
+            Integer count
     ) { // @formatter:on
         Map<String, Object> result = new HashMap<>();
 
@@ -96,9 +104,13 @@ public class WebSearchTool {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record SearchRequest(
-            @JsonPropertyDescription("query: Search query List (required) Up to 5 queries") List<String> queryList,
+            @JsonProperty(value = "queryList", required = true)
+            @JsonPropertyDescription("queryList: Search query List (required) Up to 5 queries") List<String> queryList,
+            @JsonProperty(value = "freshness")
             @JsonPropertyDescription("freshness: The time range for the search results. (Available options noLimit, oneYear, oneMonth, oneWeek, oneDay. Default is noLimit)") String freshness,
+            @JsonProperty(value = "summary")
             @JsonPropertyDescription("summary: Whether to return a summary. default true") Boolean summary,
-            @ToolParam(description = "count: Number of results (1-10, default 3)") Integer count) {
+            @JsonProperty(value = "count")
+            @JsonPropertyDescription("count: Number of results (1-10, default 3)") Integer count) {
     }
 }

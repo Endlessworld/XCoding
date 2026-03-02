@@ -28,7 +28,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +74,11 @@ public class AcpWriteTodosTool {
             
             Important: Don't use for simple tasks (<3 steps). Update status immediately.
             """)
-    public Map<String, Object> writeTodos(@ToolParam(description = "List of todo entries with content, status and priority") List<RequestEntry> entries, ToolContext toolContext) {
+    public Map<String, Object> writeTodos(
+            @JsonProperty(value = "entries", required = true)
+            @JsonPropertyDescription("List of todo entries with content, status and priority")
+            List<RequestEntry> entries,
+            ToolContext toolContext) {
         try {
             // Extract state from ToolContext
             Map<String, Object> contextData = toolContext.getContext();

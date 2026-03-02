@@ -1,8 +1,9 @@
 package com.xr21.ai.agent.tools;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,11 +29,14 @@ public class WriteFileTool {
             - 内容参数必须是字符串
             - write_file工具会创建新文件或覆写已存在的文件
             - 写入文件时，内容将完全替代现有内容
-            - 一次不得超过8000字符，剩余的部分使用edit_file工具继续添加
         """)
     public Map<String, Object> writeFile(
-        @ToolParam(description = "The absolute path of the file to create") String filePath,
-        @ToolParam(description = "The content to write to the file, must be a string. Maximum 8000 characters.") String content
+            @JsonProperty(value = "filePath", required = true)
+            @JsonPropertyDescription("The absolute path of the file to create")
+            String filePath,
+            @JsonProperty(value = "content", required = true)
+            @JsonPropertyDescription("The content to write to the file, must be a string. Maximum 8000 characters.")
+            String content
     ) { // @formatter:on
         // Validate request parameters
         if (filePath == null || filePath.isBlank()) {

@@ -1,9 +1,10 @@
 package com.xr21.ai.agent.tools;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.util.StringUtils;
 
 import java.io.File;
@@ -45,9 +46,15 @@ public class ReadFileTool {
             - 建议在使用该工具前先使用list_files工具验证文件/目录路径
         """)
     public Map<String, Object> readFile(
-        @ToolParam(description = "List of absolute paths of files or directory to read") List<String> filePaths,
-        @ToolParam(description = "Line offset to start reading from (default: 0)", required = false) Integer offset,
-        @ToolParam(description = "Maximum number of lines to read (default: 500)", required = false) Integer limit
+            @JsonProperty(value = "filePaths", required = true)
+            @JsonPropertyDescription("List of absolute paths of files or directory to read")
+            List<String> filePaths,
+            @JsonProperty(value = "offset")
+            @JsonPropertyDescription("Line offset to start reading from (default: 0)")
+            Integer offset,
+            @JsonProperty(value = "limit")
+            @JsonPropertyDescription("Maximum number of lines to read (default: 500)")
+            Integer limit
     ) { // @formatter:on
         if (filePaths == null || filePaths.isEmpty()) {
             return ToolResult.builder()

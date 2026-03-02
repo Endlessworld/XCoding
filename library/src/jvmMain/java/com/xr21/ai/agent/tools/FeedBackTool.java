@@ -1,9 +1,10 @@
 package com.xr21.ai.agent.tools;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,10 +53,18 @@ public class FeedBackTool {
         可以用于获取用户输入、确认操作或收集反馈。
         """)
     public Map<String, Object> feedback(
-        @ToolParam(description = "提示信息，向用户显示的消息", required = false) String prompt,
-        @ToolParam(description = "直接显示的消息，不需要用户输入", required = false) String message,
-        @ToolParam(description = "是否需要用户确认 (y/n)", required = false) Boolean requireConfirmation,
-        @ToolParam(description = "是否需要用户输入文本", required = false) Boolean requireInput
+            @JsonProperty(value = "prompt")
+            @JsonPropertyDescription("提示信息，向用户显示的消息")
+            String prompt,
+            @JsonProperty(value = "message")
+            @JsonPropertyDescription("直接显示的消息，不需要用户输入")
+            String message,
+            @JsonProperty(value = "requireConfirmation")
+            @JsonPropertyDescription("是否需要用户确认 (y/n)")
+            Boolean requireConfirmation,
+            @JsonProperty(value = "requireInput")
+            @JsonPropertyDescription("是否需要用户输入文本")
+            Boolean requireInput
     ) { // @formatter:on
         Map<String, Object> result = new HashMap<>();
 

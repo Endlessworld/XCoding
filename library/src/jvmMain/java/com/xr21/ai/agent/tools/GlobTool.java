@@ -1,11 +1,12 @@
 package com.xr21.ai.agent.tools;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -35,7 +36,9 @@ public class GlobTool {
         - `/src/**/*.xml` - Find all XML files under /src
         """)
     public Map<String, Object> glob(
-        @ToolParam(description = "The glob pattern to match files") String pattern
+            @JsonProperty(value = "pattern", required = true)
+            @JsonPropertyDescription("The glob pattern to match files")
+            String pattern
     ) { // @formatter:on
         try {
             Path basePathObj = Paths.get(WORKSPACE_ROOT);

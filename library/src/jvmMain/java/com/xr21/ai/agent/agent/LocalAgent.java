@@ -15,14 +15,20 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorIntercept
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.xr21.ai.agent.config.AiModels;
+import com.xr21.ai.agent.config.ModelConfigLoader;
+import com.xr21.ai.agent.config.ModelsConfig;
 import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
-import com.xr21.ai.agent.tools.*;
+import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
+import com.xr21.ai.agent.tools.FeedBackTool;
+import com.xr21.ai.agent.tools.ShellTools;
+import com.xr21.ai.agent.tools.WebSearchTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.ToolsUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.lang.NonNull;
@@ -74,7 +80,13 @@ public class LocalAgent {
      * 当前工作空间根目录，可在运行时更新
      */
     public static String WORKSPACE_ROOT = DEFAULT_WORKSPACE_ROOT;
-
+    private static final String SYSTEM_PROMPT_TEMPLATE = """
+            你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
+            The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
+            当前时间：{currentTime}
+            当前系统：{osName}
+            如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+            """;
     /**
      * 创建本地智能体的工厂方法。
      * <p>
@@ -98,7 +110,12 @@ public class LocalAgent {
     }
 
     private static List<ToolCallback> getTools() {
-        var methodToolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new EditFileTool(), new FeedBackTool(), new GlobTool(), new GrepTool(), new ListFilesTool(), new ReadFileTool(), new WebSearchTool(), new WriteFileTool()).build();
+        var methodToolCallbackProvider = MethodToolCallbackProvider.builder()
+                .toolObjects(ShellTools.builder()
+                                .build(), new FeedBackTool(), new WebSearchTool()
+//                        ,new EditFileTool(),new GlobTool(), new GrepTool(), new ListFilesTool(), new ReadFileTool(),  new WriteFileTool()
+                )
+                .build();
 
         return new ArrayList<>(List.of(methodToolCallbackProvider.getToolCallbacks()));
     }
@@ -119,8 +136,12 @@ public class LocalAgent {
                 .maxDelay(5000)     // 最大延迟10秒
                 .onFailure(ToolRetryInterceptor.OnFailureBehavior.RETURN_MESSAGE).errorFormatter(e -> Json.toJson(Map.of("error", "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage()))).jitter(true)        // 启用抖动)
                 .build();
-
-        return List.of(new ToolErrorInterceptor(), contextEditingInterceptor, largeResultEvictionInterceptor, toolRetryInterceptor);
+        var filesystemInterceptor = FilesystemInterceptor.builder()
+                .withWorkspaceRoot(WORKSPACE_ROOT)
+                .readOnly(false)
+                .withDefaultSecurity()
+                .build();
+        return List.of(new ToolErrorInterceptor(), contextEditingInterceptor, largeResultEvictionInterceptor, toolRetryInterceptor, filesystemInterceptor);
     }
 
     /**
@@ -162,6 +183,8 @@ public class LocalAgent {
                 throw new RuntimeException("Failed to initialize chat model", e);
             }
         } else {
+            List<ModelsConfig.ModelConfig> configs = ModelConfigLoader.loadConfigs();
+            chatModel = AiModels.createChatModelFromJson(ModelConfigLoader.getDefaultConfig(configs).getModelId());
             log.info("No specific model configuration found, using default model");
         }
 
@@ -188,23 +211,30 @@ public class LocalAgent {
                 }
             }
         }
-        Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder().description("请确认信息收集工具执行").build());
-        var instruction = String.format("""
-                你是一个编码智能体 XAgent，通过文件/内容查找，读取，文件创建，编辑等工具进行项目代码编辑
-                当前工作目录: %s 所有文件操作仅限与工作目录之内 定义改值为 cwd
-                如果工作目录下存在AGENT.md或README.md可以通过它们快速了解当前项目
-                当前时间: %s
-                使用grep查找内容并定位问题(禁止执行**/*类似搜索，使用明确的关键字进行检索)
-                使用read_file读取详细内容
-                使用edit_file修改文件内容（内容修改以行为单位，如果需要修改的内容较多分成多次修改，每次最多修改3行内容）
-                使用write_file创建并写入文件内容
-                使用ls查看指定目录的文件列表
-                使用Bash执行命令,使用BashOutput获取执行结果，使用KillShell结束命令 当前系统：%s
-                禁止使用ls逐步探索目录
-                直接使用grep搜索文件内容
-                """, cwd, LocalDateTime.now(), System.getProperty("os.name").toLowerCase());
-        var agent = ReactAgent.builder().name("agent").model(chatModel).tools(tools).saver(FILE_SYSTEM_SAVER).hooks(HumanInTheLoopHook.builder().approvalOn(approvalOn).build()).description("本地文件操作智能体，主要负责文件创建，编辑,命令执行").instruction(instruction).interceptors(interceptors).outputKey("agent_output").returnReasoningContents(true).build();
-
+        Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
+                        .description("请确认信息收集工具执行")
+                        .build()
+                , "ls", ToolConfig.builder().description("请确认执行查看目录工具").build());
+        HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
+        // 使用 PromptTemplate 渲染指令
+        var instruction = PromptTemplate.builder()
+                .template(SYSTEM_PROMPT_TEMPLATE)
+                .variables(Map.of(
+                        "cwd", cwd,
+                        "currentTime", LocalDateTime.now().toString(),
+                        "osName", System.getProperty("os.name").toLowerCase()
+                ))
+                .build()
+                .render();
+        var agent = ReactAgent.builder().name("agent").model(chatModel)
+                .tools(tools).saver(FILE_SYSTEM_SAVER)
+                .hooks(humanInTheLoopHook)
+                .enableLogging(true)
+                .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
+                .systemPrompt(instruction)
+                .interceptors(interceptors)
+                .outputKey("agent_output")
+                .returnReasoningContents(true).build();
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());
         return agent;
     }
