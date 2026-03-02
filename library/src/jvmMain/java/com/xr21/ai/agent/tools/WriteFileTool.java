@@ -22,11 +22,11 @@ public class WriteFileTool {
 
     // @formatter:off
     @Tool(name = "write_file", description = """
-        写入文件系统中的新文件。
+        写入文件系统中的文件。
         Usage:
             - file_path参数必须是绝对路径，且必须在workspace范围内
             - 内容参数必须是字符串
-            - write_file工具会创建一个新文件
+            - write_file工具会创建新文件或覆写已存在的文件
             - 写入文件时，内容将完全替代现有内容
             - 一次不得超过8000字符，剩余的部分使用edit_file工具继续添加
         """)
@@ -75,15 +75,8 @@ public class WriteFileTool {
                         .build();
             }
 
-            // Check if file already exists
-            if (Files.exists(path)) {
-                return ToolResult.builder()
-                        .error(String.format(
-                                "File already exists: %s. Use edit_file to modify existing files.",
-                                filePath
-                        ))
-                        .build();
-            }
+            // Check if file already exists (we'll overwrite it)
+            boolean fileExists = Files.exists(path);
 
             // Create parent directories if they don't exist
             Path parent = path.getParent();
@@ -98,13 +91,15 @@ public class WriteFileTool {
             int lineCount = content.isEmpty() ? 1 : (int) content.lines().count();
 
             // Build result
+            String action = fileExists ? "overwrote" : "created";
             ToolResult result = ToolResult.builder()
                     .success(true)
-                    .content(String.format("Successfully created file: %s (%d characters)", filePath, content.length()))
-                    .put("message", String.format("Successfully created file: %s (%d characters)", filePath, content.length()))
+                    .content(String.format("Successfully %s file: %s (%d characters)", action, filePath, content.length()))
+                    .put("message", String.format("Successfully %s file: %s (%d characters)", action, filePath, content.length()))
                     .put("file_path", filePath)
                     .put("bytes_written", content.getBytes().length)
-                    .put("line_count", lineCount);
+                    .put("line_count", lineCount)
+                    .put("action", action);
 
             // Add locations - for write_file, we add the first line and optionally the last line
             result.location(absolutePath, 1);
