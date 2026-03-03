@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.DefaultUsage;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
@@ -108,10 +109,15 @@ public class SinksUtil {
                 if (StringUtils.hasText(reasoningContent)) {
                     builder.think(reasoningContent);
                 }
+                var finishReason = streamingOutput.message()
+                        .getMetadata()
+                        .get("finishReason");
+                if (!OpenAiApi.ChatCompletionFinishReason.STOP.name().equalsIgnoreCase(String.valueOf(finishReason))) {
+                    builder.chunk(streamingOutput.chunk());
+                    builder.tokenUsage(streamingOutput.tokenUsage());
+                }
+                builder.originData(streamingOutput.getOriginData());
             }
-            builder.originData(streamingOutput.getOriginData());
-            builder.chunk(streamingOutput.chunk());
-            builder.tokenUsage(streamingOutput.tokenUsage());
             builder.subGraph(streamingOutput.isSubGraph());
             if(streamingOutput.message() instanceof AssistantMessage message){
                 if(message.hasToolCalls()){

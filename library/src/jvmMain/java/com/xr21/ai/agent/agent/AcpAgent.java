@@ -174,7 +174,7 @@ public class AcpAgent {
         // 记录到历史对话
         session.history.add("User: " + userMessage);
         // 发送思考过程
-        context.sendThought("✨✨✨XAgent正在处理中...✨✨✨");
+        context.sendThought("✨✨✨XAgent正在处理中...✨✨✨\n");
 
         var availableCommand = List.of(new AvailableCommand("/init", "初始化AGENT.md", new AvailableCommandInput("/init")));
         context.sendUpdate(sessionId, new AvailableCommandsUpdate("available_commands_update", availableCommand));
@@ -269,13 +269,10 @@ public class AcpAgent {
         // 使用 expand 实现递归处理
         // 每次递归都会执行相同的流处理逻辑 processAgentOutput
         return initialFlux.expand(output -> {
-            // ===== 统一的 Flux 流处理逻辑开始 =====
-            // 用于追踪是否是首次发送消息（用于添加换行符）
-
+            log.debug("===== 统一的 Flux 流处理逻辑开始 =====");
             // 处理输出 - 使用统一的流处理逻辑
             processAgentOutput(output, flowState);
-            // ===== 统一的 Flux 流处理逻辑结束 =====
-
+            log.debug("===== 统一的 Flux 流处理逻辑结束 =====");
             // 检查是否是中断元数据（人介入审核）
             if (output.getInterruptionMetadata() != null) {
                 log.info("[AcpAgent] Detected human intervention, requesting permission...");
@@ -358,9 +355,9 @@ public class AcpAgent {
                     .toList();
 
             var requestPermissionRequest = new RequestPermissionRequest(flowState.sessionId, toolCallUpdate, permissionOptions);
-
+            log.info("[AcpAgent] requestPermission : {}",requestPermissionRequest);
             AcpSchema.RequestPermissionResponse permissionResponse = flowState.context.requestPermission(requestPermissionRequest);
-
+            log.info("[AcpAgent] permissionResponse : {}",permissionResponse);
             if (permissionResponse.outcome() instanceof PermissionCancelled) {
                 approvedFeedback = approvedFeedbackBuilder.result(InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED).build();
                 feedbackBuilder.addToolFeedback(approvedFeedback);
@@ -400,7 +397,7 @@ public class AcpAgent {
         runnableConfig.metadata().ifPresent(metadata -> {
             metadata.put(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, approvalMetadata);
         });
-
+        log.info("[AcpAgent] interruptionMetadata : {}",approvalMetadata);
         return approvalMetadata;
     }
 
@@ -440,7 +437,7 @@ public class AcpAgent {
             if (usage.getTotalTokens() != null) {
                 flowState.totalTokens += usage.getTotalTokens();
             }
-            context.sendThought("tokens usage: promptTokens %s completionTokens %s request totalTokens %s session totalTokens %s".formatted(usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens(), flowState.totalTokens));
+            context.sendThought("\ntokens usage: promptTokens %s completionTokens %s request totalTokens %s session totalTokens %s".formatted(usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens(), flowState.totalTokens));
         }
         // 处理文本输出
         if (output.getChunk() != null) {

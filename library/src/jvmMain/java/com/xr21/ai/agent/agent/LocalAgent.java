@@ -8,12 +8,15 @@ import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.file.LocalFilesystemBackend;
 import com.alibaba.cloud.ai.graph.agent.extension.interceptor.LargeResultEvictionInterceptor;
 import com.alibaba.cloud.ai.graph.agent.extension.interceptor.SubAgentSpec;
+import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
+import com.alibaba.cloud.ai.graph.agent.hook.skills.SkillsAgentHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
+import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.config.ModelConfigLoader;
 import com.xr21.ai.agent.config.ModelsConfig;
@@ -21,7 +24,6 @@ import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.interceptors.SubAgentInterceptor;
-import com.xr21.ai.agent.tools.FeedBackTool;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.WebSearchTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
@@ -36,6 +38,7 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.lang.NonNull;
 import org.springframework.util.CollectionUtils;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -71,6 +74,7 @@ public class LocalAgent {
      * 文件系统保存器的存储目录路径
      */
     private static final Path FILE_SYSTEM_SAVER_FOLDER = Path.of(System.getProperty("user.home"), ".agi_working", "SystemSaver");
+    private static final Path FILE_SYSTEM_SKILL_DIR = Path.of(System.getProperty("user.home"), ".agi_working", "skills");
     /**
      * 文件系统保存器实例，用于持久化智能体状态
      */
@@ -113,7 +117,7 @@ public class LocalAgent {
 
     private static List<ToolCallback> getTools() {
         var toolCallbackProvider = MethodToolCallbackProvider.builder()
-                .toolObjects(ShellTools.builder().build(), new FeedBackTool(), new WebSearchTool())
+                .toolObjects(ShellTools.builder().build(), new WebSearchTool())
                 .build();
         return new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
     }
@@ -165,7 +169,6 @@ public class LocalAgent {
                 .includeGeneralPurpose(true)  // 同时包含通用子代理
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
-
         interceptors.add(contextEditingInterceptor);
         interceptors.add(largeResultEvictionInterceptor);
         interceptors.add(toolRetryInterceptor);
@@ -215,10 +218,7 @@ public class LocalAgent {
             log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
         }
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
-        Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
-                .description("请确认信息收集工具执行")
-                .build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
-        HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
+        List<Hook> hooks = getHooks();
         // 使用 PromptTemplate 渲染指令
         var instruction = PromptTemplate.builder()
                 .template(SYSTEM_PROMPT_TEMPLATE)
@@ -230,8 +230,7 @@ public class LocalAgent {
                 .name("agent")
                 .model(chatModel)
                 .tools(tools)
-                .saver(FILE_SYSTEM_SAVER)
-                .hooks(humanInTheLoopHook)
+                .saver(FILE_SYSTEM_SAVER).hooks(hooks)
                 .enableLogging(true)
                 .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
                 .systemPrompt(instruction)
@@ -242,6 +241,24 @@ public class LocalAgent {
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());
 
         return agent;
+    }
+
+    @NotNull
+    private static List<Hook> getHooks() {
+        List<Hook> hooks = new ArrayList<>();
+        Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
+                .description("请确认信息收集工具执行")
+                .build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
+        HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
+//        hooks.add(humanInTheLoopHook);
+        FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder()
+                .userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString())
+                .projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills")
+                .autoLoad(true)
+                .build();
+        SkillsAgentHook hook = SkillsAgentHook.builder().skillRegistry(registry).autoReload(true).build();
+        hooks.add(hook);
+        return hooks;
     }
 
     @NotNull

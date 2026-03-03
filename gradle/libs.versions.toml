@@ -1,8 +1,8 @@
 [versions]
 vanniktechMavenPublish = "0.34.0"
 spring = "6.2.0"
-springAi = "1.1.0"
-springAiAlibaba = "1.1.0.0"
+springAi = "1.1.2"
+springAiAlibaba = "1.1.2.0"
 reactor = "3.6.0"
 jackson = "2.17.0"
 hutool = "5.8.33"
