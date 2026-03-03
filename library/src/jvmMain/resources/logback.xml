@@ -14,24 +14,7 @@
         </encoder>
     </appender>
 
-    <!-- 文件输出 - INFO及以上级别 -->
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_HOME}/ai-agent.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <!-- 按天滚动 -->
-            <fileNamePattern>${LOG_HOME}/ai-agent.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <!-- 保留30天的日志 -->
-            <maxHistory>30</maxHistory>
-        </rollingPolicy>
-        <encoder>
-            <pattern>${LOG_PATTERN}</pattern>
-        </encoder>
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>INFO</level>
-        </filter>
-    </appender>
-    
-    <!-- 调试日志输出 - DEBUG及以上级别 -->
+    <!-- DEBUG级别日志 - 只记录DEBUG级别 -->
     <appender name="DEBUG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_HOME}/debug.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
@@ -43,12 +26,50 @@
         <encoder>
             <pattern>${LOG_PATTERN}</pattern>
         </encoder>
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
             <level>DEBUG</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
         </filter>
     </appender>
 
-    <!-- 错误日志单独输出 -->
+    <!-- INFO级别日志 - 只记录INFO级别 -->
+    <appender name="INFO_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/info.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 按天滚动 -->
+            <fileNamePattern>${LOG_HOME}/info.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <!-- 保留30天的INFO日志 -->
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>INFO</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <!-- WARN级别日志 - 只记录WARN级别 -->
+    <appender name="WARN_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/warn.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/warn.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>WARN</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <!-- ERROR级别日志 - 只记录ERROR级别 -->
     <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_HOME}/error.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
@@ -65,36 +86,99 @@
         </filter>
     </appender>
 
+    <!-- 综合日志文件 - 记录INFO及以上所有级别（保持向后兼容） -->
+    <appender name="ALL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_HOME}/ai-agent.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_HOME}/ai-agent.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
     <!-- 应用日志级别设置 -->
     <logger name="com.xr21.ai.agent" level="INFO" additivity="false">
 <!--        <appender-ref ref="CONSOLE" />-->
-        <appender-ref ref="FILE" />
-        <appender-ref ref="ERROR_FILE" />
         <appender-ref ref="DEBUG_FILE" />
+        <appender-ref ref="INFO_FILE" />
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
     </logger>
 
     <!-- Spring AI 日志 -->
-    <logger name="org.springframework.ai" level="INFO" >
-        <appender-ref ref="FILE" />
+    <logger name="org.springframework.ai" level="INFO">
+        <appender-ref ref="INFO_FILE" />
+        <appender-ref ref="WARN_FILE" />
         <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
     </logger>
+    
     <!-- ACP SDK 日志 -->
-    <logger name="com.agentclientprotocol" level="INFO" />
+    <logger name="com.agentclientprotocol" level="INFO">
+        <appender-ref ref="INFO_FILE" />
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
     
     <!-- Alibaba AI 日志 -->
-    <logger name="com.alibaba.cloud.ai" level="WARN" />
+    <logger name="com.alibaba.cloud.ai.graph.agent.hook.skills" level="INFO">
+        <appender-ref ref="INFO_FILE" />
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
+    
+    <logger name="com.alibaba.cloud.ai.graph.skills" level="INFO">
+        <appender-ref ref="INFO_FILE" />
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
+    
+    <logger name="com.alibaba.cloud.ai.graph.agent.node.AgentLlmNode" level="WARN">
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
     
     <!-- Reactor 日志 -->
-    <logger name="reactor" level="WARN" />
+    <logger name="reactor" level="WARN">
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
     
     <!-- 第三方库日志控制 -->
-    <logger name="org.apache" level="WARN" />
-    <logger name="org.eclipse" level="WARN" />
-    <logger name="io.netty" level="WARN" />
+    <logger name="org.apache" level="WARN">
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
+    
+    <logger name="org.eclipse" level="WARN">
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
+    
+    <logger name="io.netty" level="WARN">
+        <appender-ref ref="WARN_FILE" />
+        <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
+    </logger>
 
     <!-- 根日志配置 -->
     <root level="INFO">
-        <appender-ref ref="FILE" />
+        <appender-ref ref="INFO_FILE" />
+        <appender-ref ref="WARN_FILE" />
         <appender-ref ref="ERROR_FILE" />
+        <appender-ref ref="ALL_FILE" />
     </root>
 </configuration>
