@@ -68,6 +68,8 @@ public enum AiModels {
                             .model(effectiveModelName)
                             .temperature(temperature)
                             .parallelToolCalls(true)
+                            .streamUsage(true)
+                            .toolChoice("auto")
                             .extraBody(Map.of("thinking", Map.of("type", "enabled")))
                             .reasoningEffort("medium")
                             .build())

@@ -11,7 +11,6 @@ import com.alibaba.cloud.ai.graph.agent.extension.interceptor.SubAgentSpec;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
-import com.alibaba.cloud.ai.graph.agent.interceptor.todolist.TodoListInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
@@ -65,27 +64,25 @@ import java.util.Map;
 public class LocalAgent {
 
     /**
+     * 默认工作空间根目录
+     */
+    public static final String DEFAULT_WORKSPACE_ROOT = "D:\\IdeaProjects\\agi_working";
+    /**
      * 文件系统保存器的存储目录路径
      */
     private static final Path FILE_SYSTEM_SAVER_FOLDER = Path.of(System.getProperty("user.home"), ".agi_working", "SystemSaver");
-
     /**
      * 文件系统保存器实例，用于持久化智能体状态
      */
     public static final FileSystemSaver FILE_SYSTEM_SAVER = FileSystemSaver.builder()
             .targetFolder(FILE_SYSTEM_SAVER_FOLDER)
             .build();
-
-    /**
-     * 默认工作空间根目录
-     */
-    private static final String DEFAULT_WORKSPACE_ROOT = "D:\\IdeaProjects\\agi_working";
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
             当前时间：{currentTime}
             当前系统：{osName}
-            如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+            对于编码任务 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
             """;
     /**
      * 当前工作空间根目录，可在运行时更新
@@ -152,7 +149,7 @@ public class LocalAgent {
                 .build();
 
         // 创建子代理拦截器
-        SubAgentInterceptor interceptor = SubAgentInterceptor.builder()
+        SubAgentInterceptor subAgentInterceptor = SubAgentInterceptor.builder()
                 .defaultModel(chatModel)
                 .defaultTools(filesystemInterceptor.getTools())
                 .addSubAgent(SubAgentSpec.builder()
@@ -168,26 +165,18 @@ public class LocalAgent {
                 .includeGeneralPurpose(true)  // 同时包含通用子代理
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
-        interceptors.add(interceptor);
+
         interceptors.add(contextEditingInterceptor);
         interceptors.add(largeResultEvictionInterceptor);
         interceptors.add(toolRetryInterceptor);
         interceptors.add(filesystemInterceptor);
         interceptors.add(new ToolErrorInterceptor());
+        interceptors.add(AcpTodoListInterceptor.builder().build());
         if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context()
                 .get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
-            if (setSessionModeRequest.modeId().equalsIgnoreCase("plan")) {
-                // Check if we're in ACP context
-                boolean isAcpContext = runnableConfig.context().containsKey("SyncPromptContext");
-                if (isAcpContext) {
-                    // Use ACP-compatible TodoList interceptor for ACP context
-                    interceptors.add(AcpTodoListInterceptor.builder().build());
-                    log.info("plan mode use AcpTodoListInterceptor (ACP context)");
-                } else {
-                    // Use regular TodoList interceptor for non-ACP context
-                    interceptors.add(TodoListInterceptor.builder().build());
-                    log.info("plan mode use TodoListInterceptor (non-ACP context)");
-                }
+            if (setSessionModeRequest.modeId().equalsIgnoreCase("ForkAgent")) {
+                interceptors.add(subAgentInterceptor);
+                log.info("ForkAgent mode use subAgentInterceptor");
             }
         }
         return interceptors;
@@ -237,12 +226,19 @@ public class LocalAgent {
                         .toString(), "osName", System.getProperty("os.name").toLowerCase()))
                 .build()
                 .render();
-        var agent = ReactAgent.builder().name("agent").model(chatModel).tools(tools).saver(FILE_SYSTEM_SAVER)
+        var agent = ReactAgent.builder()
+                .name("agent")
+                .model(chatModel)
+                .tools(tools)
+                .saver(FILE_SYSTEM_SAVER)
                 .hooks(humanInTheLoopHook)
                 .enableLogging(true)
                 .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
                 .systemPrompt(instruction)
-                .interceptors(interceptors).outputKey("agent_output").returnReasoningContents(true).build();
+                .interceptors(interceptors)
+                .outputKey("agent_output")
+                .returnReasoningContents(true)
+                .build();
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());
 
         return agent;

@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
@@ -131,6 +132,9 @@ public class SinksUtil {
             if (data.containsKey("chunk")) {
                 builder.chunk(String.valueOf(data.getOrDefault("chunk", "")));
             }
+        }
+        if(output.tokenUsage() instanceof DefaultUsage usage){
+            logger.debug("usage: {}", usage);
         }
         return builder.build();
     }

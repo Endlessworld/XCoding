@@ -54,7 +54,7 @@ import java.util.*;
  */
 public class SubAgentInterceptor extends ModelInterceptor {
 
-	private static final String DEFAULT_SUBAGENT_PROMPT = "In order to complete the objective that the user asks of you, you have access to a number of standard tools.";
+	private static final String DEFAULT_SUBAGENT_PROMPT = "In order to complete the objective that the user asks of you, you have access to a number of standard tools. You should focus on user-assigned tasks and not do anything other than tasks";
 
 	private static final String DEFAULT_SYSTEM_PROMPT = """
 		## `task` (subagent spawner)

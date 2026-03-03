@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.content.Media;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.MimeType;
@@ -50,7 +51,8 @@ public class AcpAgent {
     private final Map<String, AcpSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, RunnableConfig> sessionsRunnableConfig = new ConcurrentHashMap<>();
     private final Map<String, CancellableRequest> activeRequests = new ConcurrentHashMap<>();
-    private final SessionModeState sessionModeState = new SessionModeState("chat", List.of(new SessionMode("Agent", "Agent", "智能体模式"), new SessionMode("Plan", "Plan", "规划执行模式")));
+    private final SessionModeState sessionModeState = new SessionModeState("Agent", List.of(new SessionMode("Agent", "Agent", "单智能体模式"),
+            new SessionMode("ForkAgent", "Fork Agent", "可动态fork出多个并行子代理处理任务")));
     private final Supplier<SessionModelState> sessionModelStateSupplier = () -> new SessionModelState(AiModels.defaultModel(), AiModels.availableModels());
 
     @Initialize
@@ -86,7 +88,6 @@ public class AcpAgent {
         }
         try {
             var builder = RunnableConfig.builder().threadId(sessionId);
-//                        builder.addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, null);
             builder.addStateUpdate(new HashMap<>());
             RunnableConfig runnableConfig = builder.build();
             sessionsRunnableConfig.put(sessionId, runnableConfig);
@@ -190,7 +191,7 @@ public class AcpAgent {
         StringBuilder responseBuilder = new StringBuilder();
 
         // 创建共享的状态对象，用于递归调用时传递上下文
-        AgentFlowState flowState = new AgentFlowState(requestId, sessionId, context, responseBuilder);
+        AgentFlowState flowState = new AgentFlowState(requestId, sessionId, 0, context, responseBuilder);
 
         // 使用 expand 实现递归的 Flux 流处理
         Flux<AgentOutput<Object>> recursiveFlux = createRecursiveAgentFlux(agent, userMessage, runnableConfig, flowState);
@@ -434,7 +435,13 @@ public class AcpAgent {
         AtomicBoolean isFirstMessage = flowState.isFirstMessage;
         SyncPromptContext context = flowState.context;
         StringBuilder responseBuilder = flowState.responseBuilder;
-
+        // 处理文本输出
+        if (output.getTokenUsage() instanceof DefaultUsage usage) {
+            if (usage.getTotalTokens() != null) {
+                flowState.totalTokens += usage.getTotalTokens();
+            }
+            context.sendThought("tokens usage: promptTokens %s completionTokens %s request totalTokens %s session totalTokens %s".formatted(usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens(), flowState.totalTokens));
+        }
         // 处理文本输出
         if (output.getChunk() != null) {
             String chunk = output.getChunk();
@@ -446,7 +453,6 @@ public class AcpAgent {
                 context.sendMessage(chunk);
             }
         }
-
         // 处理思考过程
         if (output.getThink() != null) {
             String think = output.getThink();
@@ -759,6 +765,7 @@ public class AcpAgent {
     private static class AgentFlowState {
         final String requestId;
         final String sessionId;
+        Integer totalTokens;
         final SyncPromptContext context;
         final StringBuilder responseBuilder;
         // 持久化 isFirst 状态，用于追踪思考过程的首次输出
@@ -766,9 +773,10 @@ public class AcpAgent {
         // 持久化 isFirstMessage 状态，用于追踪消息的首次输出（添加换行符）
         final AtomicBoolean isFirstMessage;
 
-        AgentFlowState(String requestId, String sessionId, SyncPromptContext context, StringBuilder responseBuilder) {
+        AgentFlowState(String requestId, String sessionId, Integer totalTokens, SyncPromptContext context, StringBuilder responseBuilder) {
             this.requestId = requestId;
             this.sessionId = sessionId;
+            this.totalTokens = totalTokens;
             this.context = context;
             this.responseBuilder = responseBuilder;
             this.isFirst = new AtomicBoolean(true);
@@ -780,7 +788,7 @@ public class AcpAgent {
          * 用于递归调用时保持状态的连续性
          */
         AgentFlowState copyWithNewRequestId(String newRequestId) {
-            AgentFlowState newState = new AgentFlowState(newRequestId, this.sessionId, this.context, this.responseBuilder);
+            AgentFlowState newState = new AgentFlowState(newRequestId, this.sessionId, this.totalTokens, this.context, this.responseBuilder);
             // 继承之前的状态，确保递归后 isFirstMessage 不会重置
             newState.isFirst.set(this.isFirst.get());
             newState.isFirstMessage.set(this.isFirstMessage.get());
