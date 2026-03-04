@@ -11,6 +11,9 @@
         "pattern": ".*\\.json$"
       },
       {
+        "pattern": "META-INF/services/.*"
+      },
+      {
         "pattern": "META-INF/.*"
       },
       {
@@ -18,8 +21,30 @@
       },
       {
         "pattern": ".*\\.md$"
+      },
+      {
+        "pattern": ".*logback.*\\.xml$"
+      },
+      {
+        "pattern": ".*spring.*\\.xml$"
+      },
+      {
+        "pattern": ".*spring.*\\.properties$"
       }
     ]
   },
-  "bundles": []
+  "bundles": [
+    {
+      "name": "jakarta.servlet.LocalStrings"
+    },
+    {
+      "name": "jakarta.servlet.http.LocalStrings"
+    },
+    {
+      "name": "org.slf4j.LoggerFactory"
+    },
+    {
+      "name": "ch.qos.logback.classic.Logger"
+    }
+  ]
 }

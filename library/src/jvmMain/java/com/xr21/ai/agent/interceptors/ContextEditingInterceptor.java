@@ -1,6 +1,5 @@
 package com.xr21.ai.agent.interceptors;
 
-import cn.hutool.core.convert.Convert;
 import com.alibaba.cloud.ai.graph.agent.hook.TokenCounter;
 import com.alibaba.cloud.ai.graph.agent.interceptor.ModelCallHandler;
 import com.alibaba.cloud.ai.graph.agent.interceptor.ModelInterceptor;
@@ -153,7 +152,7 @@ public class ContextEditingInterceptor extends ModelInterceptor {
                 if (hasPatches) {
                     msg = AssistantMessage.builder()
                             .toolCalls(tools)
-                            .content(Convert.toStr(assistantMsg.getText(), ""))
+                            .content(assistantMsg.getText() != null ? assistantMsg.getText() : "")
                             .properties(assistantMsg.getMetadata())
                             .media(assistantMsg.getMedia())
                             .build();

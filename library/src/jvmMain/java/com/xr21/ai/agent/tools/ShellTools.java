@@ -17,7 +17,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
-import static cn.hutool.core.util.CharsetUtil.GBK;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * @author Christian Tzolov
@@ -227,7 +230,7 @@ public class ShellTools {
 
                 // Read stdout
                 Thread stdoutThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), GBK))) {
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "GBK"))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
                             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
@@ -246,7 +249,7 @@ public class ShellTools {
 
                 // Read stderr
                 Thread stderrThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(),GBK))) {
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(),"GBK"))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
                             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {

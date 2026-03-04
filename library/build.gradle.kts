@@ -2,6 +2,8 @@ plugins {
     kotlin("jvm")
     alias(libs.plugins.vanniktech.mavenPublish)
     id("org.graalvm.buildtools.native")
+    id("com.github.ben-manes.versions") version "0.51.0"
+//    id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
 }
 
 group = "com.xr21"
@@ -37,16 +39,15 @@ sourceSets {
 }
 
 dependencies {
-    // Spring Framework
-//    implementation(libs.spring.core)
-//    implementation(libs.spring.context)
-//    implementation(libs.spring.web)
+    // Spring Framework (minimal)
+    implementation(libs.spring.core)
+    implementation(libs.spring.context)
 
     // Spring AI
     implementation(libs.spring.ai.openai)
     implementation(libs.spring.ai.mcp.client)
 
-    // Reactor
+    // Reactor (required by Spring AI)
     implementation(libs.reactor.core)
 
     // Jackson
@@ -57,7 +58,6 @@ dependencies {
     implementation(libs.spring.ai.alibaba.agent)
 
     // Utilities
-    implementation(libs.hutool.all)
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
 
@@ -77,7 +77,7 @@ dependencies {
 
 tasks.register<JavaExec>("runAcpAgent") {
     group = "application"
-    description = "Runs the AcpLocalAgent with ACP protocol support"
+    description = "Runs AcpLocalAgent with ACP protocol support"
     dependsOn("classes")
     mainClass.set("com.xr21.ai.agent.AcpLocalAgent")
     classpath = sourceSets.main.get().runtimeClasspath
@@ -86,7 +86,7 @@ tasks.register<JavaExec>("runAcpAgent") {
 
 tasks.register<JavaExec>("runAsyncAgentClient") {
     group = "application"
-    description = "Runs the AsyncAgentClient"
+    description = "Runs AsyncAgentClient"
     dependsOn("classes")
     mainClass.set("com.xr21.ai.agent.AsyncAgentClient")
     classpath = sourceSets.main.get().runtimeClasspath
@@ -141,9 +141,11 @@ tasks.register<Jar>("fatJar") {
 
     from(sourceSets.main.get().output)
 
-    from(configurations.runtimeClasspath.get().map {
-        if (it.isDirectory) it else zipTree(it)
-    })
+    from(
+        configurations.runtimeClasspath.get().map {
+            if (it.isDirectory) it else zipTree(it)
+        }
+    )
 
     archiveBaseName.set("XAgent")
     archiveClassifier.set("all")
@@ -155,38 +157,176 @@ graalvmNative {
         named("main") {
             imageName.set("XAgent")
             mainClass.set("com.xr21.ai.agent.AgentApplication")
-            javaLauncher.set(javaToolchains.launcherFor {
-                languageVersion.set(JavaLanguageVersion.of(17))
-                vendor.set(JvmVendorSpec.matching("GraalVM Community"))
-            })
-            
+
             // 构建参数优化
             buildArgs.addAll(
                 "--no-fallback",
-                "--allow-incomplete-classpath",
-                "--report-unsupported-elements-at-runtime",
+                "-H:+UnlockExperimentalVMOptions",
                 "-H:+ReportExceptionStackTraces",
                 "--enable-url-protocols=http,https",
-                "--enable-all-security-services",
-                "-O3",
-                "--gc=serial"  // G1 在某些 GraalVM 版本中不可用，使用 serial
+                "-O2",
+                "--gc=serial",
+                "--initialize-at-build-time=org.slf4j",
+                "--initialize-at-build-time=ch.qos.logback",
+                "--initialize-at-build-time=org.slf4j.LoggerFactory",
+                "--initialize-at-build-time=ch.qos.logback.classic.Logger",
+                "--initialize-at-build-time=ch.qos.logback.core.status.NopStatusListener",
+                "--initialize-at-build-time=ch.qos.logback.core.rolling.TimeBasedRollingPolicy",
+                "--initialize-at-build-time=ch.qos.logback.classic.filter.LevelFilter",
+                "--initialize-at-build-time=ch.qos.logback.classic.filter.ThresholdFilter",
+                "--initialize-at-build-time=ch.qos.logback.core.ConsoleAppender",
+                "--initialize-at-build-time=ch.qos.logback.core.rolling.RollingFileAppender",
+                "--initialize-at-build-time=ch.qos.logback.classic.encoder.PatternLayoutEncoder",
+                "-H:ReflectionConfigurationFiles=${projectDir}/native-reflect-config.json",
+                "-H:ResourceConfigurationFiles=${projectDir}/native-resource-config.json",
+                "-H:EnableURLProtocols=all",
+                "--initialize-at-build-time=org.springframework.aot.hint.ClasspathHint",
+                "--initialize-at-build-time=org.springframework.aot.hint.TypeHint",
+                // SLF4J Service Provider
+                "--initialize-at-build-time=org.slf4j.simple.SimpleLogger",
+                "--initialize-at-build-time=org.slf4j.ext.XLogger",
+                // MCP Jackson Service Provider
+                "--initialize-at-build-time=io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier",
+                "--initialize-at-build-time=ch.qos.logback.classic.spi.LogbackServiceProvider",
+                "-H:+AllowIncompleteClasspath",
             )
         }
     }
-    
-    // Toolchain 检测
-    toolchainDetection.set(true)
+
+    // 禁用工具链检测，使用当前环境
+    toolchainDetection.set(false)
 }
 
 // Native compile tasks
 tasks.named("nativeCompile") {
     dependsOn("classes", "fatJar")
     group = "build"
-    description = "Compiles the application to a native executable"
+    description = "Compiles application to a native executable"
 }
 
 tasks.named("nativeRun") {
     dependsOn("nativeCompile")
     group = "application"
-    description = "Runs the native executable"
+    description = "Runs native executable"
+}
+
+// 复制配置文件到构建目录
+tasks.register<Copy>("copyNativeConfigs") {
+    from(projectDir.resolve("native-reflect-config.json"))
+    from(projectDir.resolve("native-resource-config.json"))
+    into(layout.buildDirectory.dir("libs"))
+    dependsOn("fatJar")
+}
+
+// 多平台 Docker 构建任务
+tasks.register<Exec>("buildLinuxX64Docker") {
+    group = "build"
+    description = "Build native executable for Linux x64 using Docker"
+    workingDir = projectDir
+    commandLine("docker", "run", "--rm",
+        "-v", "${projectDir}:/app",
+        "-w", "/app",
+        "ghcr.io/graalvm/native-image-community:24-linux",
+        "sh", "-c",
+        "./gradlew :library:fatJar :library:copyNativeConfigs && " +
+        "native-image " +
+        "-jar library/build/libs/XAgent-0.0.1-all.jar " +
+        "-H:ReflectionConfigurationFiles=/app/library/build/libs/native-reflect-config.json " +
+        "-H:ResourceConfigurationFiles=/app/library/build/libs/native-resource-config.json " +
+        "-H:Name=XAgent-linux-x64 " +
+        "--no-fallback -H:+UnlockExperimentalVMOptions -O2 --gc=serial " +
+        "--initialize-at-build-time=org.slf4j,ch.qos.logback,org.slf4j.LoggerFactory")
+    outputs.file(layout.buildDirectory.file("XAgent-linux-x64"))
+}
+
+tasks.register<Exec>("buildLinuxArm64Docker") {
+    group = "build"
+    description = "Build native executable for Linux ARM64 using Docker"
+    workingDir = projectDir
+    commandLine("docker", "run", "--rm",
+        "-v", "${projectDir}:/app",
+        "-w", "/app",
+        "ghcr.io/graalvm/native-image-community:24-linux-arm64",
+        "sh", "-c",
+        "./gradlew :library:fatJar :library:copyNativeConfigs && " +
+        "native-image " +
+        "-jar library/build/libs/XAgent-0.0.1-all.jar " +
+        "-H:ReflectionConfigurationFiles=/app/library/build/libs/native-reflect-config.json " +
+        "-H:ResourceConfigurationFiles=/app/library/build/libs/native-resource-config.json " +
+        "-H:Name=XAgent-linux-arm64 " +
+        "--no-fallback -H:+UnlockExperimentalVMOptions -O2 --gc=serial " +
+        "--initialize-at-build-time=org.slf4j,ch.qos.logback,org.slf4j.LoggerFactory")
+    outputs.file(layout.buildDirectory.file("XAgent-linux-arm64"))
+}
+
+tasks.register<Exec>("buildDarwinX64Docker") {
+    group = "build"
+    description = "Build native executable for macOS x64 using Docker"
+    workingDir = projectDir
+    commandLine("docker", "run", "--rm",
+        "-v", "${projectDir}:/app",
+        "-w", "/app",
+        "ghcr.io/graalvm/native-image-community:24-darwin",
+        "sh", "-c",
+        "./gradlew :library:fatJar :library:copyNativeConfigs && " +
+        "native-image " +
+        "-jar library/build/libs/XAgent-0.0.1-all.jar " +
+        "-H:ReflectionConfigurationFiles=/app/library/build/libs/native-reflect-config.json " +
+        "-H:ResourceConfigurationFiles=/app/library/build/libs/native-resource-config.json " +
+        "-H:Name=XAgent-macos-x64 " +
+        "--no-fallback -H:+UnlockExperimentalVMOptions -O2 --gc=serial --static " +
+        "--initialize-at-build-time=org.slf4j,ch.qos.logback,org.slf4j.LoggerFactory")
+    outputs.file(layout.buildDirectory.file("XAgent-macos-x64"))
+}
+
+tasks.register<Exec>("buildDarwinArm64Docker") {
+    group = "build"
+    description = "Build native executable for macOS ARM64 using Docker"
+    workingDir = projectDir
+    commandLine("docker", "run", "--rm",
+        "-v", "${projectDir}:/app",
+        "-w", "/app",
+        "ghcr.io/graalvm/native-image-community:24-darwin-aarch64",
+        "sh", "-c",
+        "./gradlew :library:fatJar :library:copyNativeConfigs && " +
+        "native-image " +
+        "-jar library/build/libs/XAgent-0.0.1-all.jar " +
+        "-H:ReflectionConfigurationFiles=/app/library/build/libs/native-reflect-config.json " +
+        "-H:ResourceConfigurationFiles=/app/library/build/libs/native-resource-config.json " +
+        "-H:Name=XAgent-macos-arm64 " +
+        "--no-fallback -H:+UnlockExperimentalVMOptions -O2 --gc=serial --static " +
+        "--initialize-at-build-time=org.slf4j,ch.qos.logback,org.slf4j.LoggerFactory")
+    outputs.file(layout.buildDirectory.file("XAgent-macos-arm64"))
+}
+
+tasks.register<Exec>("buildWindowsX64Docker") {
+    group = "build"
+    description = "Build native executable for Windows x64 using Docker"
+    workingDir = projectDir
+    commandLine("docker", "run", "--rm",
+        "-v", "${projectDir}:/app",
+        "-w", "/app",
+        "ghcr.io/graalvm/native-image-community:24-windows",
+        "cmd", "/c",
+        "gradlew.bat :library:fatJar :library:copyNativeConfigs && " +
+        "native-image.exe " +
+        "-jar library\\build\\libs\\XAgent-0.0.1-all.jar " +
+        "-H:ReflectionConfigurationFiles=C:\\app\\library\\build\\libs\\native-reflect-config.json " +
+        "-H:ResourceConfigurationFiles=C:\\app\\library\\build\\libs\\native-resource-config.json " +
+        "-H:Name=XAgent-windows-x64 " +
+        "--no-fallback -H:+UnlockExperimentalVMOptions -O2 --gc=serial")
+    outputs.file(layout.buildDirectory.file("XAgent-windows-x64.exe"))
+}
+
+// 构建所有平台
+tasks.register<Exec>("buildAllPlatformsDocker") {
+    group = "build"
+    description = "Build native executables for all platforms using Docker"
+    dependsOn(
+        "buildLinuxX64Docker",
+        "buildLinuxArm64Docker",
+        "buildDarwinX64Docker",
+        "buildDarwinArm64Docker",
+        "buildWindowsX64Docker"
+    )
 }

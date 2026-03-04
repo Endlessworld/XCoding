@@ -1,0 +1,57 @@
+name: Test Native Build
+
+on:
+  push:
+    branches: [ test-native ]
+  workflow_dispatch:
+
+env:
+  GRAALVM_VERSION: '23.1.0'
+  JAVA_VERSION: '17'
+
+jobs:
+  test-native:
+    name: Test Native Compilation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up GraalVM
+      uses: graalvm/setup-graalvm@v1
+      with:
+        graalvm-version: ${{ env.GRAALVM_VERSION }}
+        java-version: ${{ env.JAVA_VERSION }}
+        components: 'native-image'
+        
+    - name: Verify GraalVM installation
+      run: |
+        echo "GRAALVM_HOME: $GRAALVM_HOME"
+        echo "JAVA_HOME: $JAVA_HOME"
+        echo "JAVA: $(which java)"
+        echo "NATIVE_IMAGE: $(which native-image)"
+        java -version
+        native-image --version
+        
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      
+    - name: Test basic build
+      run: ./gradlew build --no-daemon
+      
+    - name: Test native compilation
+      run: |
+        echo "Starting native compilation..."
+        ./gradlew :library:nativeCompile --no-daemon --info
+        
+    - name: Verify native executable
+      run: |
+        if [ -f "library/build/native/nativeCompile/XAgent" ]; then
+          echo "Native executable found!"
+          ls -la library/build/native/nativeCompile/XAgent
+          file library/build/native/nativeCompile/XAgent
+        else
+          echo "Native executable not found!"
+          exit 1
+        fi

@@ -5,7 +5,6 @@ springAi = "1.1.2"
 springAiAlibaba = "1.1.2.0"
 reactor = "3.6.0"
 jackson = "2.17.0"
-hutool = "5.8.33"
 lombok = "1.18.30"
 acpSdk = "0.9.0-SNAPSHOT"
 
@@ -19,7 +18,6 @@ reactor-core = { group = "io.projectreactor", name = "reactor-core", version.ref
 jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jackson" }
 spring-ai-alibaba-graph = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-graph-core", version.ref = "springAiAlibaba" }
 spring-ai-alibaba-agent = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-agent-framework", version.ref = "springAiAlibaba" }
-hutool-all = { group = "cn.hutool", name = "hutool-all", version.ref = "hutool" }
 lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
 acp-core = { group = "com.agentclientprotocol", name = "acp-core", version.ref = "acpSdk" }
 acp-agent-support = { group = "com.agentclientprotocol", name = "acp-agent-support", version.ref = "acpSdk" }
