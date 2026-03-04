@@ -2,12 +2,12 @@ package com.xr21.ai.agent.agent;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.McpServer;
+import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.Agent;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.file.LocalFilesystemBackend;
 import com.alibaba.cloud.ai.graph.agent.extension.interceptor.LargeResultEvictionInterceptor;
-import com.alibaba.cloud.ai.graph.agent.extension.interceptor.SubAgentSpec;
 import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
@@ -16,6 +16,7 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
+import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonStateSerializer;
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.config.ModelConfigLoader;
@@ -33,6 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.tool.StaticToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.lang.NonNull;
@@ -80,6 +82,7 @@ public class LocalAgent {
      */
     public static final FileSystemSaver FILE_SYSTEM_SAVER = FileSystemSaver.builder()
             .targetFolder(FILE_SYSTEM_SAVER_FOLDER)
+            .stateSerializer(new SpringAIJacksonStateSerializer(OverAllState::new))
             .build();
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
@@ -115,16 +118,24 @@ public class LocalAgent {
         }
     }
 
-    private static List<ToolCallback> getTools() {
+    private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers) {
         var toolCallbackProvider = MethodToolCallbackProvider.builder()
                 .toolObjects(ShellTools.builder().build(), new WebSearchTool())
                 .build();
-        return new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
+        List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
+        log.debug("Loaded {} base tools", tools.size());
+        // 添加 MCP 工具
+        if (!CollectionUtils.isEmpty(mcpServers)) {
+            List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
+            tools.addAll(mcpTools);
+            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
+        }
+        return new StaticToolCallbackProvider(tools);
     }
 
     private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel) {
         ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder()
-                .trigger(60000)  // 优化：降低到60k，提前触发优化
+                .trigger(65536)  // 优化：降低到32k，提前触发优化
                 .clearAtLeast(15000)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
                 .tokenCounter(new DefaultTokenCounter())
@@ -156,16 +167,16 @@ public class LocalAgent {
         SubAgentInterceptor subAgentInterceptor = SubAgentInterceptor.builder()
                 .defaultModel(chatModel)
                 .defaultTools(filesystemInterceptor.getTools())
-                .addSubAgent(SubAgentSpec.builder()
-                        .name("research-analyst")
-                        .description("用于对复杂主题进行深入研究")
-                        .systemPrompt("你是一名研究分析师，擅长收集、分析和综合信息...")
-                        .build())
-                .addSubAgent(SubAgentSpec.builder()
-                        .name("content-reviewer")
-                        .description("用于审查创建的内容或文档")
-                        .systemPrompt("你是一名内容审查员，检查代码和文档的质量...")
-                        .build())
+//                .addSubAgent(SubAgentSpec.builder()
+//                        .name("research-analyst")
+//                        .description("用于对复杂主题进行深入研究")
+//                        .systemPrompt("你是一名研究分析师，擅长收集、分析和综合信息...")
+//                        .build())
+//                .addSubAgent(SubAgentSpec.builder()
+//                        .name("content-reviewer")
+//                        .description("用于审查创建的内容或文档")
+//                        .systemPrompt("你是一名内容审查员，检查代码和文档的质量...")
+//                        .build())
                 .includeGeneralPurpose(true)  // 同时包含通用子代理
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
@@ -177,9 +188,9 @@ public class LocalAgent {
         interceptors.add(AcpTodoListInterceptor.builder().build());
         if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context()
                 .get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
-            if (setSessionModeRequest.modeId().equalsIgnoreCase("ForkAgent")) {
+            if (setSessionModeRequest.modeId().equalsIgnoreCase("Workers")) {
                 interceptors.add(subAgentInterceptor);
-                log.info("ForkAgent mode use subAgentInterceptor");
+                log.info("Workers mode use subAgentInterceptor");
             }
         }
         return interceptors;
@@ -208,15 +219,9 @@ public class LocalAgent {
         log.info("Building LocalAgent for workspace: {}", cwd);
         WORKSPACE_ROOT = cwd;
         log.debug("Setting workspace root to: {}", WORKSPACE_ROOT);
-        var tools = getTools();
-        log.debug("Loaded {} base tools", tools.size());
+
+
         ChatModel chatModel = getChatModel(runnableConfig);
-        // 添加 MCP 工具
-        if (!CollectionUtils.isEmpty(mcpServers)) {
-            List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
-            tools.addAll(mcpTools);
-            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
-        }
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
         List<Hook> hooks = getHooks();
         // 使用 PromptTemplate 渲染指令
@@ -226,10 +231,11 @@ public class LocalAgent {
                         .toString(), "osName", System.getProperty("os.name").toLowerCase()))
                 .build()
                 .render();
+        var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers);
+        var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
         var agent = ReactAgent.builder()
                 .name("agent")
-                .model(chatModel)
-                .tools(tools)
+                .model(chatModel).tools(tools).parallelToolExecution(true)
                 .saver(FILE_SYSTEM_SAVER).hooks(hooks)
                 .enableLogging(true)
                 .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
@@ -239,7 +245,6 @@ public class LocalAgent {
                 .returnReasoningContents(true)
                 .build();
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());
-
         return agent;
     }
 

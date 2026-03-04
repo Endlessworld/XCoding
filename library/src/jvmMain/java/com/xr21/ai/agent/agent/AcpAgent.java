@@ -53,7 +53,7 @@ public class AcpAgent {
     private final Map<String, RunnableConfig> sessionsRunnableConfig = new ConcurrentHashMap<>();
     private final Map<String, CancellableRequest> activeRequests = new ConcurrentHashMap<>();
     private final SessionModeState sessionModeState = new SessionModeState("Agent", List.of(new SessionMode("Agent", "Agent", "单智能体模式"),
-            new SessionMode("ForkAgent", "ForkAgent", "动态并行子代理")));
+            new SessionMode("Workers", "Workers", "动态并行子代理")));
     private final Supplier<SessionModelState> sessionModelStateSupplier = () -> new SessionModelState(AiModels.defaultModel(), AiModels.availableModels());
 
     @Initialize

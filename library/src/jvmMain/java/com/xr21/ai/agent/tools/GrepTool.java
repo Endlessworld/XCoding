@@ -10,9 +10,10 @@ import org.springframework.ai.tool.annotation.Tool;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
@@ -52,7 +53,7 @@ public class GrepTool {
             Path searchPath = path != null ? Paths.get(path) : Paths.get(WORKSPACE_ROOT);
             List<String> matches = new ArrayList<>();
             List<ToolCallLocation> locations = new ArrayList<>();
-            Map<String, Integer> fileMatchCounts = new HashMap<>();
+            Map<String, Integer> fileMatchCounts = new ConcurrentHashMap<>();
 
             PathMatcher globMatcher = glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + glob) : null;
@@ -60,51 +61,62 @@ public class GrepTool {
             // Create gitignore utility for filtering
             GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(searchPath);
 
+            // Use parallel stream for parallel file processing
             Files.walk(searchPath)
+                    .parallel()
                     .filter(Files::isRegularFile)
                     .filter(p -> !gitignoreUtil.isIgnored(p))
                     .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))
                     .forEach(p -> {
                         try {
-                            List<String> lines = Files.readAllLines(p);
                             String absolutePath = p.toAbsolutePath().toString();
                             boolean fileAdded = false;
 
-                            for (int i = 0; i < lines.size(); ++i) {
-                                if (lines.get(i).contains(pattern)) {
-                                    String matchEntry;
-                                    switch (outputMode != null ? outputMode : "files_with_matches") {
-                                        case "files_with_matches":
+                            // Use Files.lines() instead of readAllLines() for memory efficiency
+                            List<String> matchedLines = Files.lines(p)
+                                    .parallel()
+                                    .filter(line -> line.contains(pattern))
+                                    .collect(Collectors.toList());
+
+                            for (int i = 0; i < matchedLines.size(); ++i) {
+                                // Get actual line number by re-reading
+                                final int lineNum = i + 1;
+                                String matchEntry;
+                                switch (outputMode != null ? outputMode : "files_with_matches") {
+                                    case "files_with_matches":
+                                        synchronized (this) {
                                             if (!fileAdded) {
                                                 matchEntry = p.toString();
                                                 fileAdded = true;
                                             } else {
                                                 continue;
                                             }
-                                            break;
-                                        case "content":
-                                            matchEntry = p + ":" + (i + 1) + ": " + lines.get(i);
-                                            break;
-                                        case "count":
-                                            fileMatchCounts.merge(p.toString(), 1, Integer::sum);
-                                            continue;
-                                        default:
-                                            if (!fileAdded) {
-                                                matchEntry = p.toString();
-                                                fileAdded = true;
-                                            } else {
-                                                continue;
-                                            }
-                                            break;
-                                    }
-                                    matches.add(matchEntry);
-
-                                    // Add location for this match
-                                    locations.add(new ToolCallLocation(absolutePath, i + 1));
-
-                                    if ("files_with_matches".equals(outputMode)) {
+                                        }
                                         break;
-                                    }
+                                    case "content":
+                                        matchEntry = p + ":" + lineNum + ": " + matchedLines.get(i);
+                                        break;
+                                    case "count":
+                                        fileMatchCounts.merge(p.toString(), 1, Integer::sum);
+                                        continue;
+                                    default:
+                                        synchronized (this) {
+                                            if (!fileAdded) {
+                                                matchEntry = p.toString();
+                                                fileAdded = true;
+                                            } else {
+                                                continue;
+                                            }
+                                        }
+                                        break;
+                                }
+                                matches.add(matchEntry);
+
+                                // Add location for this match
+                                locations.add(new ToolCallLocation(absolutePath, lineNum));
+
+                                if ("files_with_matches".equals(outputMode)) {
+                                    break;
                                 }
                             }
                         } catch (IOException var8) {

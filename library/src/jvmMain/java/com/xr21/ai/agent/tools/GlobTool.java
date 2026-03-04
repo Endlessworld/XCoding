@@ -13,6 +13,7 @@ import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
@@ -43,24 +44,29 @@ public class GlobTool {
         try {
             Path basePathObj = Paths.get(WORKSPACE_ROOT);
             PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
-            List<String> matchedFiles = new ArrayList<>();
-            List<ToolCallLocation> locations = new ArrayList<>();
 
             // Create gitignore utility for filtering
             GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(basePathObj);
 
-            Files.walk(basePathObj)
+            // Use parallel stream for parallel processing
+            List<Path> matchedPaths = Files.walk(basePathObj)
+                    .parallel()
                     .filter(Files::isRegularFile)
                     .filter(path -> !gitignoreUtil.isIgnored(path))
                     .filter(path -> {
                         Path relativePath = basePathObj.relativize(path);
                         return matcher.matches(relativePath) || matcher.matches(path);
                     })
-                    .forEach(path -> {
-                        String absolutePath = path.toAbsolutePath().toString();
-                        matchedFiles.add(absolutePath);
-                        locations.add(new ToolCallLocation(absolutePath, 1));
-                    });
+                    .collect(Collectors.toList());
+
+            List<String> matchedFiles = new ArrayList<>();
+            List<ToolCallLocation> locations = new ArrayList<>();
+
+            for (Path path : matchedPaths) {
+                String absolutePath = path.toAbsolutePath().toString();
+                matchedFiles.add(absolutePath);
+                locations.add(new ToolCallLocation(absolutePath, 1));
+            }
 
             ToolResult result = ToolResult.builder();
 

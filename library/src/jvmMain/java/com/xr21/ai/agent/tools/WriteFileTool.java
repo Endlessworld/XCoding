@@ -50,19 +50,6 @@ public class WriteFileTool {
                     .error("Content cannot be null")
                     .build();
         }
-
-        // Validate content length
-        if (content.length() > MAX_CONTENT_LENGTH) {
-            return ToolResult.builder()
-                    .error(String.format(
-                            "Content exceeds maximum length of %d characters (actual: %d). " +
-                            "Please split the content and use edit_file tool for remaining parts.",
-                            MAX_CONTENT_LENGTH,
-                            content.length()
-                    ))
-                    .build();
-        }
-
         try {
             Path path = Paths.get(filePath).normalize();
             Path workspacePath = Paths.get(WORKSPACE_ROOT_NORMALIZED);
