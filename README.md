@@ -122,6 +122,18 @@ export AI_MINIMAX_API_KEY="your-api-key"
 
 ### 构建项目
 
+#### 🔄 自动化构建
+
+本项目配置了完整的 GitHub Actions 工作流：
+
+- **CI 工作流**: 每次推送和 PR 自动运行测试和构建
+- **Native Build**: 跨平台原生编译（Linux、macOS、Windows）
+- **Release**: 标签发布自动创建 GitHub Release
+
+详细说明请参考 [GitHub Actions 工作流文档](.github/workflows/README.md)。
+
+#### 🏗️ 本地构建
+
 ```bash
 # 克隆项目
 git clone https://github.com/your-username/ai-agents.git
@@ -132,6 +144,9 @@ cd ai-agents
 
 # 构建 Fat JAR
 ./gradlew :library:fatJar
+
+# 原生编译（需要 GraalVM）
+./gradlew :library:nativeCompile
 ```
 
 ### 运行方式
