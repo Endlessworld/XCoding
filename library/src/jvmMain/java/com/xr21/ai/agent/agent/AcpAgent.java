@@ -496,7 +496,7 @@ public class AcpAgent {
                     ToolCall toolCallNotification = new ToolCall("tool_call", toolCallId, toolName, toolKind, ToolCallStatus.IN_PROGRESS, contentList, locations, arguments, null, message.getMetadata());
 
                     if ("write_todos".equals(toolName)) {
-                        context.sendThought("✨✨✨让我更新任务进度...");
+                        context.sendThought("✨✨✨让我更新任务进度...\n");
                     } else {
                         context.sendUpdate(sessionId, toolCallNotification);
                     }

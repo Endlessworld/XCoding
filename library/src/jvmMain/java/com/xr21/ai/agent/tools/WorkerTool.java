@@ -34,42 +34,42 @@ import java.util.Map;
 import java.util.function.BiFunction;
 
 /**
- * Tool that enables invoking subagents to handle complex, isolated tasks.
+ * Tool that enables invoking workers to handle complex, isolated tasks.
  *
- * This tool allows the main agent to delegate work to specialized subagents,
+ * This tool allows the main agent to delegate work to specialized workers,
  * each with their own context and capabilities.
  */
 @Slf4j
-public class TaskTool implements BiFunction<TaskTool.TaskRequest, ToolContext, String> {
+public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolContext, String> {
 
-    private final Map<String, ReactAgent> subAgents;
+    private final Map<String, ReactAgent> workers;
 
-    public TaskTool(Map<String, ReactAgent> subAgents) {
-        this.subAgents = subAgents;
+    public WorkerTool(Map<String, ReactAgent> workers) {
+        this.workers = workers;
     }
 
     /**
-     * Create a ToolCallback for the task tool.
+     * Create a ToolCallback for the worker tool.
      */
-    public static ToolCallback createTaskToolCallback(Map<String, ReactAgent> subAgents, String description) {
-        return FunctionToolCallback.builder("task", new TaskTool(subAgents))
+    public static ToolCallback createWorkerToolCallback(Map<String, ReactAgent> workers, String description) {
+        return FunctionToolCallback.builder("worker", new WorkerTool(workers))
                 .description(description)
-                .inputType(TaskRequest.class)
+                .inputType(WorkerRequest.class)
                 .build();
     }
 
     @Override
-    public String apply(TaskRequest request, ToolContext context) {
-        // Validate subagent type
-        if (!subAgents.containsKey(request.subagentType)) {
-            return "Error: invoked agent of type " + request.subagentType + ", the only allowed types are " + subAgents.keySet();
+    public String apply(WorkerRequest request, ToolContext context) {
+        // Validate worker type
+        if (!workers.containsKey(request.workerType)) {
+            return "Error: invoked worker of type " + request.workerType + ", the only allowed types are " + workers.keySet();
         }
-        // Get the subagent
-        ReactAgent subAgent = subAgents.get(request.subagentType);
-        // Invoke the subagent with the task description
-        log.info("subAgents task" + request.description);
+        // Get the worker
+        ReactAgent worker = workers.get(request.workerType);
+        // Invoke the worker with the task description
+        log.info("Workers task" + request.description);
         try {
-            // Return the subagent's response
+            // Return the worker's response
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
                 log.info("config context {}", config.context());
                 log.info("config context PromptRequest {}", config.context().get("PromptRequest"));
@@ -77,54 +77,53 @@ public class TaskTool implements BiFunction<TaskTool.TaskRequest, ToolContext, S
                 if (config.context().get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
                     if (config.context().get("PromptRequest") instanceof AcpSchema.PromptRequest promptRequest) {
                         StringBuilder builder = new StringBuilder();
-                        Flux<AgentOutput<Object>> flux = SinksUtil.sinksOutput(subAgent.stream(request.description));
+                        Flux<AgentOutput<Object>> flux = SinksUtil.sinksOutput(worker.stream(request.description));
                         AgentOutput<Object> blockLast = flux.doOnNext(output -> {
                             if (StringUtils.hasText(output.getChunk())) {
                                 builder.append(output.getChunk());
-                                syncPromptContext.sendThought(output.getChunk());
+//                                syncPromptContext.sendThought(output.getChunk());
                             }
                             if (StringUtils.hasText(output.getThink())) {
-                                syncPromptContext.sendThought(output.getThink());
+//                                syncPromptContext.sendThought(output.getThink());
                             }
                         }).doOnComplete(() -> {
-                            log.info("subAgents task complete");
-                            syncPromptContext.sendThought("子智能体任务执行结束");
+                            log.info("Workers task complete");
+//                            syncPromptContext.sendThought("Worker任务执行结束");
                         }).doOnError(e -> {
-                            log.error("subAgents task failed", e);
-                            syncPromptContext.sendThought("子智能体任务执行失败" + e.getMessage());
+                            log.error("Workers task failed", e);
+//                            syncPromptContext.sendThought("Worker任务执行失败" + e.getMessage());
                         }).blockLast();
                         return builder.toString();
                     }
                 }
-                return subAgent.call(request.description).getText();
+                return worker.call(request.description).getText();
             } else {
-                return subAgent.call(request.description).getText();
+                return worker.call(request.description).getText();
             }
         } catch (Exception e) {
-            return "Error executing subagent task: " + e.getMessage();
+            return "Error executing worker task: " + e.getMessage();
         }
     }
 
     /**
-     * Request structure for the task tool.
+     * Request structure for the worker tool.
      */
-    public static class TaskRequest {
+    public static class WorkerRequest {
 
         @JsonProperty(required = true)
-        @JsonPropertyDescription("Detailed description of the task to be performed by the subagent")
+        @JsonPropertyDescription("Detailed description of the task to be performed by the worker")
         public String description;
 
-        @JsonProperty(required = true, value = "subagent_type")
-        @JsonPropertyDescription("The type of subagent to use for this task")
-        public String subagentType;
+        @JsonProperty(required = true, value = "worker_type")
+        @JsonPropertyDescription("The type of worker to use for this task")
+        public String workerType;
 
-        public TaskRequest() {
+        public WorkerRequest() {
         }
 
-        public TaskRequest(String description, String subagentType) {
+        public WorkerRequest(String description, String workerType) {
             this.description = description;
-            this.subagentType = subagentType;
+            this.workerType = workerType;
         }
     }
 }
-

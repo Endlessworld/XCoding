@@ -69,7 +69,7 @@ public class AcpWriteTodosTool {
             
             Task Priorities (Must be uppercase):
             - HIGH: Critical
-            - MEDIUM: Important  
+            - MEDIUM: Important
             - LOW: Nice-to-have
             
             Important: Don't use for simple tasks (<3 steps). Update status immediately.

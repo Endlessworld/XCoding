@@ -24,7 +24,7 @@ import com.xr21.ai.agent.config.ModelsConfig;
 import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
-import com.xr21.ai.agent.interceptors.SubAgentInterceptor;
+import com.xr21.ai.agent.interceptors.WorkerInterceptor;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.WebSearchTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
@@ -163,21 +163,21 @@ public class LocalAgent {
                 .withDefaultSecurity()
                 .build();
 
-        // 创建子代理拦截器
-        SubAgentInterceptor subAgentInterceptor = SubAgentInterceptor.builder()
+        // 创建Worker拦截器
+        WorkerInterceptor workerInterceptor = WorkerInterceptor.builder()
                 .defaultModel(chatModel)
                 .defaultTools(filesystemInterceptor.getTools())
-//                .addSubAgent(SubAgentSpec.builder()
+//                .addWorker(WorkerSpec.builder()
 //                        .name("research-analyst")
 //                        .description("用于对复杂主题进行深入研究")
 //                        .systemPrompt("你是一名研究分析师，擅长收集、分析和综合信息...")
 //                        .build())
-//                .addSubAgent(SubAgentSpec.builder()
+//                .addWorker(WorkerSpec.builder()
 //                        .name("content-reviewer")
 //                        .description("用于审查创建的内容或文档")
 //                        .systemPrompt("你是一名内容审查员，检查代码和文档的质量...")
 //                        .build())
-                .includeGeneralPurpose(true)  // 同时包含通用子代理
+                .includeGeneralPurpose(true)  // 同时包含通用Worker
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
         interceptors.add(contextEditingInterceptor);
@@ -189,8 +189,8 @@ public class LocalAgent {
         if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context()
                 .get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
             if (setSessionModeRequest.modeId().equalsIgnoreCase("Workers")) {
-                interceptors.add(subAgentInterceptor);
-                log.info("Workers mode use subAgentInterceptor");
+                interceptors.add(workerInterceptor);
+                log.info("Workers mode use workerInterceptor");
             }
         }
         return interceptors;
