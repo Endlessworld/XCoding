@@ -41,6 +41,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
+import static com.xr21.ai.agent.agent.LocalAgent.FILE_SYSTEM_SAVER;
 import static com.xr21.ai.agent.utils.ToolsUtil.describeMcpServer;
 
 @Slf4j
@@ -52,7 +53,7 @@ public class AcpAgent {
     private final Map<String, RunnableConfig> sessionsRunnableConfig = new ConcurrentHashMap<>();
     private final Map<String, CancellableRequest> activeRequests = new ConcurrentHashMap<>();
     private final SessionModeState sessionModeState = new SessionModeState("Agent", List.of(new SessionMode("Agent", "Agent", "单智能体模式"),
-            new SessionMode("ForkAgent", "Fork Agent", "可动态fork出多个并行子代理处理任务")));
+            new SessionMode("ForkAgent", "ForkAgent", "动态并行子代理")));
     private final Supplier<SessionModelState> sessionModelStateSupplier = () -> new SessionModelState(AiModels.defaultModel(), AiModels.availableModels());
 
     @Initialize
@@ -103,7 +104,7 @@ public class AcpAgent {
         log.info("[AcpAgent] Load session:  {}", request.sessionId());
         if (sessions.containsKey(request.sessionId())) {
             log.info("[AcpAgent] Session found");
-            Optional<Checkpoint> checkpointOpt = LocalAgent.FILE_SYSTEM_SAVER.get(RunnableConfig.builder()
+            Optional<Checkpoint> checkpointOpt = FILE_SYSTEM_SAVER.get(RunnableConfig.builder()
                     .threadId(sessions.get(request.sessionId()).threadId)
                     .build());
             String modelId = checkpointOpt.get().getState().getOrDefault("model", AiModels.defaultModel()).toString();
@@ -178,23 +179,24 @@ public class AcpAgent {
 
         var availableCommand = List.of(new AvailableCommand("/init", "初始化AGENT.md", new AvailableCommandInput("/init")));
         context.sendUpdate(sessionId, new AvailableCommandsUpdate("available_commands_update", availableCommand));
-
         var runnableConfig = sessionsRunnableConfig.get(sessionId);
+        log.debug("runnableConfig.context() : {}", runnableConfig.context());
         runnableConfig.context().put("PromptRequest", promptRequest);
         runnableConfig.context().put("SyncPromptContext", context);
-        Agent agent = LocalAgent.createAgent(session.getCwd(), mcpServers, runnableConfig);
-
         // 注册可取消的请求
         Thread currentThread = Thread.currentThread();
-
         // 用于收集响应内容
         StringBuilder responseBuilder = new StringBuilder();
-
-        // 创建共享的状态对象，用于递归调用时传递上下文
-        AgentFlowState flowState = new AgentFlowState(requestId, sessionId, 0, context, responseBuilder);
-
+        // 将状态存储到 runnableConfig.context() 中
+        runnableConfig.context().put("requestId", requestId);
+        runnableConfig.context().put("sessionId", sessionId);
+        runnableConfig.context().putIfAbsent("totalTokens", 0);
+        runnableConfig.context().putIfAbsent("responseBuilder", responseBuilder);
+        runnableConfig.context().putIfAbsent("isFirst", new AtomicBoolean(true));
+        runnableConfig.context().putIfAbsent("isFirstMessage", new AtomicBoolean(true));
+        Agent agent = LocalAgent.createAgent(session.getCwd(), mcpServers, runnableConfig);
         // 使用 expand 实现递归的 Flux 流处理
-        Flux<AgentOutput<Object>> recursiveFlux = createRecursiveAgentFlux(agent, userMessage, runnableConfig, flowState);
+        Flux<AgentOutput<Object>> recursiveFlux = createRecursiveAgentFlux(agent, userMessage, runnableConfig);
 
         CancellableRequest cancellableRequest = registerCancellableRequest(requestId, sessionId, currentThread, recursiveFlux);
 
@@ -259,10 +261,9 @@ public class AcpAgent {
      * @param agent          Agent 实例
      * @param userMessage    用户消息
      * @param runnableConfig 运行配置
-     * @param flowState      流处理状态
      * @return 递归处理的 Flux 流
      */
-    private Flux<AgentOutput<Object>> createRecursiveAgentFlux(Agent agent, UserMessage userMessage, RunnableConfig runnableConfig, AgentFlowState flowState) {
+    private Flux<AgentOutput<Object>> createRecursiveAgentFlux(Agent agent, UserMessage userMessage, RunnableConfig runnableConfig) {
         // 创建初始的 Flux
         Flux<AgentOutput<Object>> initialFlux = SinksUtil.toFlux(agent, userMessage, runnableConfig);
 
@@ -270,13 +271,13 @@ public class AcpAgent {
         // 每次递归都会执行相同的流处理逻辑 processAgentOutput
         return initialFlux.expand(output -> {
             // 处理输出 - 使用统一的流处理逻辑
-            processAgentOutput(output, flowState);
+            processAgentOutput(output, runnableConfig);
             // 检查是否是中断元数据（人介入审核）
             if (output.getInterruptionMetadata() != null) {
                 log.info("[AcpAgent] Detected human intervention, requesting permission...");
 
                 // 处理人介入审核，获取批准决策
-                InterruptionMetadata approvalMetadata = processHumanIntervention(flowState, runnableConfig, output.getInterruptionMetadata());
+                InterruptionMetadata approvalMetadata = processHumanIntervention(runnableConfig, output.getInterruptionMetadata());
 
                 // 检查是否被用户拒绝所有操作
                 boolean allRejected = approvalMetadata.toolFeedbacks()
@@ -301,14 +302,17 @@ public class AcpAgent {
     /**
      * 处理人介入审核流程
      *
-     * @param flowState             流处理状态
      * @param runnableConfig        运行配置
      * @param interruptionMetadata  中断元数据
      * @return 包含批准决策的 InterruptionMetadata
      */
-    private InterruptionMetadata processHumanIntervention(AgentFlowState flowState, RunnableConfig runnableConfig, InterruptionMetadata interruptionMetadata) {
+    private InterruptionMetadata processHumanIntervention(RunnableConfig runnableConfig, InterruptionMetadata interruptionMetadata) {
+        // 从 context 获取状态
+        String sessionId = (String) runnableConfig.context().get("sessionId");
+        SyncPromptContext context = (SyncPromptContext) runnableConfig.context().get("SyncPromptContext");
+
         // 获取工作目录
-        AcpSession session = sessions.get(flowState.sessionId);
+        AcpSession session = sessions.get(sessionId);
         String cwd = session != null ? session.getCwd() : System.getProperty("user.dir");
 
         // 加载权限设置
@@ -352,9 +356,9 @@ public class AcpAgent {
                     .map(kind -> new PermissionOption(kind.name(), kind.name(), kind))
                     .toList();
 
-            var requestPermissionRequest = new RequestPermissionRequest(flowState.sessionId, toolCallUpdate, permissionOptions);
+            var requestPermissionRequest = new RequestPermissionRequest(sessionId, toolCallUpdate, permissionOptions);
             log.info("[AcpAgent] requestPermission : {}",requestPermissionRequest);
-            AcpSchema.RequestPermissionResponse permissionResponse = flowState.context.requestPermission(requestPermissionRequest);
+            AcpSchema.RequestPermissionResponse permissionResponse = context.requestPermission(requestPermissionRequest);
             log.info("[AcpAgent] permissionResponse : {}",permissionResponse);
             if (permissionResponse.outcome() instanceof PermissionCancelled) {
                 approvedFeedback = approvedFeedbackBuilder.result(InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED).build();
@@ -417,25 +421,31 @@ public class AcpAgent {
      * 提取为独立方法，确保在递归的每一次会话流中都能使用相同的处理逻辑
      *
      * @param output           Agent 输出
-     * @param flowState        流处理状态
+     * @param runnableConfig   运行配置
      */
-    private void processAgentOutput(AgentOutput<Object> output, AgentFlowState flowState) {
+    private void processAgentOutput(AgentOutput<Object> output, RunnableConfig runnableConfig) {
+        // 从 context 获取状态
+        String requestId = (String) runnableConfig.context().get("requestId");
+        String sessionId = (String) runnableConfig.context().get("sessionId");
+        SyncPromptContext context = (SyncPromptContext) runnableConfig.context().get("SyncPromptContext");
+        StringBuilder responseBuilder = (StringBuilder) runnableConfig.context().get("responseBuilder");
+        AtomicBoolean isFirst = (AtomicBoolean) runnableConfig.context().get("isFirst");
+        AtomicBoolean isFirstMessage = (AtomicBoolean) runnableConfig.context().get("isFirstMessage");
+        Integer totalTokens = (Integer) runnableConfig.context().get("totalTokens");
+
         // 检查请求是否已被取消
-        if (isRequestCancelled(flowState.requestId)) {
-            log.info("[AcpAgent] Request {} was cancelled, discarding output", flowState.requestId);
+        if (isRequestCancelled(requestId)) {
+            log.info("[AcpAgent] Request {} was cancelled, discarding output", requestId);
             return;
         }
-        // 使用 flowState 中持久化的状态，确保递归后状态连续
-        AtomicBoolean isFirst = flowState.isFirst;
-        AtomicBoolean isFirstMessage = flowState.isFirstMessage;
-        SyncPromptContext context = flowState.context;
-        StringBuilder responseBuilder = flowState.responseBuilder;
+
         // 处理文本输出
         if (output.getTokenUsage() instanceof DefaultUsage usage) {
             if (usage.getTotalTokens() != null) {
-                flowState.totalTokens += usage.getTotalTokens();
+                totalTokens += usage.getTotalTokens();
+                runnableConfig.context().put("totalTokens", totalTokens);
             }
-            context.sendThought("\ntokens usage: promptTokens %s completionTokens %s request totalTokens %s session totalTokens %s".formatted(usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens(), flowState.totalTokens));
+            context.sendThought("\ntokens usage: promptTokens %s completionTokens %s request totalTokens %s session totalTokens %s".formatted(usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens(), totalTokens));
         }
         // 处理文本输出
         if (output.getChunk() != null) {
@@ -488,11 +498,11 @@ public class AcpAgent {
                     if ("write_todos".equals(toolName)) {
                         context.sendThought("✨✨✨让我更新任务进度...");
                     } else {
-                        context.sendUpdate(flowState.sessionId, toolCallNotification);
+                        context.sendUpdate(sessionId, toolCallNotification);
                     }
 
                     // 将工具调用添加到请求跟踪
-                    addToolCallToRequest(flowState.requestId, toolCallId);
+                    addToolCallToRequest(requestId, toolCallId);
                     log.info("[AcpAgent] Tool call started: {} arguments：{} id: {}", toolName, arguments, toolCallId);
                 }
             }
@@ -514,10 +524,10 @@ public class AcpAgent {
                     ToolCallStatus status = resultData.success ? ToolCallStatus.COMPLETED : (resultData.error != null ? ToolCallStatus.FAILED : ToolCallStatus.COMPLETED);
                     if (!"write_todos".equals(toolName)) {
                         // 发送工具调用更新通知 (status: COMPLETED/FAILED)
-                        context.sendUpdate(flowState.sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations, null, responseData, null));
+                        context.sendUpdate(sessionId, new ToolCallUpdateNotification("tool_call_update", toolCallId, toolName, ToolKindFind.find(toolName), status, null, locations, null, responseData, null));
                     }
                     // 从请求跟踪中移除工具调用
-                    removeToolCallFromRequest(flowState.requestId, toolCallId);
+                    removeToolCallFromRequest(requestId, toolCallId);
                     log.info("[AcpAgent] Tool call completed: {} id: {} status: {} responseData: {}", toolName, toolCallId, status, responseData);
                 }
             }
@@ -751,44 +761,6 @@ public class AcpAgent {
     private boolean isRequestCancelled(String requestId) {
         CancellableRequest request = activeRequests.get(requestId);
         return request != null && request.cancelled;
-    }
-
-    /**
-     * Agent 流处理状态类
-     * 用于在递归调用中共享上下文状态
-     */
-    private static class AgentFlowState {
-        final String requestId;
-        final String sessionId;
-        Integer totalTokens;
-        final SyncPromptContext context;
-        final StringBuilder responseBuilder;
-        // 持久化 isFirst 状态，用于追踪思考过程的首次输出
-        final AtomicBoolean isFirst;
-        // 持久化 isFirstMessage 状态，用于追踪消息的首次输出（添加换行符）
-        final AtomicBoolean isFirstMessage;
-
-        AgentFlowState(String requestId, String sessionId, Integer totalTokens, SyncPromptContext context, StringBuilder responseBuilder) {
-            this.requestId = requestId;
-            this.sessionId = sessionId;
-            this.totalTokens = totalTokens;
-            this.context = context;
-            this.responseBuilder = responseBuilder;
-            this.isFirst = new AtomicBoolean(true);
-            this.isFirstMessage = new AtomicBoolean(true);
-        }
-
-        /**
-         * 创建新的 AgentFlowState，继承 isFirst 和 isFirstMessage 状态
-         * 用于递归调用时保持状态的连续性
-         */
-        AgentFlowState copyWithNewRequestId(String newRequestId) {
-            AgentFlowState newState = new AgentFlowState(newRequestId, this.sessionId, this.totalTokens, this.context, this.responseBuilder);
-            // 继承之前的状态，确保递归后 isFirstMessage 不会重置
-            newState.isFirst.set(this.isFirst.get());
-            newState.isFirstMessage.set(this.isFirstMessage.get());
-            return newState;
-        }
     }
 
 }
