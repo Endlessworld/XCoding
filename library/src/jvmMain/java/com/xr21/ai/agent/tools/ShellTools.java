@@ -1,8 +1,12 @@
 package com.xr21.ai.agent.tools;
 
+import com.agentclientprotocol.sdk.agent.SyncPromptContext;
+import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
 import java.io.BufferedReader;
@@ -13,9 +17,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import static cn.hutool.core.util.CharsetUtil.GBK;
+
 /**
  * @author Christian Tzolov
  */
+@Slf4j
 public class ShellTools {
 
     // Storage for background processes
@@ -167,12 +174,14 @@ public class ShellTools {
 				String description,
 		@JsonProperty(value = "runInBackground")
 				@JsonPropertyDescription("Set to true to run this command in the background. Use BashOutput to read the output later.")
-				Boolean runInBackground) { // @formatter:on
+				Boolean runInBackground, ToolContext context) { // @formatter:on
 
         // Generate unique shell ID for all executions
         String shellId = "shell_" + System.currentTimeMillis();
 
         try {
+            log.info("ls files context {}", context.getContext());
+
             // Determine the shell to use based on OS
             String[] shellCommand;
             String os = System.getProperty("os.name").toLowerCase();
@@ -191,10 +200,15 @@ public class ShellTools {
             Process process = processBuilder.start();
 
             if (Boolean.TRUE.equals(runInBackground)) {
-                // Run in background
-                BackgroundProcess bgProcess = new BackgroundProcess(process);
-                backgroundProcesses.put(shellId, bgProcess);
-
+                if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config && config.context()
+                        .get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
+                    // Run in background
+                    BackgroundProcess bgProcess = new BackgroundProcess(process, syncPromptContext);
+                    backgroundProcesses.put(shellId, bgProcess);
+                } else {
+                    BackgroundProcess bgProcess = new BackgroundProcess(process, null);
+                    backgroundProcesses.put(shellId, bgProcess);
+                }
                 String output = String.format("bash_id: %s\n\nBackground shell started with ID: %s\nUse BashOutput tool with bash_id='%s' to retrieve output.", shellId, shellId, shellId);
 
                 return ToolResult.builder()
@@ -213,9 +227,16 @@ public class ShellTools {
 
                 // Read stdout
                 Thread stdoutThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), GBK))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
+                            if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
+                                if (config.context()
+                                        .get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
+                                    syncPromptContext.sendThought(line);
+                                    syncPromptContext.sendThought("<br>");
+                                }
+                            }
                             stdout.append(line).append("\n");
                         }
                     } catch (IOException e) {
@@ -225,9 +246,16 @@ public class ShellTools {
 
                 // Read stderr
                 Thread stderrThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(),GBK))) {
                         String line;
                         while ((line = reader.readLine()) != null) {
+                            if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
+                                if (config.context()
+                                        .get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
+                                    syncPromptContext.sendThought(line);
+                                    syncPromptContext.sendThought("<br>");
+                                }
+                            }
                             stderr.append(line).append("\n");
                         }
                     } catch (IOException e) {
@@ -424,10 +452,13 @@ public class ShellTools {
 
         int lastStderrPosition = 0;
 
-        BackgroundProcess(Process process) {
+        SyncPromptContext syncPromptContext;
+
+        BackgroundProcess(Process process, SyncPromptContext syncPromptContext) {
             this.process = process;
             this.stdout = new StringBuilder();
             this.stderr = new StringBuilder();
+            this.syncPromptContext = syncPromptContext;
 
             // Start thread to read stdout
             this.stdoutReader = new Thread(() -> {
@@ -436,6 +467,9 @@ public class ShellTools {
                     while ((line = reader.readLine()) != null) {
                         synchronized (stdout) {
                             stdout.append(line).append("\n");
+                            if (syncPromptContext != null) {
+                                syncPromptContext.sendThought(line + "\n");
+                            }
                         }
                     }
                 } catch (IOException e) {
@@ -452,6 +486,9 @@ public class ShellTools {
                     while ((line = reader.readLine()) != null) {
                         synchronized (stderr) {
                             stderr.append(line).append("\n");
+                            if (syncPromptContext != null) {
+                                syncPromptContext.sendThought(line + "\n");
+                            }
                         }
                     }
                 } catch (IOException e) {

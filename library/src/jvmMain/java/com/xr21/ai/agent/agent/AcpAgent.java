@@ -269,10 +269,8 @@ public class AcpAgent {
         // 使用 expand 实现递归处理
         // 每次递归都会执行相同的流处理逻辑 processAgentOutput
         return initialFlux.expand(output -> {
-            log.debug("===== 统一的 Flux 流处理逻辑开始 =====");
             // 处理输出 - 使用统一的流处理逻辑
             processAgentOutput(output, flowState);
-            log.debug("===== 统一的 Flux 流处理逻辑结束 =====");
             // 检查是否是中断元数据（人介入审核）
             if (output.getInterruptionMetadata() != null) {
                 log.info("[AcpAgent] Detected human intervention, requesting permission...");
