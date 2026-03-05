@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Linux Native Build Environment
+  linux-builder:
+    build:
+      context: ..
+      dockerfile: docker/native-build/ubuntu.Dockerfile
+      args:
+        GRAALVM_VERSION: "23.1.0"
+        JAVA_VERSION: "17"
+    image: xagent/native-build-linux:graalvm-23.1.0
+    container_name: xagent-linux-builder
+    volumes:
+      - ..:/workspace
+      - linux-gradle-cache:/root/.gradle
+    working_dir: /workspace
+    command: /bin/bash
+    profiles:
+      - linux
+      - all
+
+  # macOS Native Build Environment (需要特殊的 Docker 环境)
+  macos-builder:
+    build:
+      context: ..
+      dockerfile: docker/native-build/macos.Dockerfile
+      args:
+        GRAALVM_VERSION: "23.1.0"
+        JAVA_VERSION: "17"
+    image: xagent/native-build-macos:graalvm-23.1.0
+    container_name: xagent-macos-builder
+    volumes:
+      - ..:/workspace
+      - macos-gradle-cache:/root/.gradle
+    working_dir: /workspace
+    command: /bin/bash
+    profiles:
+      - macos
+      - all
+
+  # Windows Native Build Environment
+  windows-builder:
+    build:
+      context: ..
+      dockerfile: docker/native-build/windows.Dockerfile
+      args:
+        GRAALVM_VERSION: "23.1.0"
+        JAVA_VERSION: "17"
+    image: xagent/native-build-windows:graalvm-23.1.0
+    container_name: xagent-windows-builder
+    volumes:
+      - ..:/workspace
+      - windows-gradle-cache:C:\Users\ContainerAdministrator\.gradle
+    working_dir: C:\workspace
+    command: powershell
+    profiles:
+      - windows
+      - all
+
+volumes:
+  linux-gradle-cache:
+    driver: local
+  macos-gradle-cache:
+    driver: local
+  windows-gradle-cache:
+    driver: local
