@@ -2,9 +2,9 @@ name: Build and Native Compile
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ dev, test, main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ dev, test, main ]
   workflow_dispatch:
 
 env:
