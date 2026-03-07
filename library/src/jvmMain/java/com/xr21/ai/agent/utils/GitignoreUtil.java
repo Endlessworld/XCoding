@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.xr21.ai.agent.utils;
 
 import java.io.IOException;
@@ -5,7 +20,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -13,59 +30,34 @@ import java.util.stream.Stream;
 /**
  * Utility class for parsing .gitignore files and checking if paths should be ignored.
  * This class provides efficient .gitignore pattern matching with proper negation support.
- * 
+ * <p>
  * Features:
  * - Full .gitignore pattern support (including **, ?, character classes)
  * - Proper negation pattern handling (patterns starting with !)
  * - Directory-only pattern support (patterns ending with /)
  * - Caching for performance
  * - Thread-safe implementation
+ *
+ * @author Endless
  */
 public class GitignoreUtil {
-    
+
     // Cache for GitignoreUtil instances to avoid re-parsing .gitignore files
     private static final Map<Path, GitignoreUtil> INSTANCE_CACHE = new ConcurrentHashMap<>();
-    
+
     // Common patterns that should always be ignored
     private static final List<Pattern> DEFAULT_IGNORE_PATTERNS = List.of(
             Pattern.compile("\\.git"),
             Pattern.compile("\\.git/.*")
     );
-    
+
     // Cache for path matching results
     private final Map<String, Boolean> matchCache = new ConcurrentHashMap<>();
-    
+
     private final List<IgnorePattern> ignorePatterns;
     private final Path gitignorePath;
     private final Path basePath;
 
-    /**
-     * Internal class to represent a gitignore pattern with its properties.
-     */
-    private static class IgnorePattern {
-        final Pattern pattern;
-        final boolean isNegation;
-        final boolean isDirectoryOnly;
-        final String originalPattern;
-        
-        IgnorePattern(Pattern pattern, boolean isNegation, boolean isDirectoryOnly, String originalPattern) {
-            this.pattern = pattern;
-            this.isNegation = isNegation;
-            this.isDirectoryOnly = isDirectoryOnly;
-            this.originalPattern = originalPattern;
-        }
-        
-        boolean matches(String path, boolean isDirectory) {
-            if (isDirectoryOnly && !isDirectory) {
-                return false;
-            }
-            return pattern.matcher(path).matches() || 
-                   pattern.matcher("/" + path).matches() ||
-                   pattern.matcher(path + "/").matches() ||
-                   pattern.matcher("/" + path + "/").matches();
-        }
-    }
-    
     /**
      * Creates a GitignoreUtil that reads .gitignore from the specified base path.
      * Uses caching to avoid re-parsing the same .gitignore file.
@@ -77,7 +69,7 @@ public class GitignoreUtil {
         this.gitignorePath = this.basePath.resolve(".gitignore");
         this.ignorePatterns = loadGitignorePatterns();
     }
-    
+
     /**
      * Creates a GitignoreUtil that reads .gitignore from the current working directory.
      * Uses caching to avoid re-parsing the same .gitignore file.
@@ -85,7 +77,7 @@ public class GitignoreUtil {
     public GitignoreUtil() {
         this(Paths.get("."));
     }
-    
+
     /**
      * Gets or creates a GitignoreUtil instance for the given base path.
      * This method uses caching to avoid re-parsing the same .gitignore file.
@@ -97,7 +89,7 @@ public class GitignoreUtil {
         Path normalizedPath = basePath.toAbsolutePath().normalize();
         return INSTANCE_CACHE.computeIfAbsent(normalizedPath, GitignoreUtil::new);
     }
-    
+
     /**
      * Gets or creates a GitignoreUtil instance for the current working directory.
      *
@@ -124,7 +116,7 @@ public class GitignoreUtil {
         }
 
         List<String> rawPatterns = new ArrayList<>();
-        
+
         try (Stream<String> lines = Files.lines(gitignorePath, StandardCharsets.UTF_8)) {
             lines.map(String::trim)
                     .filter(line -> !line.isEmpty() && !line.startsWith("#"))
@@ -140,7 +132,7 @@ public class GitignoreUtil {
                 return patterns;
             }
         }
-        
+
         // Process patterns in reverse order to handle negations correctly
         // Later patterns override earlier ones, especially for negations
         for (String rawPattern : rawPatterns) {
@@ -156,7 +148,7 @@ public class GitignoreUtil {
 
         return patterns;
     }
-    
+
     /**
      * Parses a single gitignore pattern into an IgnorePattern object.
      */
@@ -164,29 +156,29 @@ public class GitignoreUtil {
         if (pattern == null || pattern.trim().isEmpty()) {
             return null;
         }
-        
+
         String trimmed = pattern.trim();
         boolean isNegation = trimmed.startsWith("!");
         boolean isDirectoryOnly = trimmed.endsWith("/");
-        
+
         // Remove negation prefix if present
         String patternWithoutNegation = isNegation ? trimmed.substring(1) : trimmed;
-        
+
         // Remove directory suffix if present
-        String patternWithoutSuffix = isDirectoryOnly ? 
-            patternWithoutNegation.substring(0, patternWithoutNegation.length() - 1) : 
-            patternWithoutNegation;
-        
+        String patternWithoutSuffix = isDirectoryOnly ?
+                patternWithoutNegation.substring(0, patternWithoutNegation.length() - 1) :
+                patternWithoutNegation;
+
         // Convert to regex
         Pattern regex = convertGitignorePatternToRegex(patternWithoutSuffix, isDirectoryOnly);
-        
+
         return new IgnorePattern(regex, isNegation, isDirectoryOnly, trimmed);
     }
 
     /**
      * Converts a .gitignore pattern to a Java regex Pattern.
-     * 
-     * @param pattern the gitignore pattern (without negation prefix or directory suffix)
+     *
+     * @param pattern         the gitignore pattern (without negation prefix or directory suffix)
      * @param isDirectoryOnly whether this is a directory-only pattern
      * @return the compiled regex pattern
      */
@@ -194,9 +186,9 @@ public class GitignoreUtil {
         if (pattern.isEmpty()) {
             return Pattern.compile(".*");
         }
-        
+
         StringBuilder regex = new StringBuilder();
-        
+
         // Check if pattern is anchored to root
         boolean anchoredToRoot = pattern.startsWith("/");
         if (anchoredToRoot) {
@@ -206,11 +198,11 @@ public class GitignoreUtil {
             // Pattern can match at any level
             regex.append("(^|.*/)");
         }
-        
+
         // Convert the pattern character by character
         for (int i = 0; i < pattern.length(); i++) {
             char c = pattern.charAt(i);
-            
+
             switch (c) {
                 case '*':
                     // Check for ** pattern
@@ -234,16 +226,16 @@ public class GitignoreUtil {
                         regex.append("[^/]*");
                     }
                     break;
-                    
+
                 case '?':
                     // ? matches any single character except /
                     regex.append("[^/]");
                     break;
-                    
+
                 case '.':
                     regex.append("\\.");
                     break;
-                    
+
                 case '\\':
                     // Escape character
                     if (i + 1 < pattern.length()) {
@@ -259,7 +251,7 @@ public class GitignoreUtil {
                         regex.append("\\\\");
                     }
                     break;
-                    
+
                 case '[':
                     // Character class
                     int closeIndex = pattern.indexOf(']', i);
@@ -274,7 +266,7 @@ public class GitignoreUtil {
                         regex.append("\\[");
                     }
                     break;
-                    
+
                 default:
                     // Escape regex special characters
                     if ("+()|{}^$".indexOf(c) >= 0) {
@@ -285,7 +277,7 @@ public class GitignoreUtil {
                     break;
             }
         }
-        
+
         // Handle end of pattern
         if (isDirectoryOnly) {
             // Directory pattern must end with /
@@ -294,7 +286,7 @@ public class GitignoreUtil {
             // File pattern can match file or directory with that name
             regex.append("(?:/.*)?$");
         }
-        
+
         // Compile with case-insensitive flag (gitignore is usually case-sensitive on Linux,
         // but we use case-insensitive for cross-platform compatibility)
         return Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE);
@@ -310,25 +302,25 @@ public class GitignoreUtil {
     public boolean isIgnored(Path path) {
         return isIgnored(path, false);
     }
-    
+
     /**
      * Checks if a given path should be ignored based on .gitignore patterns.
      * Uses caching for performance and handles negation patterns correctly.
      *
-     * @param path the path to check
+     * @param path        the path to check
      * @param isDirectory whether the path is a directory
      * @return true if the path should be ignored, false otherwise
      */
     public boolean isIgnored(Path path, boolean isDirectory) {
         // Generate cache key
         String cacheKey = getCacheKey(path, isDirectory);
-        
+
         // Check cache first
         Boolean cachedResult = matchCache.get(cacheKey);
         if (cachedResult != null) {
             return cachedResult;
         }
-        
+
         // Calculate relative path
         Path relativePath = getRelativePath(path);
         if (relativePath == null) {
@@ -336,30 +328,26 @@ public class GitignoreUtil {
             matchCache.put(cacheKey, false);
             return false;
         }
-        
+
         String pathStr = relativePath.toString().replace('\\', '/');
-        
+
         // Track the final result, considering negation patterns
         boolean ignored = false;
-        
+
         // Process patterns in order (later patterns override earlier ones for negations)
         for (IgnorePattern pattern : ignorePatterns) {
             if (pattern.matches(pathStr, isDirectory)) {
-                if (pattern.isNegation) {
-                    // Negation pattern matches - explicitly don't ignore
-                    ignored = false;
-                } else {
-                    // Regular pattern matches - mark as ignored
-                    ignored = true;
-                }
+                // Negation pattern matches - explicitly don't ignore
+                // Regular pattern matches - mark as ignored
+                ignored = !pattern.isNegation;
             }
         }
-        
+
         // Cache the result
         matchCache.put(cacheKey, ignored);
         return ignored;
     }
-    
+
     /**
      * Gets the relative path from base path.
      */
@@ -379,7 +367,7 @@ public class GitignoreUtil {
             }
         }
     }
-    
+
     /**
      * Generates a cache key for the given path and directory flag.
      */
@@ -387,14 +375,14 @@ public class GitignoreUtil {
         String pathStr = path.toAbsolutePath().normalize().toString().replace('\\', '/');
         return pathStr + "|" + isDirectory;
     }
-    
+
     /**
      * Clears the match cache. Useful when .gitignore file changes.
      */
     public void clearCache() {
         matchCache.clear();
     }
-    
+
     /**
      * Reloads .gitignore patterns and clears cache.
      * Call this method if the .gitignore file has been modified.
@@ -416,7 +404,7 @@ public class GitignoreUtil {
     public Path getBasePath() {
         return basePath;
     }
-    
+
     /**
      * Checks if a .gitignore file exists at the base path.
      *
@@ -425,7 +413,7 @@ public class GitignoreUtil {
     public boolean hasGitignore() {
         return Files.exists(gitignorePath);
     }
-    
+
     /**
      * Returns the number of ignore patterns loaded (including defaults).
      *
@@ -434,7 +422,7 @@ public class GitignoreUtil {
     public int getPatternCount() {
         return ignorePatterns.size();
     }
-    
+
     /**
      * Gets all loaded ignore patterns as strings.
      *
@@ -445,7 +433,7 @@ public class GitignoreUtil {
                 .map(p -> p.originalPattern)
                 .toList();
     }
-    
+
     /**
      * Gets the path to the .gitignore file.
      *
@@ -454,7 +442,7 @@ public class GitignoreUtil {
     public Path getGitignorePath() {
         return gitignorePath;
     }
-    
+
     /**
      * Checks if a given path string should be ignored.
      * Convenience method that converts string to Path.
@@ -465,19 +453,19 @@ public class GitignoreUtil {
     public boolean isIgnored(String pathString) {
         return isIgnored(Paths.get(pathString));
     }
-    
+
     /**
      * Checks if a given path string should be ignored.
      * Convenience method that converts string to Path.
      *
-     * @param pathString the path string to check
+     * @param pathString  the path string to check
      * @param isDirectory whether the path is a directory
      * @return true if the path should be ignored, false otherwise
      */
     public boolean isIgnored(String pathString, boolean isDirectory) {
         return isIgnored(Paths.get(pathString), isDirectory);
     }
-    
+
     /**
      * Filters a list of paths, returning only those that are not ignored.
      *
@@ -489,7 +477,7 @@ public class GitignoreUtil {
                 .filter(path -> !isIgnored(path))
                 .toList();
     }
-    
+
     /**
      * Filters a list of path strings, returning only those that are not ignored.
      *
@@ -501,4 +489,20 @@ public class GitignoreUtil {
                 .filter(path -> !isIgnored(path))
                 .toList();
     }
+
+    /**
+         * Internal class to represent a gitignore pattern with its properties.
+         */
+        private record IgnorePattern(Pattern pattern, boolean isNegation, boolean isDirectoryOnly, String originalPattern) {
+
+        boolean matches(String path, boolean isDirectory) {
+                if (isDirectoryOnly && !isDirectory) {
+                    return false;
+                }
+                return pattern.matcher(path).matches() ||
+                        pattern.matcher("/" + path).matches() ||
+                        pattern.matcher(path + "/").matches() ||
+                        pattern.matcher("/" + path + "/").matches();
+            }
+        }
 }

@@ -1,4 +1,3 @@
-
 package com.xr21.ai.agent;
 
 import com.agentclientprotocol.sdk.client.AcpClient;
@@ -18,9 +17,9 @@ public class FileRequestingAgentTest {
 
     public static void main(String[] args) {
         var params = AgentParameters.builder("java")
-            .arg("-jar")
-            .arg(findAgentJar())
-            .build();
+                .arg("-jar")
+                .arg(findAgentJar())
+                .build();
 
         var transport = new StdioAcpClientTransport(params);
 
@@ -38,7 +37,7 @@ public class FileRequestingAgentTest {
                         // Apply line limit if specified
                         if (req.limit() != null && req.limit() > 0) {
                             content = content.lines().limit(req.limit())
-                                .collect(java.util.stream.Collectors.joining("\n"));
+                                    .collect(java.util.stream.Collectors.joining("\n"));
                         }
                         return new ReadTextFileResponse(content);
                     } catch (IOException e) {
@@ -61,7 +60,7 @@ public class FileRequestingAgentTest {
                 .requestPermissionHandler((RequestPermissionRequest req) -> {
                     System.out.println("[PERMISSION] " + req.toolCall().title() + " - auto-approved");
                     return new RequestPermissionResponse(
-                        new PermissionSelected(req.options().get(0).optionId()));
+                            new PermissionSelected(req.options().get(0).optionId()));
                 })
                 // Handle session updates
                 .sessionUpdateConsumer(notification -> {
@@ -77,7 +76,7 @@ public class FileRequestingAgentTest {
 
             // Initialize with file system capabilities
             var caps = new ClientCapabilities(
-                new FileSystemCapability(true, true), false);
+                    new FileSystemCapability(true, true), false);
             client.initialize(new InitializeRequest(1, caps));
             System.out.println("Connected with file capabilities!\n");
 
@@ -87,8 +86,8 @@ public class FileRequestingAgentTest {
 
             System.out.println("--- Agent Output ---");
             var response = client.prompt(new PromptRequest(
-                session.sessionId(),
-                List.of(new TextContent("Demonstrate file operations"))));
+                    session.sessionId(),
+                    List.of(new TextContent("Demonstrate file operations"))));
 
             System.out.println("--- End ---");
             System.out.println("Stop reason: " + response.stopReason());

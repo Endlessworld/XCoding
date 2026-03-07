@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.xr21.ai.agent.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,6 +32,8 @@ import java.util.List;
 
 /**
  * 模型配置加载器，负责从 JSON 文件加载模型配置
+ *
+ * @author Endless
  */
 @Slf4j
 public class ModelConfigLoader {
@@ -27,6 +44,7 @@ public class ModelConfigLoader {
 
     /**
      * 从默认路径加载模型配置
+     *
      * @return 模型配置列表，如果文件不存在或解析失败返回空列表
      */
     public static List<ModelConfig> loadConfigs() {
@@ -36,6 +54,7 @@ public class ModelConfigLoader {
 
     /**
      * 从指定路径加载模型配置
+     *
      * @param configPath 配置文件路径
      * @return 模型配置列表，如果文件不存在或解析失败返回空列表
      */
@@ -62,6 +81,7 @@ public class ModelConfigLoader {
 
     /**
      * 解析模型配置，将 providerId 引用解析为实际的 baseUrl 和 apiKey
+     *
      * @param modelsConfig 模型配置容器
      * @return 解析后的模型配置列表
      */
@@ -78,7 +98,8 @@ public class ModelConfigLoader {
 
     /**
      * 解析单个模型配置，将 providerId 引用解析为实际的 baseUrl 和 apiKey
-     * @param model 模型配置
+     *
+     * @param model     模型配置
      * @param providers 供应商配置列表
      * @return 解析后的模型配置
      */
@@ -113,8 +134,9 @@ public class ModelConfigLoader {
 
     /**
      * 根据 providerId 查找供应商配置
+     *
      * @param providerId 供应商标识符
-     * @param providers 供应商配置列表
+     * @param providers  供应商配置列表
      * @return 找到的供应商配置，未找到返回 null
      */
     private static ProviderConfig findProvider(String providerId, List<ProviderConfig> providers) {
@@ -134,6 +156,7 @@ public class ModelConfigLoader {
     /**
      * 创建默认配置文件
      * 优先从项目资源中读取 models.json，如果读取失败则使用硬编码的默认配置
+     *
      * @param configPath 配置文件路径
      */
     private static void createDefaultConfigFile(Path configPath) {
@@ -175,6 +198,7 @@ public class ModelConfigLoader {
 
     /**
      * 获取默认模型配置
+     *
      * @return 默认的 ModelConfig，如果没有标记为默认的则返回第一个，没有配置则返回 null
      */
     public static ModelConfig getDefaultConfig(List<ModelConfig> configs) {
@@ -195,8 +219,9 @@ public class ModelConfigLoader {
 
     /**
      * 根据模型名称查找配置
+     *
      * @param modelName 模型名称
-     * @param configs 配置列表
+     * @param configs   配置列表
      * @return 找到的配置，未找到返回 null
      */
     public static ModelConfig findConfigByModelName(String modelName, List<ModelConfig> configs) {
@@ -215,6 +240,7 @@ public class ModelConfigLoader {
 
     /**
      * 获取配置文件路径
+     *
      * @return 配置文件的完整路径
      */
     public static String getConfigFilePath() {

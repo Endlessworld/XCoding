@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration debug="false" scan="false">
     <!-- 禁用 logback 内部状态日志 为避免影响ACP协议解析 务必禁用内部输出-->
-    <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
     <!-- 定义变量 -->
-    <property name="LOG_HOME" value="./logs" />
-    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n" />
-    <property name="CONSOLE_LOG_PATTERN" value="%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n" />
+    <property name="LOG_HOME" value="${user.home}/.agi_working/logs"/>
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n"/>
 
     <!-- 控制台输出 为避免影响ACP协议解析 务必禁用控制台输出 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -103,83 +104,84 @@
 
     <!-- 应用日志级别设置 -->
     <logger name="com.xr21.ai.agent" level="INFO" additivity="false">
-<!--        <appender-ref ref="CONSOLE" />-->
-        <appender-ref ref="DEBUG_FILE" />
-        <appender-ref ref="INFO_FILE" />
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <!--        <appender-ref ref="CONSOLE" />-->
+        <appender-ref ref="DEBUG_FILE"/>
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
 
     <!-- Spring AI 日志 -->
     <logger name="org.springframework.ai" level="INFO">
-        <appender-ref ref="INFO_FILE" />
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <!-- ACP SDK 日志 -->
     <logger name="com.agentclientprotocol" level="INFO">
-        <appender-ref ref="INFO_FILE" />
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <!-- Alibaba AI 日志 -->
     <logger name="com.alibaba.cloud.ai.graph.agent.hook.skills" level="INFO">
-        <appender-ref ref="INFO_FILE" />
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <logger name="com.alibaba.cloud.ai.graph.skills" level="INFO">
-        <appender-ref ref="INFO_FILE" />
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <logger name="com.alibaba.cloud.ai.graph.agent.node.AgentLlmNode" level="WARN">
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <!-- Reactor 日志 -->
     <logger name="reactor" level="WARN">
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <!-- 第三方库日志控制 -->
     <logger name="org.apache" level="WARN">
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <logger name="org.eclipse" level="WARN">
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
-    
+
     <logger name="io.netty" level="WARN">
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </logger>
 
     <!-- 根日志配置 -->
     <root level="INFO">
-        <appender-ref ref="CONSOLE" />
-        <appender-ref ref="INFO_FILE" />
-        <appender-ref ref="WARN_FILE" />
-        <appender-ref ref="ERROR_FILE" />
-        <appender-ref ref="ALL_FILE" />
+        <!-- 在native环境中注释掉控制台输出，避免干扰ACP协议 -->
+        <!-- <appender-ref ref="CONSOLE"/> -->
+        <appender-ref ref="INFO_FILE"/>
+        <appender-ref ref="WARN_FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+        <appender-ref ref="ALL_FILE"/>
     </root>
 </configuration>

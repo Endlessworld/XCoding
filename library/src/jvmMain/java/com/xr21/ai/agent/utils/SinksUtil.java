@@ -37,6 +37,10 @@ import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
+/**
+ *
+ * @author Endless
+ */
 public class SinksUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(SinksUtil.class);
@@ -68,11 +72,11 @@ public class SinksUtil {
 
     private static <T> void processStream(Flux<NodeOutput> outputFlux, Sinks.Many<T> sink, java.util.function.Function<NodeOutput, T> mapper) {
         outputFlux.doOnNext(output -> {
-            T result = mapper.apply(output);
-            if (result != null) {
-                sink.tryEmitNext(result);
-            }
-        }).doOnComplete(() -> sink.tryEmitComplete())
+                    T result = mapper.apply(output);
+                    if (result != null) {
+                        sink.tryEmitNext(result);
+                    }
+                }).doOnComplete(() -> sink.tryEmitComplete())
                 .doOnError(e -> {
                     logger.error("Error occurred during streaming", e);
                     sink.tryEmitError(e);
@@ -101,7 +105,7 @@ public class SinksUtil {
             builder.message(streamingOutput.message());
             if (streamingOutput.message() != null) {
                 builder.metadata(streamingOutput.message().getMetadata());
-                builder.metadata("timestamp",System.currentTimeMillis());
+                builder.metadata("timestamp", System.currentTimeMillis());
                 String reasoningContent = streamingOutput.message()
                         .getMetadata()
                         .getOrDefault("reasoningContent", "")
@@ -119,8 +123,8 @@ public class SinksUtil {
                 builder.originData(streamingOutput.getOriginData());
             }
             builder.subGraph(streamingOutput.isSubGraph());
-            if(streamingOutput.message() instanceof AssistantMessage message){
-                if(message.hasToolCalls()){
+            if (streamingOutput.message() instanceof AssistantMessage message) {
+                if (message.hasToolCalls()) {
                     logger.debug("Tool calls: {}", message.getToolCalls());
                 }
             }
@@ -139,7 +143,7 @@ public class SinksUtil {
                 builder.chunk(String.valueOf(data.getOrDefault("chunk", "")));
             }
         }
-        if(output.tokenUsage() instanceof DefaultUsage usage){
+        if (output.tokenUsage() instanceof DefaultUsage usage) {
             logger.debug("usage: {}", usage);
         }
         return builder.build();

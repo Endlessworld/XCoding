@@ -1,3 +1,19 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.xr21.ai.agent.entity;
 
 import com.alibaba.cloud.ai.graph.RunnableConfig;
@@ -13,6 +29,10 @@ import org.springframework.ai.chat.metadata.Usage;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ *
+ * @author Endless
+ */
 @Data
 @Builder
 @AllArgsConstructor
@@ -141,9 +161,9 @@ public class AgentOutput<T> {
 
         @JsonProperty("metadata")
         public AgentOutputBuilder<T> metadata(Map<String, Object> metadata) {
-            if ( this.metadata != null) {
+            if (this.metadata != null) {
                 this.metadata.putAll(metadata);
-            }else{
+            } else {
                 this.metadata = new HashMap<>(metadata);
             }
             return this;
@@ -157,6 +177,7 @@ public class AgentOutput<T> {
             metadata.put(key, value);
             return this;
         }
+
         @JsonProperty("agent")
         public AgentOutputBuilder<T> agent(String agent) {
             this.agent = agent;

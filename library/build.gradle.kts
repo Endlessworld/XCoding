@@ -175,8 +175,14 @@ graalvmNative {
                 "--initialize-at-build-time=ch.qos.logback.classic.filter.LevelFilter",
                 "--initialize-at-build-time=ch.qos.logback.classic.filter.ThresholdFilter",
                 "--initialize-at-build-time=ch.qos.logback.core.ConsoleAppender",
+                "--initialize-at-run-time=ch.qos.logback.core.ConsoleAppender",
                 "--initialize-at-build-time=ch.qos.logback.core.rolling.RollingFileAppender",
                 "--initialize-at-build-time=ch.qos.logback.classic.encoder.PatternLayoutEncoder",
+                "--initialize-at-build-time=ch.qos.logback.classic.LoggerContext",
+                "--initialize-at-build-time=ch.qos.logback.core.status.StatusBase",
+                "--initialize-at-build-time=ch.qos.logback.core.status.InfoStatus",
+                "--initialize-at-build-time=ch.qos.logback.core.BasicStatusManager",
+                "--initialize-at-build-time=ch.qos.logback.classic.util.ContextInitializer",
                 "-H:ReflectionConfigurationFiles=${projectDir}/native-reflect-config.json",
                 "-H:ResourceConfigurationFiles=${projectDir}/native-resource-config.json",
                 "-H:EnableURLProtocols=all",
@@ -189,10 +195,36 @@ graalvmNative {
                 "--initialize-at-build-time=io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier",
                 "--initialize-at-build-time=ch.qos.logback.classic.spi.LogbackServiceProvider",
                 "-H:+AllowIncompleteClasspath",
+                // 禁用logback控制台输出的系统属性
+                "-Dlogback.statusListener=ch.qos.logback.core.status.NopStatusListener",
+                "-Dlogback.console=disabled",
             )
         }
     }
 
     // 禁用工具链检测，使用当前环境
     toolchainDetection.set(false)
+}
+
+// 使用 Java 工具类自动生成反射配置
+tasks.register<JavaExec>("generateNativeReflectConfig") {
+    group = "graalvm"
+    description = "自动生成 native-reflect-config.json 配置文件"
+
+    dependsOn("classes")
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("com.xr21.ai.agent.utils.NativeReflectConfigGenerator")
+    workingDir = projectDir
+}
+
+// 在 nativeCompile 任务前自动生成反射配置
+tasks.named("nativeCompile") {
+    dependsOn("generateNativeReflectConfig")
+}
+
+// 创建一个便捷的更新任务
+tasks.register("updateNativeConfig") {
+    group = "graalvm"
+    description = "更新 native-reflect-config.json 配置文件（包括备份）"
+    dependsOn("generateNativeReflectConfig")
 }

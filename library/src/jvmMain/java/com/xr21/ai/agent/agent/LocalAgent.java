@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.xr21.ai.agent.agent;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
@@ -76,7 +91,6 @@ public class LocalAgent {
      * 文件系统保存器的存储目录路径
      */
     private static final Path FILE_SYSTEM_SAVER_FOLDER = Path.of(System.getProperty("user.home"), ".agi_working", "SystemSaver");
-    private static final Path FILE_SYSTEM_SKILL_DIR = Path.of(System.getProperty("user.home"), ".agi_working", "skills");
     /**
      * 文件系统保存器实例，用于持久化智能体状态
      */
@@ -84,6 +98,7 @@ public class LocalAgent {
             .targetFolder(FILE_SYSTEM_SAVER_FOLDER)
             .stateSerializer(new SpringAIJacksonStateSerializer(OverAllState::new))
             .build();
+    private static final Path FILE_SYSTEM_SKILL_DIR = Path.of(System.getProperty("user.home"), ".agi_working", "skills");
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内

@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.xr21.ai.agent.config;
 
 import lombok.AllArgsConstructor;
@@ -9,12 +24,14 @@ import java.util.List;
 
 /**
  * 模型配置容器类，用于从 JSON 文件加载完整的模型配置
- * 
+ * <p>
  * 新格式支持：
  * - providers: 定义供应商配置（baseUrl 和 apiKey）
  * - models: 定义模型配置，通过 providerId 引用供应商
- * 
+ * <p>
  * 这样可以避免在多个模型中重复配置相同的 baseUrl 和 apiKey
+ *
+ * @author Endless
  */
 @Data
 @NoArgsConstructor
@@ -24,12 +41,11 @@ public class ModelsConfig {
      * 供应商配置列表
      */
     private List<ProviderConfig> providers = new ArrayList<>();
-    
+
     /**
      * 模型配置列表
      */
     private List<ModelConfig> models = new ArrayList<>();
-
 
 
     /**
@@ -57,7 +73,7 @@ public class ModelsConfig {
 
     /**
      * 模型配置数据类，用于从 JSON 文件加载模型配置
-     *
+     * <p>
      * 新格式：通过 providerId 引用供应商配置，避免重复配置 baseUrl 和 apiKey
      */
     @Data

@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.xr21.ai.agent.agent;
 
 import com.agentclientprotocol.sdk.agent.SyncPromptContext;
@@ -44,6 +59,10 @@ import java.util.function.Supplier;
 import static com.xr21.ai.agent.agent.LocalAgent.FILE_SYSTEM_SAVER;
 import static com.xr21.ai.agent.utils.ToolsUtil.describeMcpServer;
 
+/**
+ *
+ * @author Endless
+ */
 @Slf4j
 @com.agentclientprotocol.sdk.annotation.AcpAgent
 public class AcpAgent {
@@ -302,8 +321,8 @@ public class AcpAgent {
     /**
      * 处理人介入审核流程
      *
-     * @param runnableConfig        运行配置
-     * @param interruptionMetadata  中断元数据
+     * @param runnableConfig       运行配置
+     * @param interruptionMetadata 中断元数据
      * @return 包含批准决策的 InterruptionMetadata
      */
     private InterruptionMetadata processHumanIntervention(RunnableConfig runnableConfig, InterruptionMetadata interruptionMetadata) {
@@ -357,9 +376,9 @@ public class AcpAgent {
                     .toList();
 
             var requestPermissionRequest = new RequestPermissionRequest(sessionId, toolCallUpdate, permissionOptions);
-            log.info("[AcpAgent] requestPermission : {}",requestPermissionRequest);
+            log.info("[AcpAgent] requestPermission : {}", requestPermissionRequest);
             AcpSchema.RequestPermissionResponse permissionResponse = context.requestPermission(requestPermissionRequest);
-            log.info("[AcpAgent] permissionResponse : {}",permissionResponse);
+            log.info("[AcpAgent] permissionResponse : {}", permissionResponse);
             if (permissionResponse.outcome() instanceof PermissionCancelled) {
                 approvedFeedback = approvedFeedbackBuilder.result(InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED).build();
                 feedbackBuilder.addToolFeedback(approvedFeedback);
@@ -399,7 +418,7 @@ public class AcpAgent {
         runnableConfig.metadata().ifPresent(metadata -> {
             metadata.put(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, approvalMetadata);
         });
-        log.info("[AcpAgent] interruptionMetadata : {}",approvalMetadata);
+        log.info("[AcpAgent] interruptionMetadata : {}", approvalMetadata);
         return approvalMetadata;
     }
 
@@ -420,8 +439,8 @@ public class AcpAgent {
      * 处理 Agent 输出流的核心逻辑
      * 提取为独立方法，确保在递归的每一次会话流中都能使用相同的处理逻辑
      *
-     * @param output           Agent 输出
-     * @param runnableConfig   运行配置
+     * @param output         Agent 输出
+     * @param runnableConfig 运行配置
      */
     private void processAgentOutput(AgentOutput<Object> output, RunnableConfig runnableConfig) {
         // 从 context 获取状态

@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -17,13 +32,20 @@ import java.util.regex.Pattern;
 
 /**
  * 编辑文件的工具
+ *
+ * @author Endless
  */
 public class EditFileTool {
 
     private static final Logger logger = LoggerFactory.getLogger(EditFileTool.class);
-    
+
     // 缓存文件权限，避免重复获取
     private static final Map<Path, Set<PosixFilePermission>> permissionCache = new WeakHashMap<>();
+    // 性能监控相关字段
+    private long readStartTime;
+    private long matchStartTime;
+    private long replaceStartTime;
+    private long writeStartTime;
 
     // @formatter:off
     @Tool(name = "edit_file", description = """
@@ -53,7 +75,7 @@ public class EditFileTool {
     ) { // @formatter:on
         long startTime = System.currentTimeMillis();
         Path path = Paths.get(filePath);
-        
+
         // 验证文件存在
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             return ToolResult.builder()
@@ -84,7 +106,7 @@ public class EditFileTool {
                         .metadata("fileSizeMB", String.format("%.2f MB", fileSize / (1024.0 * 1024.0)))
                         .build();
             }
-            
+
             originalContent = Files.readString(path, StandardCharsets.UTF_8);
             logger.debug("读取文件成功，大小: {} 字符 ({} 字节)", originalContent.length(), fileSize);
             setReadComplete();
@@ -99,23 +121,23 @@ public class EditFileTool {
         // 处理参数
         boolean replaceAllFlag = replaceAll != null && replaceAll;
         boolean normalizeFlag = normalizeLineEndings == null || normalizeLineEndings;
-        
+
         // 准备匹配内容
         String contentToMatch = originalContent;
         String oldStringToMatch = oldString;
-        
+
         if (normalizeFlag) {
             contentToMatch = normalizeLineEndings(originalContent);
             oldStringToMatch = normalizeLineEndings(oldString);
-            logger.debug("已归一化换行符，原内容长度: {}, 归一化后: {}", 
-                originalContent.length(), contentToMatch.length());
+            logger.debug("已归一化换行符，原内容长度: {}, 归一化后: {}",
+                    originalContent.length(), contentToMatch.length());
         }
 
         // 查找匹配
         setMatchStart();
         MatchResult matchResult = findMatches(contentToMatch, oldStringToMatch, originalContent);
         setReplaceStart();
-        
+
         if (matchResult.count == 0) {
             // 提供更详细的错误信息
             return buildNotFoundError(oldString, originalContent, contentToMatch, normalizeFlag);
@@ -128,19 +150,19 @@ public class EditFileTool {
 
         // 执行替换
         String newContent = performReplacement(
-            originalContent, 
-            contentToMatch, 
-            oldString, 
-            oldStringToMatch, 
-            newString, 
-            replaceAllFlag, 
-            normalizeFlag
+                originalContent,
+                contentToMatch,
+                oldString,
+                oldStringToMatch,
+                newString,
+                replaceAllFlag,
+                normalizeFlag
         );
         setWriteStart();
 
         // 保存文件
         boolean success = saveFileWithPermissions(path, newContent, originalContent);
-        
+
         if (!success) {
             return ToolResult.builder()
                     .error("保存文件失败，可能是权限问题或磁盘空间不足")
@@ -151,14 +173,14 @@ public class EditFileTool {
         // 构建成功结果
         long endTime = System.currentTimeMillis();
         long totalTime = endTime - startTime;
-        logger.info("文件编辑完成 - 文件: {}, 大小: {} 字符, 处理时间: {}ms, 替换次数: {}", 
-            filePath, originalContent.length(), totalTime, 
-            replaceAllFlag ? matchResult.count : 1);
-        
+        logger.info("文件编辑完成 - 文件: {}, 大小: {} 字符, 处理时间: {}ms, 替换次数: {}",
+                filePath, originalContent.length(), totalTime,
+                replaceAllFlag ? matchResult.count : 1);
+
         return buildSuccessResult(
-            filePath, path, oldString, newString, 
-            replaceAllFlag, matchResult, 
-            startTime, endTime
+                filePath, path, oldString, newString,
+                replaceAllFlag, matchResult,
+                startTime, endTime
         );
     }
 
@@ -193,7 +215,7 @@ public class EditFileTool {
      */
     private MatchResult findMatches(String contentToMatch, String oldStringToMatch, String originalContent) {
         MatchResult result = new MatchResult();
-        
+
         // 使用高效的字符串搜索
         List<Integer> positions = new ArrayList<>();
         int index = 0;
@@ -202,7 +224,7 @@ public class EditFileTool {
             index += oldStringToMatch.length();
         }
         result.count = positions.size();
-        
+
         if (result.count > 0) {
             result.positions = positions;
             // 计算行号
@@ -211,7 +233,7 @@ public class EditFileTool {
                 result.lineNumbers.add(findLineNumber(originalContent, pos));
             }
         }
-        
+
         return result;
     }
 
@@ -219,28 +241,28 @@ public class EditFileTool {
      * 执行替换操作
      */
     private String performReplacement(
-        String originalContent,
-        String contentToMatch,
-        String oldString,
-        String oldStringToMatch,
-        String newString,
-        boolean replaceAllFlag,
-        boolean normalizeFlag
+            String originalContent,
+            String contentToMatch,
+            String oldString,
+            String oldStringToMatch,
+            String newString,
+            boolean replaceAllFlag,
+            boolean normalizeFlag
     ) {
         if (normalizeFlag && !contentToMatch.equals(originalContent)) {
             // 如果归一化了内容，需要在归一化后的内容上进行替换
             String normalizedNewString = normalizeLineEndings(newString);
             String normalizedResult;
-            
+
             if (replaceAllFlag) {
                 normalizedResult = contentToMatch.replace(oldStringToMatch, normalizedNewString);
             } else {
                 normalizedResult = contentToMatch.replaceFirst(
-                    Pattern.quote(oldStringToMatch), 
-                    Matcher.quoteReplacement(normalizedNewString)
+                        Pattern.quote(oldStringToMatch),
+                        Matcher.quoteReplacement(normalizedNewString)
                 );
             }
-            
+
             // 将结果转换回原始换行符格式
             return restoreLineEndings(normalizedResult, originalContent);
         } else {
@@ -249,8 +271,8 @@ public class EditFileTool {
                 return originalContent.replace(oldString, newString);
             } else {
                 return originalContent.replaceFirst(
-                    Pattern.quote(oldString), 
-                    Matcher.quoteReplacement(newString)
+                        Pattern.quote(oldString),
+                        Matcher.quoteReplacement(newString)
                 );
             }
         }
@@ -266,15 +288,15 @@ public class EditFileTool {
                 logger.warn("替换后内容未改变，跳过保存");
                 return true;
             }
-            
+
             // 获取并缓存文件权限
             Set<PosixFilePermission> perms = getFilePermissions(path);
-            
+
             // 写入文件
-            Files.writeString(path, newContent, 
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE);
-            
+            Files.writeString(path, newContent,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE);
+
             // 恢复权限
             if (perms != null) {
                 try {
@@ -283,7 +305,7 @@ public class EditFileTool {
                     logger.warn("恢复文件权限失败: {}", e.getMessage());
                 }
             }
-            
+
             logger.debug("文件保存成功，大小: {} 字符", newContent.length());
             return true;
         } catch (IOException e) {
@@ -309,10 +331,10 @@ public class EditFileTool {
      * 构建未找到错误
      */
     private Map<String, Object> buildNotFoundError(
-        String oldString, 
-        String originalContent, 
-        String normalizedContent,
-        boolean normalized
+            String oldString,
+            String originalContent,
+            String normalizedContent,
+            boolean normalized
     ) {
         ToolResult result = ToolResult.builder()
                 .error("未在文件中找到指定的文本")
@@ -320,22 +342,22 @@ public class EditFileTool {
                 .metadata("searchedLength", oldString.length())
                 .metadata("fileContentLength", originalContent.length())
                 .metadata("normalized", normalized);
-        
+
         // 提供调试信息
         if (oldString.length() > 0) {
             // 显示前几个字符
-            String preview = oldString.length() > 50 ? 
-                oldString.substring(0, 50) + "..." : oldString;
+            String preview = oldString.length() > 50 ?
+                    oldString.substring(0, 50) + "..." : oldString;
             result.metadata("textPreview", preview);
         }
-        
+
         // 检查换行符差异
         if (normalized && !originalContent.equals(normalizedContent)) {
             result.metadata("lineEndingNormalized", true);
             result.metadata("originalLineEndings", detectLineEndings(originalContent));
             result.put("suggestion", "尝试关闭 normalize_line_endings 参数");
         }
-        
+
         return result.build();
     }
 
@@ -349,13 +371,13 @@ public class EditFileTool {
                 .metadata("searchedText", oldString)
                 .metadata("matchPositions", matchResult.positions)
                 .metadata("matchLines", matchResult.lineNumbers);
-        
+
         // 显示所有匹配位置
         if (matchResult.lineNumbers != null && !matchResult.lineNumbers.isEmpty()) {
             result.put("lineNumbers", matchResult.lineNumbers);
             result.put("suggestion", "文本出现在以下行: " + matchResult.lineNumbers);
         }
-        
+
         return result.build();
     }
 
@@ -363,13 +385,13 @@ public class EditFileTool {
      * 构建成功结果
      */
     private Map<String, Object> buildSuccessResult(
-        String filePath, Path path, String oldString, String newString,
-        boolean replaceAllFlag, MatchResult matchResult,
-        long startTime, long endTime
+            String filePath, Path path, String oldString, String newString,
+            boolean replaceAllFlag, MatchResult matchResult,
+            long startTime, long endTime
     ) {
         int replacements = replaceAllFlag ? matchResult.count : 1;
         String absolutePath = path.toAbsolutePath().toString();
-        
+
         ToolResult result = ToolResult.builder()
                 .success(true)
                 .content("文件编辑成功")
@@ -386,10 +408,10 @@ public class EditFileTool {
                 .metadata("writeTimeMs", calculateWriteTime(startTime))
                 .metadata("oldTextLength", oldString.length())
                 .metadata("newTextLength", newString.length());
-        
+
         // 添加差异内容
         result.toolCallContent(ToolResult.createDiffContent(absolutePath, oldString, newString));
-        
+
         // 添加位置信息
         if (replaceAllFlag && matchResult.lineNumbers != null) {
             for (Integer line : matchResult.lineNumbers) {
@@ -398,7 +420,7 @@ public class EditFileTool {
         } else if (matchResult.lineNumbers != null && !matchResult.lineNumbers.isEmpty()) {
             result.location(absolutePath, matchResult.lineNumbers.get(0));
         }
-        
+
         return result.build();
     }
 
@@ -426,21 +448,6 @@ public class EditFileTool {
         }
         return "Unknown";
     }
-
-    /**
-     * 匹配结果内部类
-     */
-    private static class MatchResult {
-        int count;
-        List<Integer> positions;
-        List<Integer> lineNumbers;
-    }
-
-    // 性能监控相关字段
-    private long readStartTime;
-    private long matchStartTime;
-    private long replaceStartTime;
-    private long writeStartTime;
 
     /**
      * 计算读取时间
@@ -474,16 +481,25 @@ public class EditFileTool {
     private void setReadComplete() {
         readStartTime = System.currentTimeMillis();
     }
-    
+
     private void setMatchStart() {
         matchStartTime = System.currentTimeMillis();
     }
-    
+
     private void setReplaceStart() {
         replaceStartTime = System.currentTimeMillis();
     }
-    
+
     private void setWriteStart() {
         writeStartTime = System.currentTimeMillis();
+    }
+
+    /**
+     * 匹配结果内部类
+     */
+    private static class MatchResult {
+        int count;
+        List<Integer> positions;
+        List<Integer> lineNumbers;
     }
 }

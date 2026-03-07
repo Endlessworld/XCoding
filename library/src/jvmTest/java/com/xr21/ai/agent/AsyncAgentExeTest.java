@@ -18,19 +18,16 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 
-public class AsyncAgentTest {
+public class AsyncAgentExeTest {
 
-    private static final String JAR_PATH = "D:\\local-github\\ai-agents\\library\\build\\libs\\XAgent-0.0.1-all.jar";
+    private static final String JAR_PATH = "D:/agent/XAgent.exe";
 
     public static void main(String[] args) {
         // 设置控制台输出编码为 UTF-8
         setConsoleEncoding();
 
         // Launch the AsyncAgent as a subprocess
-        var params = AgentParameters.builder("java")
-                .arg("-Dfile.encoding=UTF-8")
-                .arg("-jar")
-                .arg(findAgentJar())
+        var params = AgentParameters.builder(JAR_PATH)
                 .build();
 
         var transport = new StdioAcpClientTransport(params);

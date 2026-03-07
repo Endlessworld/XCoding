@@ -1,96 +1,158 @@
-# AI Agents
+# XAgent
 
-一个多平台的 AI Agent 库，基于 Spring AI 和 Alibaba AI 构建，支持 ACP (Agent Client Protocol) 协议与客户端通信。
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Java Version](https://img.shields.io/badge/Java-17%2B-b07219)](https://openjdk.org/)
+[![Gradle](https://img.shields.io/badge/Gradle-8.x-02303a)](https://gradle.org/)
+
+一个功能强大的本地 AI Agent 库，基于 Spring AI 和 Alibaba AI 构建，支持 ACP (Agent Client Protocol) 协议与客户端通信。
 
 ## 项目概述
 
-本项目是一个功能丰富的本地 AI Agent 实现，提供以下核心能力：
+XAgent 是一个生产级的本地 AI Agent 实现，专为编码任务设计，基于 Spring AI Alibaba Graph 和 ACP 协议构建，提供以下核心能力：
 
-- **ACP 协议支持** - 通过标准输入/输出传输层与客户端通信
-- **多模型支持** - 集成多个 AI 模型提供商（DeepSeek、Kimi、GLM、MiniMax 等）
-- **文件操作工具** - 完整的本地文件系统操作能力
-- **终端命令执行** - 安全的 Shell 命令执行支持
-- **MCP 集成** - 支持 Model Context Protocol 服务器扩展
-- **会话管理** - 持久化会话状态和历史记录
-- **拦截器系统** - 可配置的请求/响应拦截处理
+- 🤖 **ACP 协议支持** - 通过标准输入/输出（STDIO）与客户端通信，支持会话初始化、模式切换、模型切换
+- 🧠 **多模型支持** - 支持任意 OpenAI 协议的模型服务（火山引擎、DeepSeek、OpenRouter、MiniMax 等），通过 JSON 配置管理
+- 📁 **文件操作工具** - 完整的本地文件系统操作能力（读/写/编辑/搜索），支持路径安全验证
+- 💻 **终端命令执行** - 安全的 Shell 命令执行支持
+- 🔌 **MCP 集成** - 支持 Model Context Protocol 服务器扩展（STDIO/HTTP 模式）
+- 💾 **会话管理** - 持久化会话状态和历史记录（FileSystemSaver）
+- 🛡️ **权限系统** - 工具调用权限管理（Allow once / Allow always / Reject once / Reject always）
+- 👥 **人机协作** - Human-in-the-loop 机制，敏感操作需用户确认
+- 📋 **任务列表管理** - ACP Plan 模式的任务状态更新，支持复杂任务规划
+- ✂️ **上下文编辑** - 动态上下文管理 实现智能体长期运行
+- 👷 **Workers 模式** - 动态并行子代理模式，支持复杂任务分解
+- 🎯 **Skills 技能系统** - 支持自定义技能加载（用户级/项目级）
+- 🛡️ **拦截器系统** - 可配置的请求/响应拦截处理（上下文编辑、工具重试、大结果驱逐）
+- ⚡ **原生支持** - GraalVM Native Image 编译，超快启动
 
 ## 技术栈
 
-- **语言**: Java 17, Kotlin 1.9.24
-- **框架**: 
-  - Spring AI 1.1.0
-  - Spring AI Alibaba 1.1.0.0
-  - Reactor Core 3.6.0
-- **协议**: ACP SDK 0.9.0-SNAPSHOT
-- **工具库**: Hutool 5.8.33, Jackson 2.17.0
-- **构建工具**: Gradle 8.x
-- **原生支持**: GraalVM Native Image
+| 类别 | 技术 | 版本 |
+|------|------|------|
+| **语言** | Java | 17 |
+| **语言** | Kotlin | 1.9.24 |
+| **框架** | Spring Framework | 6.2.0 |
+| **框架** | Spring AI | 1.1.2 |
+| **框架** | Spring AI Alibaba | 1.1.2.0 |
+| **协议** | ACP SDK | 0.9.0-SNAPSHOT |
+| **响应式** | Reactor Core | 3.6.0 |
+| **JSON** | Jackson | 2.17.0 |
+| **工具库** | Lombok | 1.18.30 |
+| **构建工具** | Gradle | 8.x |
+| **原生编译** | GraalVM Native Build Tools | 0.10.2 |
+| **发布** | Maven Publish | 0.34.0 |
 
 ## 项目结构
 
 ```
-ai-agents/
-├── library/                          # 主要模块
+XAgent/
+├── library/                                    # 主模块
 │   ├── src/
 │   │   ├── jvmMain/
 │   │   │   └── java/com/xr21/ai/agent/
-│   │   │       ├── AcpLocalAgent.java    # ACP 协议主入口
-│   │   │       ├── LocalAgent.java       # 本地 Agent 实现
-│   │   │       ├── AsyncAgentClient.java # 异步客户端
+│   │   │       ├── agent/
+│   │   │       │   ├── AcpAgent.java          # ACP 协议主入口
+│   │   │       │   └── LocalAgent.java        # 本地 Agent 核心
 │   │   │       ├── config/
-│   │   │       │   └── AiModels.java     # AI 模型配置
+│   │   │       │   ├── AiModels.java          # AI 模型配置入口
+│   │   │       │   ├── ModelConfigLoader.java # 配置加载器
+│   │   │       │   └── ModelsConfig.java      # 配置数据类
 │   │   │       ├── entity/
-│   │   │       │   └── AgentOutput.java  # Agent 输出实体
-│   │   │       ├── interceptors/         # 拦截器实现
-│   │   │       ├── tools/                # 工具实现
-│   │   │       └── utils/                # 工具类
-│   │   └── jvmTest/                      # 测试代码
-│   ├── build.gradle.kts                  # 模块构建配置
-│   ├── native-reflect-config.json        # GraalVM 反射配置
-│   └── native-resource-config.json       # GraalVM 资源配置
-├── images/                               # 文档图片
-├── build.gradle.kts                      # 根构建配置
-├── settings.gradle.kts                   # 项目设置
-└── gradle/                               # Gradle 包装器
+│   │   │       │   ├── AcpSession.java        # ACP 会话状态
+│   │   │       │   ├── AgentOutput.java       # Agent 输出
+│   │   │       │   ├── CancellableRequest.java # 可取消请求
+│   │   │       │   └── ToolResult.java        # 工具结果
+│   │   │       ├── interceptors/
+│   │   │       │   ├── AcpTodoListInterceptor.java   # ACP 任务列表
+│   │   │       │   ├── ContextEditingInterceptor.java # 上下文编辑
+│   │   │       │   ├── FilesystemInterceptor.java    # 文件系统拦截
+│   │   │       │   ├── ToolRetryInterceptor.java     # 工具重试
+│   │   │       │   └── WorkerInterceptor.java        # Worker 拦截
+│   │   │       ├── tools/
+│   │   │       │   ├── AcpWriteTodosTool.java  # ACP 任务管理
+│   │   │       │   ├── ContextCacheTool.java    # 上下文缓存
+│   │   │       │   ├── EditFileTool.java         # 编辑文件
+│   │   │       │   ├── FeedBackTool.java        # 用户反馈
+│   │   │       │   ├── GlobTool.java             # 文件模式匹配
+│   │   │       │   ├── GrepTool.java             # 文件搜索
+│   │   │       │   ├── ListFilesTool.java        # 目录列表
+│   │   │       │   ├── ReadFileTool.java         # 读取文件
+│   │   │       │   ├── ShellTools.java          # Shell 命令执行
+│   │   │       │   ├── ToolKindFind.java         # 工具类型查找
+│   │   │       │   ├── WebSearchTool.java       # 网络搜索
+│   │   │       │   ├── WorkerTool.java          # Worker 工具
+│   │   │       │   └── WriteFileTool.java       # 写入文件
+│   │   │       └── utils/
+│   │   │           ├── DefaultTokenCounter.java  # 令牌计数
+│   │   │           ├── GitignoreUtil.java         # Gitignore 解析
+│   │   │           ├── Json.java                  # JSON 工具
+│   │   │           ├── PermissionSettings.java   # 权限设置
+│   │   │           ├── SinksUtil.java            # 流处理工具
+│   │   │           └── ToolsUtil.java            # MCP 工具加载
+│   │   └── jvmTest/                           # 测试代码
+│   ├── build.gradle.kts                       # 模块构建配置
+│   ├── native-reflect-config.json             # GraalVM 反射配置
+│   └── native-resource-config.json            # GraalVM 资源配置
+├── docker/                                     # Docker 配置
+├── gradle/                                     # Gradle 包装器
+├── build.gradle.kts                           # 根构建配置
+└── settings.gradle.kts                        # 项目设置
 ```
 
 ## 核心组件
 
-### AcpLocalAgent
+### AcpAgent
 
-主要的 ACP Agent 实现，负责：
-- 管理 ACP 会话生命周期
-- 处理客户端初始化、新会话、加载会话请求
-- 处理用户提示并流式返回响应
-- 集成 MCP 服务器工具
+ACP 协议主入口，负责：
+- 管理 ACP 会话生命周期（初始化、新建、加载会话）
+- 处理客户端请求（initialize / newSession / loadSession / prompt）
+- 流式返回响应
+- 集成 MCP 服务器工具（STDIO/HTTP 模式）
 
 ### LocalAgent
 
-本地 Agent 核心实现，提供：
-- 基于 Reactor 的响应式处理
-- 文件操作工具集（读/写/编辑/搜索）
-- Shell 命令执行
-- 上下文管理和令牌清理
-- 错误处理和重试机制
+本地 Agent 核心实现，基于 Spring AI Alibaba Graph 构建：
+- React 模式（ReAct 推理 + 工具调用）
+- 可配置的检查点保存器（MemorySaver / FileSystemSaver）
+- 动态工具注册和管理
+- 响应式流处理（Reactor）
 
 ### AiModels
 
-枚举形式的 AI 模型配置，支持：
-- 多模型提供商（火山引擎、OpenRouter、MiniMax 等）
+JSON 配置形式的 AI 模型管理，支持：
+- 多模型提供商（火山引擎、DeepSeek、OpenRouter、MiniMax 等）
 - 动态 API 密钥和基础 URL 配置
 - 温度和最大令牌数自定义
 
 ## 可用工具
 
-| 工具名称 | 描述 |
-|---------|------|
+### 文件操作工具
+
+| 工具 | 描述 |
+|------|------|
+| `read_file` | 读取文件内容，支持分页 |
+| `write_file` | 创建/覆盖文件 |
+| `edit_file` | 精确字符串替换编辑 |
 | `grep` | 文件内容搜索 |
 | `glob` | 文件模式匹配 |
-| `edit_file` | 编辑文件内容 |
-| `write_file` | 创建/写入文件 |
-| `read_file` | 读取文件内容 |
 | `ls` | 列出目录内容 |
-| `execute_terminal_command` | 执行终端命令 |
+
+### 终端命令工具
+
+| 工具 | 描述 |
+|------|------|
+| `Bash` | 执行终端命令 |
+| `BashOutput` | 获取后台命令输出 |
+| `KillShell` | 终止后台命令 |
+
+### 其他工具
+
+| 工具 | 描述 |
+|------|------|
+| `WebSearch` | 网络搜索 |
+| `FeedBack` | 用户反馈收集 |
+| `contextCacheTool` | 上下文缓存读取 |
+| `write_todos` | ACP 任务管理 |
 
 ## 快速开始
 
@@ -102,42 +164,30 @@ ai-agents/
 
 ### 环境变量配置
 
-根据使用的模型提供商，配置以下环境变量：
-
 ```bash
 # 火山引擎
-export AI_VOLC_BASE_URL="https://..."
+export AI_VOLC_BASE_URL="https://ark.cn-beijing.volces.com/api/coding/v3"
 export AI_VOLC_API_KEY="your-api-key"
 
+# DeepSeek
+export AI_DEEPSEEK_BASE_URL="https://api.deepseek.com"
+export AI_DEEPSEEK_API_KEY="your-api-key"
+
 # OpenRouter
-export AI_OPEN_ROUTER_BASE_URL="https://..."
+export AI_OPEN_ROUTER_BASE_URL="https://openrouter.ai/api"
 export AI_OPEN_ROUTER_API_KEY="your-api-key"
 
 # MiniMax
-export AI_MINIMAX_BASE_URL="https://..."
-export AI_MINIMAX_API_KEY="your-api-key"
-
-# 其他提供商...
+export AI_CUCLOUD_BASE_URL="https://aigw-gzgy2.cucloud.cn:8443"
+export AI_CUCLOUD_API_KEY="your-api-key"
 ```
 
 ### 构建项目
 
-#### 🔄 自动化构建
-
-本项目配置了完整的 GitHub Actions 工作流：
-
-- **CI 工作流**: 每次推送和 PR 自动运行测试和构建
-- **Native Build**: 跨平台原生编译（Linux、macOS、Windows）
-- **Release**: 标签发布自动创建 GitHub Release
-
-详细说明请参考 [GitHub Actions 工作流文档](.github/workflows/README.md)。
-
-#### 🏗️ 本地构建
-
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/ai-agents.git
-cd ai-agents
+git clone https://github.com/xr21/XAgent.git
+cd XAgent
 
 # 构建项目
 ./gradlew build
@@ -151,183 +201,115 @@ cd ai-agents
 
 ### 运行方式
 
-#### 1. 作为 ACP Agent 运行
+#### 作为 ACP Agent 运行
 
 ```bash
 ./gradlew :library:runAcpAgent
 ```
 
-#### 2. 运行异步客户端
+#### 运行异步客户端
 
 ```bash
 ./gradlew :library:runAsyncAgentClient
 ```
 
-#### 3. 使用 Fat JAR
+#### 使用 Fat JAR
 
 ```bash
-java -jar library/build/libs/library-1.0.0-all.jar
+java -jar library/build/libs/XAgent-0.0.1-all.jar
 ```
 
-#### 4. 原生可执行文件（需要 GraalVM）
+#### 原生可执行文件
 
 ```bash
 ./gradlew :library:nativeCompile
-# 生成的可执行文件位于 build/native/nativeCompile/ai-agents
-./gradlew :library:nativeRun
+# Windows: library\build\native\nativeCompile\XAgent.exe
+# Linux/macOS: ./library/build/native/nativeCompile/XAgent
 ```
 
-## 配置说明
+## AI 模型配置
 
-### Maven Central 发布配置
+项目使用 JSON 配置文件管理 AI 模型，配置文件位于 `${user.home}\.agi_working\models.json`：
 
-项目已配置为可发布到 Maven Central：
-
-```bash
-./gradlew publishToMavenCentral
+```json
+{
+  "providers": [
+    {
+      "providerId": "volcengine",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
+      "apiKey": "${AI_VOLC_API_KEY}"
+    },
+    {
+      "providerId": "deepseek",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKey": "${AI_DEEPSEEK_API_KEY}"
+    }
+  ],
+  "models": [
+    {
+      "modelId": "doubao-seed-2.0-code",
+      "modelName": "doubao-seed-2.0-code",
+      "temperature": 0.75,
+      "maxTokens": 8000,
+      "providerId": "volcengine",
+      "isDefault": true
+    }
+  ]
+}
 ```
 
-发布配置位于 `library/build.gradle.kts`，包含：
-- 项目坐标：`com.xr21:ai-agents:1.0.0`
-- 许可证：Apache-2.0
-- SCM 信息
+### 支持的模型
+ 所有OpenAI API格式且支持工具调用的模型
 
-### GraalVM 原生编译
+## 拦截器系统
 
-#### 前置要求
+项目包含以下拦截器，优化智能体行为：
 
-1. **安装 GraalVM**
-   - 下载 GraalVM for JDK 17（推荐使用 GraalVM Community 或 Oracle GraalVM）
-   - 设置 `JAVA_HOME` 指向 GraalVM 安装目录
-   - 确保 `native-image` 工具可用
+| 拦截器 | 描述 |
+|--------|------|
+| `AcpTodoListInterceptor` | ACP 任务列表管理，处理 Plan 模式的任务状态更新 |
+| `ContextEditingInterceptor` | 上下文编辑，管理令牌数量，支持合并连续 UserMessage |
+| `FilesystemInterceptor` | 文件系统操作拦截，路径安全验证（工作目录限制、权限检查） |
+| `ToolRetryInterceptor` | 工具调用重试，失败时自动重试最多 2 次 |
+| `WorkerInterceptor` | Worker 拦截器，管理并行子代理的创建和结果处理 |
+
+## GraalVM 原生编译
+
+### 前置要求
+
+1. 安装 GraalVM for JDK 17
+2. 安装 native-image 组件：
 
 ```bash
-# 验证 GraalVM 安装
-java -version
-native-image --version
-```
-
-2. **安装 Native Image 组件**（如未预装）
-
-```bash
-# 使用 Gu 安装 native-image 组件
 gu install native-image
 ```
 
-#### 配置文件说明
-
-项目包含以下 Native Image 配置文件：
-
-| 文件 | 说明 |
-|------|------|
-| `native-reflect-config.json` | 反射配置，注册需要反射访问的类 |
-| `native-resource-config.json` | 资源配置，包含需要打包的资源文件 |
-
-#### 构建步骤
+### 构建步骤
 
 ```bash
 # 1. 清理并构建项目
 ./gradlew clean build
 
-# 2. 构建 Fat JAR（必需，nativeCompile 依赖此任务）
+# 2. 构建 Fat JAR
 ./gradlew :library:fatJar
 
 # 3. 编译为原生可执行文件
 ./gradlew :library:nativeCompile
 ```
 
-构建完成后，原生可执行文件位置：
-- **Windows**: `library/build/native/nativeCompile/ai-agents.exe`
-- **Linux/macOS**: `library/build/native/nativeCompile/ai-agents`
-
-#### 运行原生应用
-
-```bash
-# 方式 1：使用 Gradle 任务
-./gradlew :library:nativeRun
-
-# 方式 2：直接执行编译后的文件
-# Windows
-library\build\native\nativeCompile\ai-agents.exe
-
-# Linux/macOS
-./library/build/native/nativeCompile/ai-agents
-```
-
-#### 构建参数优化
-
-项目在 `build.gradle.kts` 中已配置以下优化参数：
-
-```kotlin
-buildArgs.addAll(
-    "--no-fallback",                    // 不生成回退配置
-    "--allow-incomplete-classpath",     // 允许不完整类路径
-    "--report-unsupported-elements-at-runtime", // 运行时报告不支持的元素
-    "-H:+ReportExceptionStackTraces",   // 报告异常堆栈
-    "--enable-url-protocols=http,https", // 启用 HTTP/HTTPS 协议
-    "--enable-all-security-services"    // 启用所有安全服务
-)
-
-// 性能优化
-buildArgs.addAll(
-    "-O3",                              // 最高级别优化
-    "--gc=G1"                           // 使用 G1 垃圾回收器
-)
-```
-
-#### 常见问题
-
-**问题 1：`native-image` 命令未找到**
-
-确保 GraalVM 正确安装且 `bin` 目录在 `PATH` 环境变量中。
-
-**问题 2：反射相关错误**
-
-检查 `native-reflect-config.json` 是否包含所有需要反射访问的类。
-
-**问题 3：资源文件缺失**
-
-在 `native-resource-config.json` 中添加缺失的资源模式。
-
-**问题 4：构建内存不足**
-
-增加 JVM 堆内存：
-```bash
-export JAVA_OPTS="-Xmx4g"
-./gradlew :library:nativeCompile
-```
-
-#### 原生镜像优势
+### 原生镜像优势
 
 | 特性 | JVM 模式 | 原生模式 |
 |------|---------|---------|
 | 启动时间 | ~5-10 秒 | ~0.1-0.5 秒 |
 | 内存占用 | ~200-500 MB | ~50-150 MB |
 | 部署复杂度 | 需要 JRE | 单文件部署 |
-| 跨平台 | 一次编译，到处运行 | 需分平台编译 |
-
-## 拦截器系统
-
-内置拦截器包括：
-
-1. **ContextEditingInterceptor** - 上下文编辑，管理令牌数量
-2. **ToolErrorInterceptor** - 工具错误处理
-3. **ToolRetryInterceptor** - 工具调用重试
-4. **LargeResultEvictionInterceptor** - 大结果驱逐
-5. **FilesystemInterceptor** - 文件系统操作拦截
-
-## 会话模式
-
-支持多种会话模式：
-- **Chat** - 对话模式
-- **Agent** - 智能体模式
-- **Plan** - 规划执行模式
 
 ## 开发指南
 
 ### 添加新工具
 
-在 `tools` 包中创建新工具类，使用 `@Tool` 注解标记方法：
+在 `tools` 包中创建新工具类：
 
 ```java
 public class MyCustomTool {
@@ -340,25 +322,47 @@ public class MyCustomTool {
 
 ### 添加新模型
 
-在 `AiModels` 枚举中添加新条目：
+在 `models.json` 配置文件中添加：
 
-```java
-MY_NEW_MODEL("model-name", temperature, maxTokens, baseUrlSupplier, apiKeySupplier)
+```json
+{
+  "providers": [
+    {
+      "providerId": "my-provider",
+      "baseUrl": "https://api.myprovider.com",
+      "apiKey": "${AI_MY_PROVIDER_API_KEY}"
+    }
+  ],
+  "models": [
+    {
+      "modelId": "my-model",
+      "modelName": "my-model-name",
+      "temperature": 0.7,
+      "maxTokens": 4096,
+      "providerId": "my-provider",
+      "isDefault": false
+    }
+  ]
+}
 ```
 
 ## 测试
 
-运行测试：
-
 ```bash
+# 运行测试
 ./gradlew test
-```
 
-查看测试报告：
-
-```bash
+# 查看测试报告
 open library/build/reports/tests/test/index.html
 ```
+
+## GitHub Actions
+
+项目配置了完整的 CI/CD 工作流：
+
+- **CI** - 每次推送和 PR 自动运行测试和构建
+- **Native Build** - 跨平台原生编译（Linux、macOS、Windows）
+- **Release** - 标签发布自动创建 GitHub Release
 
 ## 许可证
 
@@ -366,13 +370,8 @@ open library/build/reports/tests/test/index.html
 
 ## 贡献
 
-欢迎提交 Issue 和 Pull Request！
-
-## 联系方式
-
-- GitHub: [@xr21](https://github.com/your-username)
-- 项目主页：https://github.com/your-username/ai-agents
+欢迎提交 Issue 和 Pull Request！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解贡献指南。
 
 ---
 
-*最后更新：2026 年 2 月*
+*最后更新：2026 年 3 月*

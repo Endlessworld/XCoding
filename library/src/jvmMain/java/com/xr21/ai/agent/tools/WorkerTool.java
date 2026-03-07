@@ -35,9 +35,11 @@ import java.util.function.BiFunction;
 
 /**
  * Tool that enables invoking workers to handle complex, isolated tasks.
- *
+ * <p>
  * This tool allows the main agent to delegate work to specialized workers,
  * each with their own context and capabilities.
+ *
+ * @author Endless
  */
 @Slf4j
 public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolContext, String> {
