@@ -175,7 +175,6 @@ graalvmNative {
                 "--initialize-at-build-time=ch.qos.logback.classic.filter.LevelFilter",
                 "--initialize-at-build-time=ch.qos.logback.classic.filter.ThresholdFilter",
                 "--initialize-at-build-time=ch.qos.logback.core.ConsoleAppender",
-                "--initialize-at-run-time=ch.qos.logback.core.ConsoleAppender",
                 "--initialize-at-build-time=ch.qos.logback.core.rolling.RollingFileAppender",
                 "--initialize-at-build-time=ch.qos.logback.classic.encoder.PatternLayoutEncoder",
                 "--initialize-at-build-time=ch.qos.logback.classic.LoggerContext",
