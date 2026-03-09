@@ -35,7 +35,7 @@ public class NativeReflectConfigGenerator {
 
     // 要扫描的包
     private static final String[] SCAN_PACKAGES = {
-            "com"
+            "com","ch","org","cn","io"
     };
 
     // 已知需要反射的 JAR 包前缀（空数组表示扫描所有 JAR）
@@ -63,7 +63,26 @@ public class NativeReflectConfigGenerator {
             Pattern.compile("@JsonIdentityInfo"),
             Pattern.compile("@JsonFormat")
     };
-
+    private static final List<String> PROJECT_CLASSES = Arrays.asList(
+            "com.xr21.ai.agent.AgentApplication",
+            "com.xr21.ai.agent.agent.AcpAgent",
+            "com.xr21.ai.agent.agent.LocalAgent",
+            "com.xr21.ai.agent.config.AiModels",
+            "com.xr21.ai.agent.config.ModelConfigLoader",
+            "com.xr21.ai.agent.config.ModelsConfig",
+            "com.xr21.ai.agent.config.ModelsConfig$ModelConfig",
+            "com.xr21.ai.agent.entity.AcpSession",
+            "com.xr21.ai.agent.entity.AgentOutput",
+            "com.xr21.ai.agent.entity.CancellableRequest",
+            "com.xr21.ai.agent.entity.ToolResult",
+            "com.xr21.ai.agent.utils.Json",
+            "com.xr21.ai.agent.utils.ToolsUtil"
+    );
+    private static final List<String> JACKSON_CLASSES = Arrays.asList(
+            "com.fasterxml.jackson.databind.ObjectMapper",
+            "com.fasterxml.jackson.databind.JsonNode",
+            "com.fasterxml.jackson.databind.module.SimpleModule"
+    );
     // 内部类模式
     private static final Pattern INNER_CLASS_PATTERN = Pattern.compile(
             "(public|private|protected)?\\s*(static)?\\s*(class|interface|enum|record)\\s+(\\w+)"
@@ -96,6 +115,122 @@ public class NativeReflectConfigGenerator {
             System.exit(1);
         }
     }
+    private static final List<String> LOGGING_CLASSES = Arrays.asList(
+            "org.slf4j.simple.SimpleLogger",
+            "org.slf4j.spi.SLF4JServiceProvider",
+            "ch.qos.logback.core.status.NopStatusListener",
+            "ch.qos.logback.core.rolling.TimeBasedRollingPolicy",
+            "ch.qos.logback.classic.filter.LevelFilter",
+            "ch.qos.logback.classic.filter.ThresholdFilter",
+            "ch.qos.logback.core.ConsoleAppender",
+            "ch.qos.logback.core.rolling.RollingFileAppender",
+            "ch.qos.logback.classic.encoder.PatternLayoutEncoder",
+            "ch.qos.logback.classic.spi.LogbackServiceProvider"
+    );
+    private static final List<String> MCP_CLASSES = Arrays.asList(
+            "io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier",
+            "io.modelcontextprotocol.json.McpJsonMapperSupplier",
+            "io.modelcontextprotocol.json.McpJsonMapper"
+    );
+
+    // ========== Jackson 相关类 ==========
+    private static final List<String> ACP_SCHEMA_CLASSES = Arrays.asList(
+            "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCRequest",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCResponse",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCError",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCNotification",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$InitializeParams",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$InitializeResult",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ClientCapabilities",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$AgentCapabilities",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$McpCapabilities",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$PromptCapabilities",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ClientInfo",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$AuthMethod",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$SessionNewParams",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$SessionNewResult",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$SessionInfo",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ModelInfo",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$Models",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$Modes",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ModeInfo",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$PromptParams",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$PromptResult",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$PromptMessage",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ContentBlock",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$TextContent",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ImageContent",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$AudioContent",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$EmbeddedContext",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCall",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ToolResult",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ToolInfo",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$Resource",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ResourceContents",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$TextResourceContents",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$BlobResourceContents",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallId",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallInput",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$LoggingMessage",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$LoggingLevel",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ErrorData",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ErrorCode",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ListModelsResult",
+            "com.agentclientprotocol.sdk.spec.AcpSchema$ListToolsResult"
+    );
+
+    // ========== 日志相关类 ==========
+
+    /**
+     * 获取所有需要注册反射的类
+     */
+    public static List<String> getAllClasses() {
+        String jarPath = "library/build/libs/XAgent-0.0.1-all.jar";
+        try (JarFile jarFile = new JarFile(jarPath)) {
+            return jarFile.stream()
+                    .filter(entry -> entry.getName().endsWith(".class"))
+                    .map(JarEntry::getName)
+                    .map(className -> {
+                        return className.replaceAll("/", ".").replaceAll(".class", "");
+                    })
+                    .toList();
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    // ========== MCP 相关类 ==========
+
+    /**
+     * 生成 reflect-config.json 内容
+     */
+    public static String getReflectConfig() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[\n");
+
+        List<String> allClasses = getAllClasses();
+        for (int i = 0; i < allClasses.size(); i++) {
+            String className = allClasses.get(i);
+            sb.append("  {\n");
+            sb.append("    \"name\": \"").append(className).append("\",\n");
+            sb.append("    \"allDeclaredConstructors\": true,\n");
+            sb.append("    \"allPublicConstructors\": true,\n");
+            sb.append("    \"allDeclaredMethods\": true,\n");
+            sb.append("    \"allPublicMethods\": true,\n");
+            sb.append("    \"allDeclaredFields\": true,\n");
+            sb.append("    \"allPublicFields\": true\n");
+            sb.append("  }");
+            if (i < allClasses.size() - 1) {
+                sb.append(",");
+            }
+            sb.append("\n");
+        }
+
+        sb.append("]");
+        return sb.toString();
+    }
+
+    // ========== ACP Schema 内部类 ==========
 
     public void generateConfig() throws Exception {
         System.out.println("📦 扫描包: " + String.join(", ", SCAN_PACKAGES));
@@ -127,19 +262,23 @@ public class NativeReflectConfigGenerator {
             scanPackage(packageName, reflectConfig, processedClasses);
         }
 
-        // 4. 扫描依赖 JAR 中的类（新增功能）
+        // 4. 强制添加预定义的类列表
+        System.out.println("\n🔧 强制添加预定义类列表...");
+        addForcedClasses(reflectConfig, processedClasses);
+
+        // 5. 扫描依赖 JAR 中的类（新增功能）
         System.out.println("\n🔍 扫描依赖 JAR...");
         scanDependencyJars(reflectConfig, processedClasses);
 
-        // 5. 添加必需的第三方类
+        // 6. 添加必需的第三方类
         System.out.println("\n📚 添加必需的第三方类...");
         addRequiredThirdPartyClasses(reflectConfig, processedClasses);
 
-        // 6. 写入配置文件
+        // 7. 写入配置文件
         System.out.println("\n💾 写入配置文件...");
         writeConfig(reflectConfig);
 
-        // 7. 打印统计信息
+        // 8. 打印统计信息
         printSummary(reflectConfig, existingConfig);
     }
 
@@ -460,7 +599,18 @@ public class NativeReflectConfigGenerator {
                     .forEach(javaFile -> {
                         try {
                             String content = Files.readString(javaFile);
-                            processJavaFile(packageName, javaFile.toFile(), content, config, processedClasses);
+                            // 根据文件的相对路径计算完整包名
+                            String relativePath = javaFile.toString();
+                            String subPath = relativePath.substring(basePath.length());
+                            String fullPackageName = subPath.replace('/', '.').replace('\\', '.');
+                            // 移除开头的点
+                            if (fullPackageName.startsWith(".")) {
+                                fullPackageName = packageName+fullPackageName;
+                            }
+                            // 提取包名部分（去掉文件名）
+                            int lastDot = fullPackageName.lastIndexOf('.');
+                            String filePackageName = lastDot > 0 ? fullPackageName.substring(0, lastDot) : packageName;
+                            processJavaFile(filePackageName, javaFile.toFile(), content, config, processedClasses);
                         } catch (IOException e) {
                             System.err.println("Error reading file: " + javaFile);
                         }
@@ -520,7 +670,7 @@ public class NativeReflectConfigGenerator {
             addReflectionConfig(config, fullClassName, processedClasses);
             System.out.println("  ➕ 添加: " + fullClassName);
         }
-
+        System.err.println(fullClassName);
         detectInnerClasses(content, packageName, className, config, processedClasses);
         detectPermittedClasses(content, packageName, className, config, processedClasses);
     }
@@ -651,6 +801,31 @@ public class NativeReflectConfigGenerator {
         entry.put("allPublicFields", true);
 
         config.add(entry);
+    }
+
+    /**
+     * 强制添加预定义列表中的类（PROJECT_CLASSES, JACKSON_CLASSES, LOGGING_CLASSES, MCP_CLASSES, ACP_SCHEMA_CLASSES）
+     */
+    private void addForcedClasses(List<Map<String, Object>> config, Set<String> processedClasses) {
+        int addedCount = 0;
+
+        // 合并所有预定义列表
+        List<String> allForcedClasses = new ArrayList<>();
+        allForcedClasses.addAll(PROJECT_CLASSES);
+        allForcedClasses.addAll(JACKSON_CLASSES);
+        allForcedClasses.addAll(LOGGING_CLASSES);
+        allForcedClasses.addAll(MCP_CLASSES);
+        allForcedClasses.addAll(ACP_SCHEMA_CLASSES);
+
+        for (String className : allForcedClasses) {
+            if (!processedClasses.contains(className)) {
+                addReflectionConfig(config, className, processedClasses);
+                System.out.println("  ➕ 强制添加: " + className);
+                addedCount++;
+            }
+        }
+
+        System.out.println("  ✅ 强制添加 " + addedCount + " 个预定义类");
     }
 
     /**
