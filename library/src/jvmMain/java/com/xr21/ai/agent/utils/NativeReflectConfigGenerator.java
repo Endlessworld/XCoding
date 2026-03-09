@@ -63,21 +63,21 @@ public class NativeReflectConfigGenerator {
             Pattern.compile("@JsonIdentityInfo"),
             Pattern.compile("@JsonFormat")
     };
-    private static final List<String> PROJECT_CLASSES = Arrays.asList(
-            "com.xr21.ai.agent.AgentApplication",
-            "com.xr21.ai.agent.agent.AcpAgent",
-            "com.xr21.ai.agent.agent.LocalAgent",
-            "com.xr21.ai.agent.config.AiModels",
-            "com.xr21.ai.agent.config.ModelConfigLoader",
-            "com.xr21.ai.agent.config.ModelsConfig",
-            "com.xr21.ai.agent.config.ModelsConfig$ModelConfig",
-            "com.xr21.ai.agent.entity.AcpSession",
-            "com.xr21.ai.agent.entity.AgentOutput",
-            "com.xr21.ai.agent.entity.CancellableRequest",
-            "com.xr21.ai.agent.entity.ToolResult",
-            "com.xr21.ai.agent.utils.Json",
-            "com.xr21.ai.agent.utils.ToolsUtil"
-    );
+//    private static final List<String> PROJECT_CLASSES = Arrays.asList(
+//            "com.xr21.ai.agent.AgentApplication",
+//            "com.xr21.ai.agent.agent.AcpAgent",
+//            "com.xr21.ai.agent.agent.LocalAgent",
+//            "com.xr21.ai.agent.config.AiModels",
+//            "com.xr21.ai.agent.config.ModelConfigLoader",
+//            "com.xr21.ai.agent.config.ModelsConfig",
+//            "com.xr21.ai.agent.config.ModelsConfig$ModelConfig",
+//            "com.xr21.ai.agent.entity.AcpSession",
+//            "com.xr21.ai.agent.entity.AgentOutput",
+//            "com.xr21.ai.agent.entity.CancellableRequest",
+//            "com.xr21.ai.agent.entity.ToolResult",
+//            "com.xr21.ai.agent.utils.Json",
+//            "com.xr21.ai.agent.utils.ToolsUtil"
+//    );
     private static final List<String> JACKSON_CLASSES = Arrays.asList(
             "com.fasterxml.jackson.databind.ObjectMapper",
             "com.fasterxml.jackson.databind.JsonNode",
@@ -811,7 +811,7 @@ public class NativeReflectConfigGenerator {
 
         // 合并所有预定义列表
         List<String> allForcedClasses = new ArrayList<>();
-        allForcedClasses.addAll(PROJECT_CLASSES);
+//        allForcedClasses.addAll(PROJECT_CLASSES);
         allForcedClasses.addAll(JACKSON_CLASSES);
         allForcedClasses.addAll(LOGGING_CLASSES);
         allForcedClasses.addAll(MCP_CLASSES);

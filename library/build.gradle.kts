@@ -218,12 +218,12 @@ tasks.register<JavaExec>("generateNativeReflectConfig") {
 
 // 在 nativeCompile 任务前自动生成反射配置
 tasks.named("nativeCompile") {
-    dependsOn("generateNativeReflectConfig")
+//    dependsOn("generateNativeReflectConfig")
 }
 
 // 创建一个便捷的更新任务
 tasks.register("updateNativeConfig") {
     group = "graalvm"
     description = "更新 native-reflect-config.json 配置文件（包括备份）"
-    dependsOn("generateNativeReflectConfig")
+//    dependsOn("generateNativeReflectConfig")
 }
