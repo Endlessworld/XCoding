@@ -277,7 +277,7 @@ java -jar library/build/libs/XAgent-0.0.1-all.jar
 
 ### 前置要求
 
-1. 安装 GraalVM for JDK 17
+1. 安装 GraalVM for JDK 24
 2. 安装 native-image 组件：
 
 ```bash
@@ -299,11 +299,45 @@ gu install native-image
 
 ### 原生镜像优势
 
-| 特性 | JVM 模式 | 原生模式 |
-|------|---------|---------|
-| 启动时间 | ~5-10 秒 | ~0.1-0.5 秒 |
-| 内存占用 | ~200-500 MB | ~50-150 MB |
-| 部署复杂度 | 需要 JRE | 单文件部署 |
+| 特性 | JVM 模式      | 原生模式       |
+|------|-------------|------------|
+| 启动时间 | ~1-2 秒      | ~0.1-0.5 秒 |
+| 内存占用 | ~200-500 MB | ~5-10 MB   |
+| 部署复杂度 | 需要 JRE      | 单文件部署      |
+
+### 生成反射配置文件
+
+项目使用 `native-image-agent` 自动收集运行时反射使用情况，生成配置文件。
+ 
+#### 使用ACP客户端运行Agent, 以生成完整反射配置json文件
+
+如果你使用 ACP 客户端（如JetBrains AI Assistant、AionUI 等）连接 Agent：
+1. 切换至GraalVM 24.x
+2. 先解开AcpAgent.cancelSession方法中的 System.exit(0)代码，实现取消会话正常退出应用，打包编译。
+3. JetBrains AI Assistant 添加自定义智能体： 
+
+```
+   "agent_servers": {
+      "X Agent": {
+      "command": "java",
+      "args": [
+         "-jar",
+         "-agentlib:native-image-agent=config-output-dir=${替换为项目目录}/library/src/jvmMain/resources/META-INF/native-image",
+         "${替换为项目目录}\\library\\build\\libs\\XAgent-0.0.1-all.jar"
+      ],
+      "env": {
+       
+      }
+   }
+   
+```
+
+4. 在ACP客户端中试用全部工能，参考TOOL_TEST_GUIDE.md
+
+5. 使用完所有功能后，在流式响应过程中点击取消输出
+
+6. 检查生成的文件：library/src/jvmMain/resources/META-INF/native-image/reachability-metadata.json
+ 
 
 ## 开发指南
 

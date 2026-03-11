@@ -17,7 +17,7 @@ on:
         default: false
 
 env:
-  GRAALVM_VERSION: '23.1.0'
+  GRAALVM_VERSION: '24.1.0'
   JAVA_VERSION: '17'
 
 jobs:

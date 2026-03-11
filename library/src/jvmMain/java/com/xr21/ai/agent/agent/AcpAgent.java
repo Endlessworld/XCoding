@@ -155,6 +155,7 @@ public class AcpAgent {
         // 清理会话资源
         cleanupSessionResources(sessionId);
         log.info("[AcpAgent] Cancelled {} active requests for session: {}", requestsToCancel.size(), sessionId);
+//        System.exit(0);
     }
 
     @SetSessionMode

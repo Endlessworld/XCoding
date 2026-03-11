@@ -76,7 +76,7 @@
 
 ## 环境变量
 
-- `GRAALVM_VERSION`: `23.1.0` - GraalVM 版本
+- `GRAALVM_VERSION`: `24.1.0` - GraalVM 版本
 - `JAVA_VERSION`: `17` - Java 版本
 
 ## 发布

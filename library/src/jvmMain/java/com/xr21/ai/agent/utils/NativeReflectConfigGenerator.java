@@ -63,21 +63,73 @@ public class NativeReflectConfigGenerator {
             Pattern.compile("@JsonIdentityInfo"),
             Pattern.compile("@JsonFormat")
     };
-//    private static final List<String> PROJECT_CLASSES = Arrays.asList(
-//            "com.xr21.ai.agent.AgentApplication",
-//            "com.xr21.ai.agent.agent.AcpAgent",
-//            "com.xr21.ai.agent.agent.LocalAgent",
-//            "com.xr21.ai.agent.config.AiModels",
-//            "com.xr21.ai.agent.config.ModelConfigLoader",
-//            "com.xr21.ai.agent.config.ModelsConfig",
-//            "com.xr21.ai.agent.config.ModelsConfig$ModelConfig",
-//            "com.xr21.ai.agent.entity.AcpSession",
-//            "com.xr21.ai.agent.entity.AgentOutput",
-//            "com.xr21.ai.agent.entity.CancellableRequest",
-//            "com.xr21.ai.agent.entity.ToolResult",
-//            "com.xr21.ai.agent.utils.Json",
-//            "com.xr21.ai.agent.utils.ToolsUtil"
-//    );
+    private static final List<String> PROJECT_CLASSES = Arrays.asList(
+            // 主应用类
+            "com.xr21.ai.agent.AgentApplication",
+            // Agent 类
+            "com.xr21.ai.agent.agent.AcpAgent",
+            "com.xr21.ai.agent.agent.LocalAgent",
+            // Config 类
+            "com.xr21.ai.agent.config.AiModels",
+            "com.xr21.ai.agent.config.ModelConfigLoader",
+            "com.xr21.ai.agent.config.ModelsConfig",
+            "com.xr21.ai.agent.config.ModelsConfig$ModelConfig",
+            "com.xr21.ai.agent.config.ModelsConfig$ProviderConfig",
+            // Entity 类
+            "com.xr21.ai.agent.entity.AcpSession",
+            "com.xr21.ai.agent.entity.AgentOutput",
+            "com.xr21.ai.agent.entity.AgentOutput$AgentOutputBuilder",
+            "com.xr21.ai.agent.entity.CancellableRequest",
+            "com.xr21.ai.agent.entity.ToolResult",
+            // Interceptor 类
+            "com.xr21.ai.agent.interceptors.AcpTodoListInterceptor",
+            "com.xr21.ai.agent.interceptors.AcpTodoListInterceptor$Builder",
+            "com.xr21.ai.agent.interceptors.ContextEditingInterceptor",
+            "com.xr21.ai.agent.interceptors.ContextEditingInterceptor$Builder",
+            "com.xr21.ai.agent.interceptors.ContextEditingInterceptor$ClearableCandidate",
+            "com.xr21.ai.agent.interceptors.FilesystemInterceptor",
+            "com.xr21.ai.agent.interceptors.FilesystemInterceptor$Builder",
+            "com.xr21.ai.agent.interceptors.ToolRetryInterceptor",
+            "com.xr21.ai.agent.interceptors.ToolRetryInterceptor$Builder",
+            "com.xr21.ai.agent.interceptors.WorkerInterceptor",
+            "com.xr21.ai.agent.interceptors.WorkerInterceptor$Builder",
+            // Tools 类
+            "com.xr21.ai.agent.tools.AcpWriteTodosTool",
+            "com.xr21.ai.agent.tools.AcpWriteTodosTool$RequestEntry",
+            "com.xr21.ai.agent.tools.ContextCacheTool",
+            "com.xr21.ai.agent.tools.EditFileTool",
+            "com.xr21.ai.agent.tools.EditFileTool$MatchResult",
+            "com.xr21.ai.agent.tools.FeedBackTool",
+            "com.xr21.ai.agent.tools.GlobTool",
+            "com.xr21.ai.agent.tools.GrepTool",
+            "com.xr21.ai.agent.tools.ListFilesTool",
+            "com.xr21.ai.agent.tools.ReadFileTool",
+            "com.xr21.ai.agent.tools.ShellTools",
+            "com.xr21.ai.agent.tools.ShellTools$BackgroundProcess",
+            "com.xr21.ai.agent.tools.ShellTools$Builder",
+            "com.xr21.ai.agent.tools.ToolKindFind",
+            "com.xr21.ai.agent.tools.WebSearchTool",
+            "com.xr21.ai.agent.tools.WebSearchTool$Params",
+            "com.xr21.ai.agent.tools.WebSearchTool$SearchRequest",
+            "com.xr21.ai.agent.tools.WorkerTool",
+            "com.xr21.ai.agent.tools.WorkerTool$WorkerRequest",
+            "com.xr21.ai.agent.tools.WriteFileTool",
+            // Utils 类
+            "com.xr21.ai.agent.utils.DefaultTokenCounter",
+            "com.xr21.ai.agent.utils.GitignoreUtil",
+            "com.xr21.ai.agent.utils.GitignoreUtil$IgnorePattern",
+            "com.xr21.ai.agent.utils.Json",
+            "com.xr21.ai.agent.utils.NativeReflectConfigGenerator",
+            "com.xr21.ai.agent.utils.PermissionSettings",
+            "com.xr21.ai.agent.utils.PermissionSettings$PermissionAction",
+            "com.xr21.ai.agent.utils.PermissionSettings$Settings",
+            "com.xr21.ai.agent.utils.PermissionSettings$Settings$Permissions",
+            "com.xr21.ai.agent.utils.SinksUtil",
+            "com.xr21.ai.agent.utils.ToolsUtil",
+            "com.xr21.ai.agent.utils.ToolsUtil$ToolResultData",
+            // Spring AI 类
+            "org.springframework.ai.openai.api.OpenAiApi"
+    );
     private static final List<String> JACKSON_CLASSES = Arrays.asList(
             "com.fasterxml.jackson.databind.ObjectMapper",
             "com.fasterxml.jackson.databind.JsonNode",
@@ -811,7 +863,7 @@ public class NativeReflectConfigGenerator {
 
         // 合并所有预定义列表
         List<String> allForcedClasses = new ArrayList<>();
-//        allForcedClasses.addAll(PROJECT_CLASSES);
+        allForcedClasses.addAll(PROJECT_CLASSES);
         allForcedClasses.addAll(JACKSON_CLASSES);
         allForcedClasses.addAll(LOGGING_CLASSES);
         allForcedClasses.addAll(MCP_CLASSES);

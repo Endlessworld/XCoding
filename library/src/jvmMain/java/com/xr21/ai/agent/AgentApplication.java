@@ -21,9 +21,12 @@ import com.agentclientprotocol.sdk.agent.transport.WebSocketAcpAgentTransport;
 import com.agentclientprotocol.sdk.spec.AcpAgentTransport;
 import com.xr21.ai.agent.agent.AcpAgent;
 import io.modelcontextprotocol.json.McpJsonMapper;
+import io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapper;
 
 import java.time.Duration;
 import java.util.List;
+
+import static com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES;
 
 /**
  *
@@ -32,9 +35,11 @@ import java.util.List;
 public class AgentApplication {
 
     public static void main(String[] args) {
+        JacksonMcpJsonMapper mapper = (JacksonMcpJsonMapper) McpJsonMapper.createDefault();
+        mapper.getObjectMapper().configure(FAIL_ON_UNKNOWN_PROPERTIES,true);
         AcpAgentTransport acpAgentTransport = new StdioAcpAgentTransport();
         if (List.of(args).contains("--socket")) {
-            acpAgentTransport = new WebSocketAcpAgentTransport(9315, "/acp", McpJsonMapper.createDefault());
+            acpAgentTransport = new WebSocketAcpAgentTransport(9315, "/acp", mapper);
         }
         AcpAgentSupport.create(new AcpAgent())
                 .transport(acpAgentTransport)
