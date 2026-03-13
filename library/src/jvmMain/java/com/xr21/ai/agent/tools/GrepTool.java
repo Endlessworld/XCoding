@@ -23,6 +23,7 @@ import com.xr21.ai.agent.utils.GitignoreUtil;
 import org.springframework.ai.tool.annotation.Tool;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,8 +90,8 @@ public class GrepTool {
                             String absolutePath = p.toAbsolutePath().toString();
                             boolean fileAdded = false;
 
-                            // Use Files.lines() instead of readAllLines() for memory efficiency
-                            List<String> matchedLines = Files.lines(p)
+                            // Use Files.lines() with UTF-8 encoding to handle various file encodings
+                            List<String> matchedLines = Files.lines(p, StandardCharsets.UTF_8)
                                     .parallel()
                                     .filter(line -> line.contains(pattern))
                                     .collect(Collectors.toList());
@@ -136,8 +137,8 @@ public class GrepTool {
                                     break;
                                 }
                             }
-                        } catch (IOException var8) {
-                            // Ignore file read errors
+                        } catch (Exception e) {
+                            // Ignore file read errors (including encoding errors)
                         }
                     });
 
