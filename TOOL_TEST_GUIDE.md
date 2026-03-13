@@ -120,6 +120,9 @@ Bash(arg0="ping -n 5 127.0.0.1", arg2="测试命令", arg1=30000)
 
 # 后台执行
 Bash(arg0="ping -n 10 127.0.0.1", arg2="后台命令", arg3=true)
+
+# 交互式 shell (支持 stdin 输入)
+Bash(arg0="cmd /k", arg2="启动交互式shell", arg3=true, arg4=true)
 ```
 - **功能**: 执行 Shell 命令
 - **参数**:
@@ -127,7 +130,22 @@ Bash(arg0="ping -n 10 127.0.0.1", arg2="后台命令", arg3=true)
   - `arg1`: 超时时间 (毫秒, 默认120000, 最大600000)
   - `arg2`: 命令描述 (5-10字)
   - `arg3`: 是否后台运行 (默认false)
+  - `arg4`: 是否交互式 shell (默认false, 需要 runInBackground=true)
 - **预期**: 返回命令输出和退出码
+
+#### 2.1.1 可重入功能 (增量输出获取)
+```bash
+# 启动长时间运行的命令
+Bash(arg0="powershell -Command 'for($i=1; $i -le 30; $i++) { Write-Host $i; Start-Sleep 1 }'", arg2="长时间任务", arg3=true)
+
+# 第一次获取输出 (返回前 N 行)
+BashOutput(arg0="shell_xxx")
+
+# 第二次获取输出 (只返回新增的输出 - 可重入)
+BashOutput(arg0="shell_xxx")
+```
+- **功能**: 后台命令支持增量输出获取，每次调用只返回自上次检查后的新输出
+- **用途**: 监控长时间运行的构建、测试等任务
 
 #### 2.2 BashOutput - 获取后台命令输出
 ```bash
@@ -151,6 +169,27 @@ KillShell(arg0="shell_xxx")
 - **参数**:
   - `arg0`: 后台 shell ID
 - **预期**: 返回成功/失败状态
+
+#### 2.4 ShellInput - 向交互式 shell 发送命令
+```bash
+# 先创建交互式 shell
+Bash(arg0="cmd /k", arg2="交互式shell", arg3=true, arg4=true)
+
+# 发送命令到交互式 shell
+ShellInput(arg0="shell_xxx", arg1="dir")
+```
+- **功能**: 向交互式 shell 会话发送命令
+- **参数**:
+  - `arg0`: 交互式 shell ID
+  - `arg1`: 要发送的命令
+- **注意**: 需要先通过 Bash 工具创建 `interactive=true` 的 shell
+
+#### 2.5 ShellSessions - 列出所有活跃会话
+```bash
+ShellSessions()
+```
+- **功能**: 列出所有活跃的 shell 会话（交互式和后台）
+- **返回**: 每个会话的 ID、类型、状态和命令
 
 ---
 
@@ -204,10 +243,14 @@ webSearch(arg0=["搜索关键词1", "搜索关键词2"], arg1="oneYear", arg2=tr
 □ 13. Bash 工具 - 执行 shell 命令
 □ 14. Bash 工具 - 超时参数
 □ 15. Bash 工具 - 后台执行
-□ 16. BashOutput 工具 - 获取后台输出
-□ 17. BashOutput 工具 - 正则过滤
-□ 18. KillShell 工具 - 杀死后台进程
-□ 19. webSearch 工具 - 网络搜索
+□ 16. Bash 工具 - 交互式 shell (interactive=true)
+□ 17. BashOutput 工具 - 获取后台输出
+□ 18. BashOutput 工具 - 可重入功能 (多次获取增量输出)
+□ 19. BashOutput 工具 - 正则过滤
+□ 20. KillShell 工具 - 杀死后台进程
+□ 21. ShellInput 工具 - 向交互式 shell 发送命令
+□ 22. ShellSessions 工具 - 列出所有活跃会话
+□ 23. webSearch 工具 - 网络搜索
 ```
 
 ### 快速测试脚本 (PowerShell)

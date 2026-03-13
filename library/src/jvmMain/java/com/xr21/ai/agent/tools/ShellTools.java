@@ -27,6 +27,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +42,9 @@ public class ShellTools {
 
     // Storage for background processes
     public static final Map<String, BackgroundProcess> backgroundProcesses = new ConcurrentHashMap<>();
+
+    // Storage for interactive shell sessions (for re-entrant shell support)
+    public static final Map<String, ShellSession> shellSessions = new ConcurrentHashMap<>();
 
     public static Builder builder() {
         return new Builder();
@@ -188,13 +192,19 @@ public class ShellTools {
 				String description,
 		@JsonProperty(value = "runInBackground")
 				@JsonPropertyDescription("Set to true to run this command in the background. Use BashOutput to read the output later.")
-				Boolean runInBackground, ToolContext context) { // @formatter:on
+				Boolean runInBackground,
+			@JsonProperty(value = "interactive")
+				@JsonPropertyDescription("Set to true to create an interactive shell session that supports stdin input. Use ShellInput tool to send commands to the running shell. Only works with runInBackground=true.")
+				Boolean interactive,
+			ToolContext context) { // @formatter:on
 
         // Generate unique shell ID for all executions
         String shellId = "shell_" + System.currentTimeMillis();
 
         try {
-            log.info("ls files context {}", context.getContext());
+            log.info("Bash tool called - command: {}, timeout: {}, runInBackground: {}, interactive: {}",
+                    command, timeout, runInBackground, interactive);
+            log.debug("Tool context: {}", context.getContext());
 
             // Determine the shell to use based on OS
             String[] shellCommand;
@@ -213,7 +223,32 @@ public class ShellTools {
 
             Process process = processBuilder.start();
 
-            if (Boolean.TRUE.equals(runInBackground)) {
+            // Handle interactive shell session
+            if (Boolean.TRUE.equals(runInBackground) && Boolean.TRUE.equals(interactive)) {
+                // Create interactive shell session with stdin support
+                SyncPromptContext syncPromptContext = null;
+                if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
+                    syncPromptContext = (SyncPromptContext) config.context().get("SyncPromptContext");
+                }
+                ShellSession session = new ShellSession(process, syncPromptContext, shellId);
+                shellSessions.put(shellId, session);
+                
+                String output = String.format(
+                    "shell_id: %s\n\nInteractive shell session started with ID: %s\n" +
+                    "Use ShellInput tool with shell_id='%s' and input='your command' to send commands.\n" +
+                    "Use BashOutput tool with bash_id='%s' to read the output.\n" +
+                    "Use KillShell tool with bash_id='%s' to terminate the session.",
+                    shellId, shellId, shellId, shellId, shellId);
+
+                return ToolResult.builder()
+                        .success(true)
+                        .content(output)
+                        .toolCallContent(ToolResult.createTerminalContent(shellId))
+                        .put("bash_id", shellId)
+                        .put("command", command)
+                        .put("interactive", true)
+                        .build();
+            } else if (Boolean.TRUE.equals(runInBackground)) {
                 if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config && config.context()
                         .get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
                     // Run in background
@@ -223,7 +258,7 @@ public class ShellTools {
                     BackgroundProcess bgProcess = new BackgroundProcess(process, null);
                     backgroundProcesses.put(shellId, bgProcess);
                 }
-                String output = String.format("bash_id: %s\n\nBackground shell started with ID: %s\nUse BashOutput tool with bash_id='%s' to retrieve output.", shellId, shellId, shellId);
+                String output = String.format("bash_id: %s\n\nBackground shell started with ID: %s\nUse BashOutput tool with bash_id='%s' to retrieve output.\nNote: This is a background process. To create an interactive shell with stdin support, use interactive=true parameter.", shellId, shellId, shellId);
 
                 return ToolResult.builder()
                         .success(true)
@@ -368,6 +403,13 @@ public class ShellTools {
 				@JsonPropertyDescription("Optional regular expression to filter the output lines. Only lines matching this regex will be included in the result. Any lines that do not match will no longer be available to read.")
 				String filter) { // @formatter:on
 
+        // Check for interactive shell session first
+        ShellSession session = shellSessions.get(bash_id);
+        if (session != null) {
+            return getShellSessionOutput(bash_id, filter, session);
+        }
+
+        // Fall back to background process
         BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
 
         if (bgProcess == null) {
@@ -404,6 +446,42 @@ public class ShellTools {
                 .build();
     }
 
+    /**
+     * Get output from an interactive shell session
+     */
+    private Map<String, Object> getShellSessionOutput(String bash_id, String filter, ShellSession session) {
+        String newOutput = session.getNewOutput(filter);
+
+        StringBuilder result = new StringBuilder();
+        result.append("Shell ID: ").append(bash_id).append("\n");
+        result.append("Type: Interactive Session\n");
+        result.append("Status: ").append(session.isAlive() ? "Running" : "Completed").append("\n");
+
+        if (!session.isAlive()) {
+            try {
+                result.append("Exit code: ").append(session.getExitCode()).append("\n");
+            } catch (IllegalThreadStateException e) {
+                // Process not yet terminated
+            }
+        }
+
+        if (!newOutput.isEmpty()) {
+            result.append("\nNew output:\n").append(newOutput);
+        } else {
+            result.append("\nNo new output since last check.");
+        }
+
+        return ToolResult.builder()
+                .success(true)
+                .content(result.toString())
+                .toolCallContent(ToolResult.createTerminalContent(bash_id))
+                .put("bash_id", bash_id)
+                .put("isAlive", session.isAlive())
+                .put("newOutput", newOutput)
+                .put("interactive", true)
+                .build();
+    }
+
     // @formatter:off
 	@Tool(name = "KillShell", description = """
 		- Kills a running background bash shell by its ID
@@ -417,6 +495,32 @@ public class ShellTools {
 				@JsonPropertyDescription("The ID of the background shell to kill")
 				String bash_id) { // @formatter:on
 
+        // Check for interactive shell session first
+        ShellSession session = shellSessions.get(bash_id);
+        if (session != null) {
+            if (!session.isAlive()) {
+                shellSessions.remove(bash_id);
+                String message = "Shell " + bash_id + " was already terminated. Removed from active shells.";
+                return ToolResult.builder().success(true).content(message).put("bash_id", bash_id).put("interactive", true).build();
+            }
+            session.destroy();
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            shellSessions.remove(bash_id);
+            String message = "Successfully killed interactive shell: " + bash_id;
+            return ToolResult.builder()
+                    .success(true)
+                    .content(message)
+                    .toolCallContent(ToolResult.createTerminalContent(bash_id))
+                    .put("bash_id", bash_id)
+                    .put("interactive", true)
+                    .build();
+        }
+
+        // Fall back to background process
         BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
 
         if (bgProcess == null) {
@@ -446,6 +550,95 @@ public class ShellTools {
                 .content(message)
                 .toolCallContent(ToolResult.createTerminalContent(bash_id))
                 .put("bash_id", bash_id)
+                .build();
+    }
+
+    // @formatter:off
+	@Tool(name = "ShellInput", description = """
+		- Sends input (commands) to an interactive shell session
+		- Takes a shell_id parameter identifying the shell to send input to
+		- Takes an input parameter containing the command to send
+		- Use this tool to interact with a running interactive shell session
+		- The shell must have been created with interactive=true
+		- After sending input, use BashOutput to read the response
+		""")
+	public Map<String, Object> shellInput(
+			@JsonProperty(value = "shell_id", required = true)
+				@JsonPropertyDescription("The ID of the interactive shell session to send input to")
+				String shell_id,
+			@JsonProperty(value = "input", required = true)
+				@JsonPropertyDescription("The command/input to send to the shell")
+				String input) { // @formatter:on
+
+        ShellSession session = shellSessions.get(shell_id);
+
+        if (session == null) {
+            return ToolResult.builder().error("Error: No interactive shell session found with ID: " + shell_id + ". Make sure the shell was created with interactive=true.").build();
+        }
+
+        if (!session.isAlive()) {
+            return ToolResult.builder().error("Error: Interactive shell session " + shell_id + " is no longer running.").build();
+        }
+
+        // Send input to the shell
+        boolean success = session.sendInput(input);
+
+        if (!success) {
+            return ToolResult.builder().error("Error: Failed to send input to shell " + shell_id).build();
+        }
+
+        String message = "Input sent to shell " + shell_id + ":\n" + input + "\n\nUse BashOutput to read the response.";
+        return ToolResult.builder()
+                .success(true)
+                .content(message)
+                .toolCallContent(ToolResult.createTerminalContent(shell_id))
+                .put("shell_id", shell_id)
+                .put("input", input)
+                .build();
+    }
+
+    // @formatter:off
+	@Tool(name = "ShellSessions", description = """
+		- Lists all active shell sessions (both interactive and background)
+		- Returns information about each shell including ID, type, status, and command
+		- Use this to find shell IDs for BashOutput, KillShell, or ShellInput operations
+		""")
+	public Map<String, Object> shellSessions() { // @formatter:on
+
+        StringBuilder result = new StringBuilder();
+        result.append("Active Shell Sessions:\n\n");
+
+        // List interactive sessions
+        if (!shellSessions.isEmpty()) {
+            result.append("Interactive Sessions:\n");
+            for (Map.Entry<String, ShellSession> entry : shellSessions.entrySet()) {
+                ShellSession session = entry.getValue();
+                result.append("  - ID: ").append(entry.getKey()).append("\n");
+                result.append("    Status: ").append(session.isAlive() ? "Running" : "Completed").append("\n");
+                result.append("    Command: ").append(session.getCommand()).append("\n");
+            }
+            result.append("\n");
+        }
+
+        // List background processes
+        if (!backgroundProcesses.isEmpty()) {
+            result.append("Background Processes:\n");
+            for (Map.Entry<String, BackgroundProcess> entry : backgroundProcesses.entrySet()) {
+                BackgroundProcess bgProcess = entry.getValue();
+                result.append("  - ID: ").append(entry.getKey()).append("\n");
+                result.append("    Status: ").append(bgProcess.isAlive() ? "Running" : "Completed").append("\n");
+            }
+        }
+
+        if (shellSessions.isEmpty() && backgroundProcesses.isEmpty()) {
+            result.append("No active shell sessions.");
+        }
+
+        return ToolResult.builder()
+                .success(true)
+                .content(result.toString())
+                .put("interactiveCount", shellSessions.size())
+                .put("backgroundCount", backgroundProcesses.size())
                 .build();
     }
 
@@ -580,6 +773,167 @@ public class ShellTools {
     public static class Builder {
         public ShellTools build() {
             return new ShellTools();
+        }
+    }
+
+    /**
+     * Inner class to manage interactive shell sessions with stdin support.
+     * This allows sending commands to a running shell and reading responses.
+     */
+    public static class ShellSession {
+
+        final Process process;
+        final StringBuilder stdout;
+        final StringBuilder stderr;
+        final Thread stdoutReader;
+        final Thread stderrReader;
+        final OutputStream stdin;
+        final String command;
+        final SyncPromptContext syncPromptContext;
+
+        int lastStdoutPosition = 0;
+        int lastStderrPosition = 0;
+
+        ShellSession(Process process, SyncPromptContext syncPromptContext, String shellId) {
+            this.process = process;
+            this.stdout = new StringBuilder();
+            this.stderr = new StringBuilder();
+            this.command = "interactive_session_" + shellId;
+            this.syncPromptContext = syncPromptContext;
+
+            // Get the stdin stream for sending commands
+            this.stdin = process.getOutputStream();
+
+            // Start thread to read stdout
+            this.stdoutReader = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        synchronized (stdout) {
+                            stdout.append(line).append("\n");
+                            if (syncPromptContext != null) {
+                                syncPromptContext.sendThought(line + "\n");
+                            }
+                        }
+                    }
+                } catch (IOException e) {
+                    // Process terminated or stream closed
+                }
+            });
+            this.stdoutReader.setDaemon(true);
+            this.stdoutReader.start();
+
+            // Start thread to read stderr
+            this.stderrReader = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        synchronized (stderr) {
+                            stderr.append(line).append("\n");
+                            if (syncPromptContext != null) {
+                                syncPromptContext.sendThought(line + "\n");
+                            }
+                        }
+                    }
+                } catch (IOException e) {
+                    // Process terminated or stream closed
+                }
+            });
+            this.stderrReader.setDaemon(true);
+            this.stderrReader.start();
+        }
+
+        /**
+         * Send input (command) to the shell's stdin
+         */
+        public synchronized boolean sendInput(String input) {
+            try {
+                // Add newline if not present
+                String command = input;
+                if (!command.endsWith("\n")) {
+                    command = command + "\n";
+                }
+                stdin.write(command.getBytes());
+                stdin.flush();
+                return true;
+            } catch (IOException e) {
+                log.error("Failed to send input to shell: {}", e.getMessage());
+                return false;
+            }
+        }
+
+        /**
+         * Get new output since last check
+         */
+        String getNewOutput(String filter) {
+            StringBuilder result = new StringBuilder();
+
+            synchronized (stdout) {
+                String newStdout = stdout.substring(lastStdoutPosition);
+                if (filter != null && !filter.isEmpty()) {
+                    Pattern pattern = Pattern.compile(filter);
+                    newStdout = filterOutput(newStdout, pattern);
+                }
+                if (!newStdout.isEmpty()) {
+                    result.append("STDOUT:\n").append(newStdout);
+                }
+                lastStdoutPosition = stdout.length();
+            }
+
+            synchronized (stderr) {
+                String newStderr = stderr.substring(lastStderrPosition);
+                if (filter != null && !filter.isEmpty()) {
+                    Pattern pattern = Pattern.compile(filter);
+                    newStderr = filterOutput(newStderr, pattern);
+                }
+                if (!newStderr.isEmpty()) {
+                    if (result.length() > 0) result.append("\n");
+                    result.append("STDERR:\n").append(newStderr);
+                }
+                lastStderrPosition = stderr.length();
+            }
+
+            return result.toString();
+        }
+
+        private String filterOutput(String output, Pattern pattern) {
+            String[] lines = output.split("\n");
+            StringBuilder filtered = new StringBuilder();
+            for (String line : lines) {
+                if (pattern.matcher(line).find()) {
+                    filtered.append(line).append("\n");
+                }
+            }
+            return filtered.toString();
+        }
+
+        boolean isAlive() {
+            return process.isAlive();
+        }
+
+        public void destroy() {
+            try {
+                stdin.close();
+            } catch (IOException e) {
+                // Ignore
+            }
+            process.destroy();
+            try {
+                if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+            }
+        }
+
+        int getExitCode() {
+            return process.exitValue();
+        }
+
+        String getCommand() {
+            return command;
         }
     }
 
