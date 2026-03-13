@@ -4,11 +4,9 @@
 [![Java Version](https://img.shields.io/badge/Java-17%2B-b07219)](https://openjdk.org/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.x-02303a)](https://gradle.org/)
 
-一个功能强大的本地 AI Agent 库，基于 Spring AI 和 Alibaba AI 构建，支持 ACP (Agent Client Protocol) 协议与客户端通信。
-
 ## 项目概述
 
-XAgent 是一个生产级的本地 AI Agent 实现，专为编码任务设计，基于 Spring AI Alibaba Graph 和 ACP 协议构建，提供以下核心能力：
+XAgent 是一个生产级的本地 AI Agent 实现，专为编码任务设计，基于 Spring AI Alibaba Graph 和[ACP](https://agentclientprotocol.com/get-started/introduction)(Agent Client Protocol)协议构建，提供以下核心能力：
 
 - 🤖 **ACP 协议支持** - 通过标准输入/输出（STDIO）与客户端通信，支持会话初始化、模式切换、模型切换
 - 🧠 **多模型支持** - 支持任意 OpenAI 协议的模型服务（火山引擎、DeepSeek、OpenRouter、MiniMax 等），通过 JSON 配置管理
@@ -25,6 +23,25 @@ XAgent 是一个生产级的本地 AI Agent 实现，专为编码任务设计，
 - 🛡️ **拦截器系统** - 可配置的请求/响应拦截处理（上下文编辑、工具重试、大结果驱逐）
 - ⚡ **原生支持** - GraalVM Native Image 编译，超快启动
 
+XAgent 基于 ACP 协议，兼容 IntelliJ IDEA 系列、VSCode、Zed、Neovim、[AionUI](https://github.com/iOfficeAI/AionUi) 
+等 [30+ APC客户端](https://agentclientprotocol.com/get-started/clients)，支持 Windows、macOS、Linux 、Android、ISO全平台运行。
+
+[JetBrains Al Assistant 配置说明](https://www.jetbrains.com/zh-cn/help/ai-assistant/acp.html#configure-acp-compatible-agent)
+参考 :
+```json 
+{
+  "default_mcp_settings": {},
+  "agent_servers": {
+    "X Agent": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "${你的下载目录}/XAgent-0.0.1-all.jar"
+      ]
+    }
+  }
+}
+```
 ## 技术栈
 
 | 类别 | 技术 | 版本 |
