@@ -105,7 +105,7 @@ public class NativeReflectConfigGenerator {
             "com.xr21.ai.agent.tools.ListFilesTool",
             "com.xr21.ai.agent.tools.ReadFileTool",
             "com.xr21.ai.agent.tools.ShellTools",
-            "com.xr21.ai.agent.tools.ShellTools$BackgroundProcess",
+            "com.xr21.ai.agent.tools.ShellTools$ShellSession",
             "com.xr21.ai.agent.tools.ShellTools$Builder",
             "com.xr21.ai.agent.tools.ToolKindFind",
             "com.xr21.ai.agent.tools.WebSearchTool",

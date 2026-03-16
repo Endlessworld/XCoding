@@ -38,7 +38,7 @@ public class CancellableRequest {
     final Flux<?> flux;
     final List<String> activeToolCallIds;
     final long startTime;
-    private final Map<String, ShellTools.BackgroundProcess> activeShellProcesses;
+    private final Map<String, ShellTools.ShellSession> activeShellSessions;
     private final Object lock = new Object();
     public volatile boolean cancelled;
     private Disposable fluxDisposable;
@@ -49,7 +49,7 @@ public class CancellableRequest {
         this.executionThread = executionThread;
         this.flux = flux;
         this.activeToolCallIds = new ArrayList<>();
-        this.activeShellProcesses = new ConcurrentHashMap<>();
+        this.activeShellSessions = new ConcurrentHashMap<>();
         this.startTime = System.currentTimeMillis();
         this.cancelled = false;
         this.fluxDisposable = null;
@@ -59,12 +59,12 @@ public class CancellableRequest {
         this.fluxDisposable = disposable;
     }
 
-    public void addShellProcess(String shellId, ShellTools.BackgroundProcess process) {
-        activeShellProcesses.put(shellId, process);
+    public void addShellSession(String shellId, ShellTools.ShellSession session) {
+        activeShellSessions.put(shellId, session);
     }
 
-    public void removeShellProcess(String shellId) {
-        activeShellProcesses.remove(shellId);
+    public void removeShellSession(String shellId) {
+        activeShellSessions.remove(shellId);
     }
 
     public void cancel() {
@@ -93,25 +93,25 @@ public class CancellableRequest {
 
             // 4. 清理资源
             activeToolCallIds.clear();
-            activeShellProcesses.clear();
+            activeShellSessions.clear();
 
             log.info("[CancellableRequest] Request {} cancelled successfully", requestId);
         }
     }
 
     private void cancelActiveToolCalls() {
-        // 取消所有活跃的 shell 进程
-        for (Map.Entry<String, ShellTools.BackgroundProcess> entry : activeShellProcesses.entrySet()) {
+        // 取消所有活跃的 shell 会话
+        for (Map.Entry<String, ShellTools.ShellSession> entry : activeShellSessions.entrySet()) {
             String shellId = entry.getKey();
-            ShellTools.BackgroundProcess process = entry.getValue();
+            ShellTools.ShellSession session = entry.getValue();
             try {
-                log.info("[CancellableRequest] Killing shell process: {} for request: {}", shellId, requestId);
+                log.info("[CancellableRequest] Killing shell session: {} for request: {}", shellId, requestId);
                 ShellTools.builder().build().killShell(shellId);
             } catch (Exception e) {
-                log.warn("[CancellableRequest] Failed to kill shell process {}: {}", shellId, e.getMessage());
+                log.warn("[CancellableRequest] Failed to kill shell session {}: {}", shellId, e.getMessage());
             }
         }
-        activeShellProcesses.clear();
+        activeShellSessions.clear();
     }
 
     public void addToolCall(String toolCallId) {

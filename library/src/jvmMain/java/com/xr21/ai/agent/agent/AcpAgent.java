@@ -680,7 +680,7 @@ public class AcpAgent {
 //        sessions.remove(sessionId);
 
         // 清理后台进程（从 ShellTools）
-        cleanupBackgroundProcesses(sessionId);
+        cleanupShellSessions(sessionId);
 
         log.info("[AcpAgent] Cleaned up resources for session: {}", sessionId);
     }
@@ -688,34 +688,33 @@ public class AcpAgent {
     /**
      * 清理后台进程
      */
-    private void cleanupBackgroundProcesses(String sessionId) {
+    private void cleanupShellSessions(String sessionId) {
         try {
-            Map<String, ShellTools.BackgroundProcess> backgroundProcesses = ShellTools.backgroundProcesses;
-            // 查找并清理与该会话相关的进程
-            List<String> processesToRemove = new ArrayList<>();
-            for (Map.Entry<String, ShellTools.BackgroundProcess> entry : backgroundProcesses.entrySet()) {
+            // 获取所有活跃的 shell 会话
+            Map<String, ShellTools.ShellSession> shellSessions = ShellTools.shellSessions;
+            // 查找并清理与该会话相关的会话
+            List<String> sessionsToRemove = new ArrayList<>();
+            for (Map.Entry<String, ShellTools.ShellSession> entry : shellSessions.entrySet()) {
                 String shellId = entry.getKey();
-                // 假设 shellId 包含会话信息或我们可以通过其他方式关联
-                // 这里简单清理所有进程，实际应用中可能需要更精确的关联
-                processesToRemove.add(shellId);
+                sessionsToRemove.add(shellId);
                 try {
                     // 调用 KillShell 工具
                     ShellTools.builder().build().killShell(shellId);
-                    log.info("[AcpAgent] Killed background shell: {} for session: {}", shellId, sessionId);
+                    log.info("[AcpAgent] Killed shell session: {} for session: {}", shellId, sessionId);
                 } catch (Exception e) {
-                    log.warn("[AcpAgent] Failed to kill shell {}: {}", shellId, e.getMessage());
+                    log.warn("[AcpAgent] Failed to kill shell session {}: {}", shellId, e.getMessage());
                 }
             }
 
-            // 从所有活跃请求中移除该会话的 shell 进程
+            // 从所有活跃请求中移除该会话的 shell 会话
             for (CancellableRequest request : activeRequests.values()) {
                 if (request.sessionId.equals(sessionId)) {
-                    // 请求的 cancel() 方法会清理自己的 shell 进程
+                    // 请求的 cancel() 方法会清理自己的 shell 会话
                     request.cancel();
                 }
             }
         } catch (Exception e) {
-            log.warn("[AcpAgent] Failed to cleanup background processes: {}", e.getMessage());
+            log.warn("[AcpAgent] Failed to cleanup shell sessions: {}", e.getMessage());
         }
     }
 
@@ -758,20 +757,20 @@ public class AcpAgent {
     /**
      * 为请求添加 shell 进程
      */
-    private void addShellProcessToRequest(String requestId, String shellId, ShellTools.BackgroundProcess process) {
+    private void addShellSessionToRequest(String requestId, String shellId, ShellTools.ShellSession session) {
         CancellableRequest request = activeRequests.get(requestId);
         if (request != null) {
-            request.addShellProcess(shellId, process);
+            request.addShellSession(shellId, session);
         }
     }
 
     /**
-     * 从请求中移除 shell 进程
+     * 从请求中移除 shell 会话
      */
-    private void removeShellProcessFromRequest(String requestId, String shellId) {
+    private void removeShellSessionFromRequest(String requestId, String shellId) {
         CancellableRequest request = activeRequests.get(requestId);
         if (request != null) {
-            request.removeShellProcess(shellId);
+            request.removeShellSession(shellId);
         }
     }
 

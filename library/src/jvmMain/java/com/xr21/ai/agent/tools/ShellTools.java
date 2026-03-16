@@ -31,6 +31,7 @@ import java.io.OutputStream;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /**
@@ -40,8 +41,14 @@ import java.util.regex.Pattern;
 @Slf4j
 public class ShellTools {
 
-    // Storage for background processes
-    public static final Map<String, BackgroundProcess> backgroundProcesses = new ConcurrentHashMap<>();
+    // Minimum timeout value in milliseconds (30 seconds)
+    public static final long MIN_TIMEOUT_MS = 30000;
+
+    // Maximum timeout value in milliseconds (10 minutes)
+    public static final long MAX_TIMEOUT_MS = 600000;
+
+    // Default timeout value (2 minutes)
+    public static final long DEFAULT_TIMEOUT_MS = 120000;
 
     // Storage for interactive shell sessions (for re-entrant shell support)
     public static final Map<String, ShellSession> shellSessions = new ConcurrentHashMap<>();
@@ -56,9 +63,13 @@ public class ShellTools {
 
     // @formatter:off
 	@Tool(name = "Bash", description = """
-		Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
+		Executes a given bash command in a persistent shell session with timeout support.
 
 		IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
+
+		Behavior:
+		- If the command completes within the timeout period, the result is returned immediately and the session is closed.
+		- If the command does NOT complete within the timeout period, an interactive shell session is returned, allowing you to continue interacting with it using ShellInput and BashOutput tools.
 
 		Before executing the command, please follow these steps:
 
@@ -78,10 +89,9 @@ public class ShellTools {
 
 		Usage notes:
 		- The command argument is required.
-		- You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
+		- The timeout argument is required and must be at least 30000ms (30 seconds) and at most 600000ms (10 minutes).
 		- It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
 		- If the output exceeds 30000 characters, output will be truncated before being returned to you.
-		- You can use the `run_in_background` parameter to run the command in the background, which allows you to continue working while the command runs. You can monitor the output using the Bash tool as it becomes available. Never use `run_in_background` to run 'sleep' as it will return immediately. You do not need to use '&' at the end of the command when using this parameter.
 
 		- Avoid using Bash with the `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
 			- File search: Use Glob (NOT find or ls)
@@ -92,16 +102,16 @@ public class ShellTools {
 			- Communication: Output text directly (NOT echo/printf)
 		- When issuing multiple commands:
 			- If the commands are independent and can run in parallel, make multiple Bash tool calls in a single message. For example, if you need to run "git status" and "git diff", send a single message with two Bash tool calls in parallel.
-			- If the commands depend on each other and must run sequentially, use a single Bash call with '&&' to chain them together (e.g., `git add . && git commit -m "message" && git push`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before Bash for git operations, or git add before git commit), run these operations sequentially instead.
+			- If the commands depend on each other and must run sequentially, use a single Bash call with '&&' to chain them together (e.g., `git add . && git commit -m "message" && git push`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before Bash for git operations, or git add before git commit), run them sequentially instead.
 			- Use ';' only when you need to run commands sequentially but don't care if earlier commands fail
 			- DO NOT use newlines to separate commands (newlines are ok in quoted strings)
 		- Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of `cd`. You may use `cd` if the User explicitly requests it.
 			<good-example>
 			pytest /foo/bar/tests
 			</good-example>
-			<bad-example>
+			<bad_example>
 			cd /foo/bar && pytest tests
-			</bad-example>
+			</bad_example>
 
 		# Committing changes with git
 
@@ -109,14 +119,14 @@ public class ShellTools {
 
 		Git Safety Protocol:
 		- NEVER update the git config
-		- NEVER run destructive/irreversible git commands (like push --force, hard reset, etc) unless the user explicitly requests them
+		- NEVER run destructive/irreversible git commands (like push --force, hard reset, etc) unless the user explicitly requests it
 		- NEVER skip hooks (--no-verify, --no-gpg-sign, etc) unless the user explicitly requests it
 		- NEVER run force push to main/master, warn the user if they request it
 		- Avoid git commit --amend.  ONLY use --amend when either (1) user explicitly requested amend OR (2) adding edits from pre-commit hook (additional instructions below)
 		- Before amending: ALWAYS check authorship (git log -1 --format='%an %ae')
 		- NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive.
 
-		1. You can call multiple tools in a single response. When multiple independent pieces of information are requested and all commands are likely to succeed, run multiple tool calls in parallel for optimal performance. run the following bash commands in parallel, each using the Bash tool:
+		1. You can call multiple tools in a single response when all commands are likely to succeed, run multiple Bash tool calls in parallel for optimal performance. run the following bash commands in parallel, each using the Bash tool:
 		- Run a git status command to see all untracked files.
 		- Run a git diff command to see both staged and unstaged changes that will be committed.
 		- Run a git log command to see recent commit messages, so that you can follow this repository's commit message style.
@@ -125,7 +135,7 @@ public class ShellTools {
 		- Do not commit files that likely contain secrets (.env, credentials.json, etc). Warn the user if they specifically request to commit those files
 		- Draft a concise (1-2 sentences) commit message that focuses on the "why" rather than the "what"
 		- Ensure it accurately reflects the changes and their purpose
-		3. You can call multiple tools in a single response. When multiple independent pieces of information are requested and all commands are likely to succeed, run multiple tool calls in parallel for optimal performance. run the following commands:
+		3. You can call multiple tools in a single response when all commands are likely to succeed, run the following bash commands in parallel:
 		- Add relevant untracked files to the staging area.
 		- Create the commit with a message ending with:
 		🤖 Generated with [Claude Code](https://claude.com/claude-code)
@@ -150,16 +160,16 @@ public class ShellTools {
 
 		IMPORTANT: When the user asks you to create a pull request, follow these steps carefully:
 
-		1. You can call multiple tools in a single response. When multiple independent pieces of information are requested and all commands are likely to succeed, run multiple tool calls in parallel for optimal performance. run the following bash commands in parallel using the Bash tool, in order to understand the current state of the branch since it diverged from the main branch:
+		1. You can call multiple tools in a single response to understand the current state of the branch since it diverged from the main branch:
 		- Run a git status command to see all untracked files
 		- Run a git diff command to see both staged and unstaged changes that will be committed
 		- Check if the current branch tracks a remote branch and is up to date with the remote, so you know if you need to push to the remote
-		- Run a git log command and `git diff [base-branch]...HEAD` to understand the full commit history for the current branch (from the time it diverged from the base branch)
-		2. Analyze all changes that will be included in the pull request, making sure to look at all relevant commits (NOT just the latest commit, but ALL commits that will be included in the pull request!!!), and draft a pull request summary
-		3. You can call multiple tools in a single response. When multiple independent pieces of information are requested and all commands are likely to succeed, run multiple tool calls in parallel for optimal performance. run the following commands in parallel:
+		- Run a git log command and `git diff [base-branch]...HEAD` to understand the full commit history for the current branch
+		2. Analyze all changes that will be included in the pull request, and draft a pull request summary
+		3. You can call multiple tools in a single response when all commands are likely to succeed, run the following bash commands in parallel:
 		- Create new branch if needed
 		- Push to remote with -u flag if needed
-		- Create PR using gh pr create with the format below. Use a HEREDOC to pass the body to ensure correct formatting.
+		- Create PR using gh pr create with the format below:
 		<example>
 		gh pr create --title "the pr title" --body "$(cat <<'EOF'
 		## Summary
@@ -181,30 +191,26 @@ public class ShellTools {
 		- View comments on a Github PR: gh api repos/foo/bar/pulls/123/comments
 		""")
 	public Map<String, Object> bash(
-		@JsonProperty(value = "command", required = true)
-				@JsonPropertyDescription("The command to execute")
-				String command,
-		@JsonProperty(value = "timeout")
-				@JsonPropertyDescription("Optional timeout in milliseconds (max 600000)")
-				Long timeout,
-		@JsonProperty(value = "description")
-				@JsonPropertyDescription("Clear, concise description of what this command does in 5-10 words, in active voice. Examples:\nInput: ls\nOutput: List files in current directory\n\nInput: git status\nOutput: Show working tree status\n\nInput: npm install\nOutput: Install package dependencies\n\nInput: mkdir foo\nOutput: Create directory 'foo'")
-				String description,
-		@JsonProperty(value = "runInBackground")
-				@JsonPropertyDescription("Set to true to run this command in the background. Use BashOutput to read the output later.")
-				Boolean runInBackground,
-			@JsonProperty(value = "interactive")
-				@JsonPropertyDescription("Set to true to create an interactive shell session that supports stdin input. Use ShellInput tool to send commands to the running shell. Only works with runInBackground=true.")
-				Boolean interactive,
+			@JsonProperty(value = "command", required = true)
+					@JsonPropertyDescription("The command to execute")
+					String command,
+			@JsonProperty(value = "timeout", required = true)
+					@JsonPropertyDescription("Timeout in milliseconds. Must be at least 30000ms (30 seconds) and at most 600000ms (10 minutes).")
+					Long timeout,
+			@JsonProperty(value = "description")
+					@JsonPropertyDescription("Clear, concise description of what this command does in 5-10 words, in active voice. Examples:\nInput: ls\nOutput: List files in current directory\n\nInput: git status\nOutput: Show working tree status\n\nInput: npm install\nOutput: Install package dependencies\n\nInput: mkdir foo\nOutput: Create directory 'foo'")
+					String description,
 			ToolContext context) { // @formatter:on
 
         // Generate unique shell ID for all executions
         String shellId = "shell_" + System.currentTimeMillis();
 
         try {
-            log.info("Bash tool called - command: {}, timeout: {}, runInBackground: {}, interactive: {}",
-                    command, timeout, runInBackground, interactive);
+            log.info("Bash tool called - command: {}, timeout: {}", command, timeout);
             log.debug("Tool context: {}", context.getContext());
+
+            // Validate and normalize timeout
+            long timeoutMs = validateTimeout(timeout);
 
             // Determine the shell to use based on OS
             String[] shellCommand;
@@ -218,163 +224,27 @@ public class ShellTools {
             ProcessBuilder processBuilder = new ProcessBuilder(shellCommand);
             processBuilder.redirectErrorStream(false);
 
-            // Set working directory if available in tool context
-            // processBuilder.directory(new File(workingDirectory));
-
             Process process = processBuilder.start();
 
-            // Handle interactive shell session
-            if (Boolean.TRUE.equals(runInBackground) && Boolean.TRUE.equals(interactive)) {
-                // Create interactive shell session with stdin support
-                SyncPromptContext syncPromptContext = null;
-                if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                    syncPromptContext = (SyncPromptContext) config.context().get("SyncPromptContext");
-                }
-                ShellSession session = new ShellSession(process, syncPromptContext, shellId);
-                shellSessions.put(shellId, session);
-                
-                String output = String.format(
-                    "shell_id: %s\n\nInteractive shell session started with ID: %s\n" +
-                    "Use ShellInput tool with shell_id='%s' and input='your command' to send commands.\n" +
-                    "Use BashOutput tool with bash_id='%s' to read the output.\n" +
-                    "Use KillShell tool with bash_id='%s' to terminate the session.",
-                    shellId, shellId, shellId, shellId, shellId);
+            // Get SyncPromptContext if available
+            SyncPromptContext syncPromptContext = null;
+            if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
+                syncPromptContext = (SyncPromptContext) config.context().get("SyncPromptContext");
+            }
 
-                return ToolResult.builder()
-                        .success(true)
-                        .content(output)
-                        .toolCallContent(ToolResult.createTerminalContent(shellId))
-                        .put("bash_id", shellId)
-                        .put("command", command)
-                        .put("interactive", true)
-                        .build();
-            } else if (Boolean.TRUE.equals(runInBackground)) {
-                if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config && config.context()
-                        .get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
-                    // Run in background
-                    BackgroundProcess bgProcess = new BackgroundProcess(process, syncPromptContext);
-                    backgroundProcesses.put(shellId, bgProcess);
-                } else {
-                    BackgroundProcess bgProcess = new BackgroundProcess(process, null);
-                    backgroundProcesses.put(shellId, bgProcess);
-                }
-                String output = String.format("bash_id: %s\n\nBackground shell started with ID: %s\nUse BashOutput tool with bash_id='%s' to retrieve output.\nNote: This is a background process. To create an interactive shell with stdin support, use interactive=true parameter.", shellId, shellId, shellId);
+            // Create interactive shell session with stdin support
+            ShellSession session = new ShellSession(process, syncPromptContext, shellId, command);
+            shellSessions.put(shellId, session);
 
-                return ToolResult.builder()
-                        .success(true)
-                        .content(output)
-                        .toolCallContent(ToolResult.createTerminalContent(shellId))
-                        .put("bash_id", shellId)
-                        .put("command", command)
-                        .build();
+            // Wait for completion or timeout
+            boolean completed = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
+
+            if (completed) {
+                // Command completed within timeout - return result and clean up session
+                return handleCompletedProcess(session, shellId, command);
             } else {
-                // Run synchronously with timeout
-                long timeoutMs = timeout != null ? Math.min(timeout, 600000) : 120000;
-
-                StringBuilder stdout = new StringBuilder();
-                StringBuilder stderr = new StringBuilder();
-
-                // Read stdout
-                Thread stdoutThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), "GBK"))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                                if (config.context()
-                                        .get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
-                                    syncPromptContext.sendThought(line);
-                                    syncPromptContext.sendThought("<br>");
-                                }
-                            }
-                            stdout.append(line).append("\n");
-                        }
-                    } catch (IOException e) {
-                        // Ignore
-                    }
-                });
-
-                // Read stderr
-                Thread stderrThread = new Thread(() -> {
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), "GBK"))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                                if (config.context()
-                                        .get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
-                                    syncPromptContext.sendThought(line);
-                                    syncPromptContext.sendThought("<br>");
-                                }
-                            }
-                            stderr.append(line).append("\n");
-                        }
-                    } catch (IOException e) {
-                        // Ignore
-                    }
-                });
-
-                stdoutThread.start();
-                stderrThread.start();
-
-                boolean completed = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
-
-                if (!completed) {
-                    process.destroy();
-                    if (!process.waitFor(5, TimeUnit.SECONDS)) {
-                        process.destroyForcibly();
-                    }
-                    String output = String.format("bash_id: %s\n\nCommand timed out after %dms", shellId, timeoutMs);
-                    return ToolResult.builder()
-                            .success(false)
-                            .content(output)
-                            .toolCallContent(ToolResult.createTerminalContent(shellId))
-                            .put("bash_id", shellId)
-                            .put("command", command)
-                            .put("timedOut", true)
-                            .build();
-                }
-
-                stdoutThread.join(1000);
-                stderrThread.join(1000);
-
-                int exitCode = process.exitValue();
-                StringBuilder result = new StringBuilder();
-
-                // Add bash_id at the beginning
-                result.append("bash_id: ").append(shellId).append("\n\n");
-
-                if (stdout.length() > 0) {
-                    result.append(stdout);
-                }
-
-                if (stderr.length() > 0) {
-                    if (result.length() > result.indexOf("\n\n") + 2) result.append("\n");
-                    result.append("STDERR:\n").append(stderr);
-                }
-
-                if (exitCode != 0) {
-                    if (result.length() > result.indexOf("\n\n") + 2) result.append("\n");
-                    result.append("Exit code: ").append(exitCode);
-                }
-
-                // Truncate if too long
-                String output = result.toString();
-                if (output.length() > 30000) {
-                    // Keep the bash_id header
-                    String header = output.substring(0, output.indexOf("\n\n") + 2);
-                    String content = output.substring(output.indexOf("\n\n") + 2);
-                    output = header + content.substring(0, Math.min(content.length(), 30000 - header.length())) + "\n... (output truncated)";
-                }
-
-                return ToolResult.builder()
-                        .success(exitCode == 0)
-                        .content(output)
-                        .toolCallContent(ToolResult.createTerminalContent(shellId))
-                        .put("bash_id", shellId)
-                        .put("command", command)
-                        .put("exitCode", exitCode)
-                        .put("stdout", stdout.toString())
-                        .put("stderr", stderr.toString())
-                        .build();
+                // Command timed out - return interactive shell session info
+                return handleTimeoutSession(session, shellId, command, timeoutMs);
             }
 
         } catch (IOException e) {
@@ -385,71 +255,132 @@ public class ShellTools {
         }
     }
 
-    // @formatter:off
-	@Tool(name = "BashOutput", description = """
-		- Retrieves output from a running or completed background bash shell
-		- Takes a shell_id parameter identifying the shell
-		- Always returns only new output since the last check
-		- Returns stdout and stderr output along with shell status
-		- Supports optional regex filtering to show only lines matching a pattern
-		- Use this tool when you need to monitor or check the output of a long-running shell
-		- Shell IDs can be found using the /bashes command
-		""")
-	public Map<String, Object> bashOutput(
-		@JsonProperty(value = "bash_id", required = true)
-				@JsonPropertyDescription("The ID of the background shell to retrieve output from")
-				String bash_id,
-		@JsonProperty(value = "filter")
-				@JsonPropertyDescription("Optional regular expression to filter the output lines. Only lines matching this regex will be included in the result. Any lines that do not match will no longer be available to read.")
-				String filter) { // @formatter:on
+    /**
+     * Validate and normalize timeout value
+     */
+    private long validateTimeout(Long timeout) {
+        if (timeout == null) {
+            return DEFAULT_TIMEOUT_MS;
+        }
+        if (timeout < MIN_TIMEOUT_MS) {
+            log.warn("Timeout {}ms is less than minimum {}ms, using minimum", timeout, MIN_TIMEOUT_MS);
+            return MIN_TIMEOUT_MS;
+        }
+        if (timeout > MAX_TIMEOUT_MS) {
+            log.warn("Timeout {}ms is greater than maximum {}ms, using maximum", timeout, MAX_TIMEOUT_MS);
+            return MAX_TIMEOUT_MS;
+        }
+        return timeout;
+    }
 
-        // Check for interactive shell session first
-        ShellSession session = shellSessions.get(bash_id);
-        if (session != null) {
-            return getShellSessionOutput(bash_id, filter, session);
+    /**
+     * Handle completed process - return result and clean up session
+     */
+    private Map<String, Object> handleCompletedProcess(ShellSession session, String shellId, String command) {
+        // Wait for output readers to finish
+        try {
+            session.waitForOutputReaders(1000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
 
-        // Fall back to background process
-        BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
+        // Get the output
+        String stdout = session.getStdout();
+        String stderr = session.getStderr();
+        int exitCode = session.getExitCode();
 
-        if (bgProcess == null) {
-            return ToolResult.builder().error("Error: No background shell found with ID: " + bash_id).build();
-        }
+        // Clean up the session
+        session.destroy();
+        shellSessions.remove(shellId);
 
-        String newOutput = bgProcess.getNewOutput(filter);
-
+        // Build result
         StringBuilder result = new StringBuilder();
-        result.append("Shell ID: ").append(bash_id).append("\n");
-        result.append("Status: ").append(bgProcess.isAlive() ? "Running" : "Completed").append("\n");
+        result.append("bash_id: ").append(shellId).append("\n\n");
 
-        if (!bgProcess.isAlive()) {
-            try {
-                result.append("Exit code: ").append(bgProcess.getExitCode()).append("\n");
-            } catch (IllegalThreadStateException e) {
-                // Process not yet terminated
-            }
+        if (stdout != null && !stdout.isEmpty()) {
+            result.append(stdout);
         }
 
-        if (!newOutput.isEmpty()) {
-            result.append("\nNew output:\n").append(newOutput);
-        } else {
-            result.append("\nNo new output since last check.");
+        if (stderr != null && !stderr.isEmpty()) {
+            if (result.length() > result.indexOf("\n\n") + 2) result.append("\n");
+            result.append("STDERR:\n").append(stderr);
+        }
+
+        if (exitCode != 0) {
+            if (result.length() > result.indexOf("\n\n") + 2) result.append("\n");
+            result.append("Exit code: ").append(exitCode);
+        }
+
+        // Truncate if too long
+        String output = result.toString();
+        if (output.length() > 30000) {
+            String header = output.substring(0, output.indexOf("\n\n") + 2);
+            String content = output.substring(output.indexOf("\n\n") + 2);
+            output = header + content.substring(0, Math.min(content.length(), 30000 - header.length())) + "\n... (output truncated)";
         }
 
         return ToolResult.builder()
-                .success(true)
-                .content(result.toString())
-                .toolCallContent(ToolResult.createTerminalContent(bash_id))
-                .put("bash_id", bash_id)
-                .put("isAlive", bgProcess.isAlive())
-                .put("newOutput", newOutput)
+                .success(exitCode == 0)
+                .content(output)
+                .toolCallContent(ToolResult.createTerminalContent(shellId))
+                .put("bash_id", shellId)
+                .put("command", command)
+                .put("exitCode", exitCode)
+                .put("stdout", stdout)
+                .put("stderr", stderr)
                 .build();
     }
 
     /**
-     * Get output from an interactive shell session
+     * Handle timeout - return interactive shell session info
      */
-    private Map<String, Object> getShellSessionOutput(String bash_id, String filter, ShellSession session) {
+    private Map<String, Object> handleTimeoutSession(ShellSession session, String shellId, String command, long timeoutMs) {
+        String output = String.format(
+                "bash_id: %s\n\n" +
+                "Command timed out after %dms, but shell session is still running.\n\n" +
+                "Interactive shell session started with ID: %s\n" +
+                "Use ShellInput tool with shell_id='%s' and input='your command' to send commands.\n" +
+                "Use BashOutput tool with bash_id='%s' to read the output.\n" +
+                "Use KillShell tool with bash_id='%s' to terminate the session.\n\n" +
+                "Note: The command is still running in the background. You can continue to interact with it.",
+                shellId, timeoutMs, shellId, shellId, shellId, shellId);
+
+        return ToolResult.builder()
+                .success(true)
+                .content(output)
+                .toolCallContent(ToolResult.createTerminalContent(shellId))
+                .put("bash_id", shellId)
+                .put("command", command)
+                .put("timedOut", true)
+                .put("timeout", timeoutMs)
+                .put("interactive", true)
+                .build();
+    }
+
+    // @formatter:off
+	@Tool(name = "BashOutput", description = """
+		- Retrieves output from a running or completed interactive bash shell
+		- Takes a shell_id parameter identifying the shell
+		- Always returns only new output since the last check
+		- Returns stdout and stderr output along with shell status
+		- Supports optional regex filtering to show only lines matching a pattern
+		- Use this tool to monitor or check the output of a shell session
+		- Shell IDs can be found using the ShellSessions tool
+		""")
+	public Map<String, Object> bashOutput(
+			@JsonProperty(value = "bash_id", required = true)
+					@JsonPropertyDescription("The ID of the shell to retrieve output from")
+					String bash_id,
+			@JsonProperty(value = "filter")
+					@JsonPropertyDescription("Optional regular expression to filter the output lines. Only lines matching this regex will be included in the result.")
+					String filter) { // @formatter:on
+
+        ShellSession session = shellSessions.get(bash_id);
+
+        if (session == null) {
+            return ToolResult.builder().error("Error: No shell session found with ID: " + bash_id).build();
+        }
+
         String newOutput = session.getNewOutput(filter);
 
         StringBuilder result = new StringBuilder();
@@ -460,12 +391,16 @@ public class ShellTools {
         if (!session.isAlive()) {
             try {
                 result.append("Exit code: ").append(session.getExitCode()).append("\n");
+                // Clean up completed session
+                session.destroy();
+                shellSessions.remove(bash_id);
+                result.append("\nNote: Shell session has completed and been cleaned up.");
             } catch (IllegalThreadStateException e) {
                 // Process not yet terminated
             }
         }
 
-        if (!newOutput.isEmpty()) {
+        if (newOutput != null && !newOutput.isEmpty()) {
             result.append("\nNew output:\n").append(newOutput);
         } else {
             result.append("\nNo new output since last check.");
@@ -484,65 +419,31 @@ public class ShellTools {
 
     // @formatter:off
 	@Tool(name = "KillShell", description = """
-		- Kills a running background bash shell by its ID
+		- Kills a running bash shell by its ID
 		- Takes a shell_id parameter identifying the shell to kill
 		- Returns a success or failure status
-		- Use this tool when you need to terminate a long-running shell
-		- Shell IDs can be found using the /bashes command
+		- Use this tool to terminate a long-running shell session
+		- Shell IDs can be found using the ShellSessions tool
 		""")
 	public Map<String, Object> killShell(
-		@JsonProperty(value = "bash_id", required = true)
-				@JsonPropertyDescription("The ID of the background shell to kill")
-				String bash_id) { // @formatter:on
+			@JsonProperty(value = "bash_id", required = true)
+					@JsonPropertyDescription("The ID of the shell to kill")
+					String bash_id) { // @formatter:on
 
-        // Check for interactive shell session first
         ShellSession session = shellSessions.get(bash_id);
-        if (session != null) {
-            if (!session.isAlive()) {
-                shellSessions.remove(bash_id);
-                String message = "Shell " + bash_id + " was already terminated. Removed from active shells.";
-                return ToolResult.builder().success(true).content(message).put("bash_id", bash_id).put("interactive", true).build();
-            }
-            session.destroy();
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+
+        if (session == null) {
+            return ToolResult.builder().error("Error: No shell session found with ID: " + bash_id).build();
+        }
+
+        if (!session.isAlive()) {
             shellSessions.remove(bash_id);
-            String message = "Successfully killed interactive shell: " + bash_id;
-            return ToolResult.builder()
-                    .success(true)
-                    .content(message)
-                    .toolCallContent(ToolResult.createTerminalContent(bash_id))
-                    .put("bash_id", bash_id)
-                    .put("interactive", true)
-                    .build();
-        }
-
-        // Fall back to background process
-        BackgroundProcess bgProcess = backgroundProcesses.get(bash_id);
-
-        if (bgProcess == null) {
-            return ToolResult.builder().error("Error: No background shell found with ID: " + bash_id).build();
-        }
-
-        if (!bgProcess.isAlive()) {
-            backgroundProcesses.remove(bash_id);
             String message = "Shell " + bash_id + " was already terminated. Removed from active shells.";
             return ToolResult.builder().success(true).content(message).put("bash_id", bash_id).build();
         }
 
-        bgProcess.destroy();
-
-        // Wait a bit to confirm termination
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        backgroundProcesses.remove(bash_id);
+        session.destroy();
+        shellSessions.remove(bash_id);
 
         String message = "Successfully killed shell: " + bash_id;
         return ToolResult.builder()
@@ -558,26 +459,26 @@ public class ShellTools {
 		- Sends input (commands) to an interactive shell session
 		- Takes a shell_id parameter identifying the shell to send input to
 		- Takes an input parameter containing the command to send
-		- Use this tool to interact with a running interactive shell session
-		- The shell must have been created with interactive=true
+		- Use this tool to interact with a running shell session
 		- After sending input, use BashOutput to read the response
+		- Shell IDs can be found using the ShellSessions tool
 		""")
 	public Map<String, Object> shellInput(
 			@JsonProperty(value = "shell_id", required = true)
-				@JsonPropertyDescription("The ID of the interactive shell session to send input to")
-				String shell_id,
+					@JsonPropertyDescription("The ID of the shell session to send input to")
+					String shell_id,
 			@JsonProperty(value = "input", required = true)
-				@JsonPropertyDescription("The command/input to send to the shell")
-				String input) { // @formatter:on
+					@JsonPropertyDescription("The command/input to send to the shell")
+					String input) { // @formatter:on
 
         ShellSession session = shellSessions.get(shell_id);
 
         if (session == null) {
-            return ToolResult.builder().error("Error: No interactive shell session found with ID: " + shell_id + ". Make sure the shell was created with interactive=true.").build();
+            return ToolResult.builder().error("Error: No shell session found with ID: " + shell_id).build();
         }
 
         if (!session.isAlive()) {
-            return ToolResult.builder().error("Error: Interactive shell session " + shell_id + " is no longer running.").build();
+            return ToolResult.builder().error("Error: Shell session " + shell_id + " is no longer running.").build();
         }
 
         // Send input to the shell
@@ -599,8 +500,8 @@ public class ShellTools {
 
     // @formatter:off
 	@Tool(name = "ShellSessions", description = """
-		- Lists all active shell sessions (both interactive and background)
-		- Returns information about each shell including ID, type, status, and command
+		- Lists all active shell sessions
+		- Returns information about each shell including ID, status, and command
 		- Use this to find shell IDs for BashOutput, KillShell, or ShellInput operations
 		""")
 	public Map<String, Object> shellSessions() { // @formatter:on
@@ -608,166 +509,22 @@ public class ShellTools {
         StringBuilder result = new StringBuilder();
         result.append("Active Shell Sessions:\n\n");
 
-        // List interactive sessions
-        if (!shellSessions.isEmpty()) {
-            result.append("Interactive Sessions:\n");
+        if (shellSessions.isEmpty()) {
+            result.append("No active shell sessions.");
+        } else {
             for (Map.Entry<String, ShellSession> entry : shellSessions.entrySet()) {
                 ShellSession session = entry.getValue();
                 result.append("  - ID: ").append(entry.getKey()).append("\n");
                 result.append("    Status: ").append(session.isAlive() ? "Running" : "Completed").append("\n");
                 result.append("    Command: ").append(session.getCommand()).append("\n");
             }
-            result.append("\n");
-        }
-
-        // List background processes
-        if (!backgroundProcesses.isEmpty()) {
-            result.append("Background Processes:\n");
-            for (Map.Entry<String, BackgroundProcess> entry : backgroundProcesses.entrySet()) {
-                BackgroundProcess bgProcess = entry.getValue();
-                result.append("  - ID: ").append(entry.getKey()).append("\n");
-                result.append("    Status: ").append(bgProcess.isAlive() ? "Running" : "Completed").append("\n");
-            }
-        }
-
-        if (shellSessions.isEmpty() && backgroundProcesses.isEmpty()) {
-            result.append("No active shell sessions.");
         }
 
         return ToolResult.builder()
                 .success(true)
                 .content(result.toString())
-                .put("interactiveCount", shellSessions.size())
-                .put("backgroundCount", backgroundProcesses.size())
+                .put("sessionCount", shellSessions.size())
                 .build();
-    }
-
-    // Inner class to manage background processes
-    public static class BackgroundProcess {
-
-        final Process process;
-
-        final StringBuilder stdout;
-
-        final StringBuilder stderr;
-
-        final Thread stdoutReader;
-
-        final Thread stderrReader;
-
-        int lastStdoutPosition = 0;
-
-        int lastStderrPosition = 0;
-
-        SyncPromptContext syncPromptContext;
-
-        BackgroundProcess(Process process, SyncPromptContext syncPromptContext) {
-            this.process = process;
-            this.stdout = new StringBuilder();
-            this.stderr = new StringBuilder();
-            this.syncPromptContext = syncPromptContext;
-
-            // Start thread to read stdout
-            this.stdoutReader = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        synchronized (stdout) {
-                            stdout.append(line).append("\n");
-                            if (syncPromptContext != null) {
-                                syncPromptContext.sendThought(line + "\n");
-                            }
-                        }
-                    }
-                } catch (IOException e) {
-                    // Process terminated or stream closed
-                }
-            });
-            this.stdoutReader.setDaemon(true);
-            this.stdoutReader.start();
-
-            // Start thread to read stderr
-            this.stderrReader = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        synchronized (stderr) {
-                            stderr.append(line).append("\n");
-                            if (syncPromptContext != null) {
-                                syncPromptContext.sendThought(line + "\n");
-                            }
-                        }
-                    }
-                } catch (IOException e) {
-                    // Process terminated or stream closed
-                }
-            });
-            this.stderrReader.setDaemon(true);
-            this.stderrReader.start();
-        }
-
-        String getNewOutput(String filter) {
-            StringBuilder result = new StringBuilder();
-
-            synchronized (stdout) {
-                String newStdout = stdout.substring(lastStdoutPosition);
-                if (filter != null && !filter.isEmpty()) {
-                    Pattern pattern = Pattern.compile(filter);
-                    newStdout = filterOutput(newStdout, pattern);
-                }
-                if (!newStdout.isEmpty()) {
-                    result.append("STDOUT:\n").append(newStdout);
-                }
-                lastStdoutPosition = stdout.length();
-            }
-
-            synchronized (stderr) {
-                String newStderr = stderr.substring(lastStderrPosition);
-                if (filter != null && !filter.isEmpty()) {
-                    Pattern pattern = Pattern.compile(filter);
-                    newStderr = filterOutput(newStderr, pattern);
-                }
-                if (!newStderr.isEmpty()) {
-                    if (result.length() > 0) result.append("\n");
-                    result.append("STDERR:\n").append(newStderr);
-                }
-                lastStderrPosition = stderr.length();
-            }
-
-            return result.toString();
-        }
-
-        private String filterOutput(String output, Pattern pattern) {
-            String[] lines = output.split("\n");
-            StringBuilder filtered = new StringBuilder();
-            for (String line : lines) {
-                if (pattern.matcher(line).find()) {
-                    filtered.append(line).append("\n");
-                }
-            }
-            return filtered.toString();
-        }
-
-        boolean isAlive() {
-            return process.isAlive();
-        }
-
-        public void destroy() {
-            process.destroy();
-            try {
-                if (!process.waitFor(5, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                process.destroyForcibly();
-            }
-        }
-
-        int getExitCode() {
-            return process.exitValue();
-        }
-
     }
 
     public static class Builder {
@@ -791,14 +548,17 @@ public class ShellTools {
         final String command;
         final SyncPromptContext syncPromptContext;
 
+        final AtomicBoolean stdoutFinished = new AtomicBoolean(false);
+        final AtomicBoolean stderrFinished = new AtomicBoolean(false);
+
         int lastStdoutPosition = 0;
         int lastStderrPosition = 0;
 
-        ShellSession(Process process, SyncPromptContext syncPromptContext, String shellId) {
+        ShellSession(Process process, SyncPromptContext syncPromptContext, String shellId, String command) {
             this.process = process;
             this.stdout = new StringBuilder();
             this.stderr = new StringBuilder();
-            this.command = "interactive_session_" + shellId;
+            this.command = command;
             this.syncPromptContext = syncPromptContext;
 
             // Get the stdin stream for sending commands
@@ -818,6 +578,8 @@ public class ShellTools {
                     }
                 } catch (IOException e) {
                     // Process terminated or stream closed
+                } finally {
+                    stdoutFinished.set(true);
                 }
             });
             this.stdoutReader.setDaemon(true);
@@ -837,6 +599,8 @@ public class ShellTools {
                     }
                 } catch (IOException e) {
                     // Process terminated or stream closed
+                } finally {
+                    stderrFinished.set(true);
                 }
             });
             this.stderrReader.setDaemon(true);
@@ -849,11 +613,11 @@ public class ShellTools {
         public synchronized boolean sendInput(String input) {
             try {
                 // Add newline if not present
-                String command = input;
-                if (!command.endsWith("\n")) {
-                    command = command + "\n";
+                String cmd = input;
+                if (!cmd.endsWith("\n")) {
+                    cmd = cmd + "\n";
                 }
-                stdin.write(command.getBytes());
+                stdin.write(cmd.getBytes());
                 stdin.flush();
                 return true;
             } catch (IOException e) {
@@ -909,6 +673,28 @@ public class ShellTools {
 
         boolean isAlive() {
             return process.isAlive();
+        }
+
+        /**
+         * Get full stdout content
+         */
+        synchronized String getStdout() {
+            return stdout.toString();
+        }
+
+        /**
+         * Get full stderr content
+         */
+        synchronized String getStderr() {
+            return stderr.toString();
+        }
+
+        /**
+         * Wait for output readers to finish
+         */
+        public void waitForOutputReaders(long timeoutMs) throws InterruptedException {
+            stdoutReader.join(timeoutMs);
+            stderrReader.join(timeoutMs);
         }
 
         public void destroy() {
