@@ -19,7 +19,7 @@ on:
         - windows
 
 env:
-  GRAALVM_VERSION: '23.1.2'
+  GRAALVM_VERSION: '24.0.2'
   JAVA_VERSION: '17'
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Xmx4g'
   GRAALVM_HOME: ${{ github.workspace }}/graalvm
