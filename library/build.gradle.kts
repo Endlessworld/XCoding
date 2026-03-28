@@ -316,7 +316,6 @@ graalvmNative {
             buildArgs.add("--enable-url-protocols=http,https")
             buildArgs.add("-O2")
             buildArgs.add("--verbose")
-            buildArgs.add("-O0")
             buildArgs.add("--gc=serial")
             // 基础必需项
             buildArgs.add("--initialize-at-build-time=org.slf4j")
