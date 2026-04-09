@@ -128,7 +128,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
         return """
                  ## 文件系统访问工具 
                     你可以访问一个文件系统，可以通过这些工具进行交互。
-                    所有文件路径必须是以“/”开头的绝对路径。
+                    所有文件路径必须是绝对路径。
                     ### 安全指南：
                         1. 避免使用根目录（'/'）——使用特定的工作区路径
                         2. 切勿尝试使用'..'或者'~'
@@ -149,7 +149,9 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         2. 对于大文件使用带有偏移/限制的“read_file”
                         3. 在重大编辑前创建备份
                         4. 使用描述性路径，避免歧义名称
-                        5. 使用 edit_file、write_file 创建或编辑文件内容时 以行为单位，一次最多不可超过20行
+                        5. 使用 edit_file 编辑文件内容时 以行为单位，一次最多不可超过15行
+                        6. 创建文件时写入的文件内容 务必小于500字符，未完成的部分使用edit_file继续添加 否则将创建失败！
+                        7. 通过并行工具调用edit_file,write_file实现同时读取或写入多个文件加快执行效率
                     ### 路径验证：
                         - 所有路径都经过安全性验证
                         - 路径穿越尝试被阻断

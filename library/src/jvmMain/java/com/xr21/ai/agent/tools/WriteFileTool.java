@@ -43,7 +43,8 @@ public class WriteFileTool {
         写入文件系统中的文件。
         Usage:
             - file_path参数必须是绝对路径，且必须在workspace范围内
-            - 内容参数必须是字符串
+            - 如果文件包含多级目录将自动创建所有父级目录,所以无需创建父级目录可直接写入文件
+            - 内容参数必须是字符串，长度必须小于500字符，未完成的部分使用edit_file继续添加
             - write_file工具会创建新文件或覆写已存在的文件
             - 写入文件时，内容将完全替代现有内容
         """)
@@ -52,7 +53,7 @@ public class WriteFileTool {
             @JsonPropertyDescription("The absolute path of the file to create")
             String filePath,
             @JsonProperty(value = "content", required = true)
-            @JsonPropertyDescription("The content to write to the file, must be a string. Maximum 8000 characters.")
+            @JsonPropertyDescription("The content to write to the file, must be a string. Maximum 500 characters.")
             String content
     ) { // @formatter:on
         // Validate request parameters
