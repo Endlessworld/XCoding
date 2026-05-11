@@ -49,6 +49,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.StaticToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
@@ -94,10 +95,7 @@ public class LocalAgent {
     /**
      * 文件系统保存器实例，用于持久化智能体状态
      */
-    public static final FileSystemSaver FILE_SYSTEM_SAVER = FileSystemSaver.builder()
-            .targetFolder(FILE_SYSTEM_SAVER_FOLDER)
-            .stateSerializer(new SpringAIJacksonStateSerializer(OverAllState::new))
-            .build();
+    public static final FileSystemSaver FILE_SYSTEM_SAVER = FileSystemSaver.builder().targetFolder(FILE_SYSTEM_SAVER_FOLDER).stateSerializer(new SpringAIJacksonStateSerializer(OverAllState::new)).build();
     private static final Path FILE_SYSTEM_SKILL_DIR = Path.of(System.getProperty("user.home"), ".agi_working", "skills");
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
@@ -134,9 +132,7 @@ public class LocalAgent {
     }
 
     private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers) {
-        var toolCallbackProvider = MethodToolCallbackProvider.builder()
-                .toolObjects(ShellTools.builder().build(), new WebSearchTool())
-                .build();
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebSearchTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具
@@ -149,39 +145,25 @@ public class LocalAgent {
     }
 
     private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel) {
-        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder()
-                .trigger(65536)  // 优化：降低到32k，提前触发优化
+        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(65536)  // 优化：降低到32k，提前触发优化
                 .clearAtLeast(15000)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
-                .tokenCounter(new DefaultTokenCounter())
-                .clearToolInputs(true)  // 清理工具输入
+                .tokenCounter(new DefaultTokenCounter()).clearToolInputs(true)  // 清理工具输入
                 .placeholder("[...]")  // 优化：更有意义的占位符
                 .build();
 
-        var largeResultEvictionInterceptor = LargeResultEvictionInterceptor.builder()
-                .toolTokenLimitBeforeEvict(30000)
-                .backend(new LocalFilesystemBackend(WORKSPACE_ROOT))
-                .build();
+        var largeResultEvictionInterceptor = LargeResultEvictionInterceptor.builder().toolTokenLimitBeforeEvict(30000).backend(new LocalFilesystemBackend(WORKSPACE_ROOT)).build();
 
-        var toolRetryInterceptor = ToolRetryInterceptor.builder()
-                .maxRetries(2)   // 设置退避策略
+        var toolRetryInterceptor = ToolRetryInterceptor.builder().maxRetries(2)   // 设置退避策略
                 .initialDelay(1)  // 初始延迟1秒
                 .backoffFactor(1.5)  // 退避因子1.5倍
                 .maxDelay(5000)     // 最大延迟10秒
-                .onFailure(ToolRetryInterceptor.OnFailureBehavior.RETURN_MESSAGE)
-                .errorFormatter(e -> Json.toJson(Map.of("error", "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage())))
-                .jitter(true)        // 启用抖动)
+                .onFailure(ToolRetryInterceptor.OnFailureBehavior.RETURN_MESSAGE).errorFormatter(e -> Json.toJson(Map.of("error", "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage()))).jitter(true)        // 启用抖动)
                 .build();
-        var filesystemInterceptor = FilesystemInterceptor.builder()
-                .withWorkspaceRoot(WORKSPACE_ROOT)
-                .readOnly(false)
-                .withDefaultSecurity()
-                .build();
+        var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(false).withDefaultSecurity().build();
 
         // 创建Worker拦截器
-        WorkerInterceptor workerInterceptor = WorkerInterceptor.builder()
-                .defaultModel(chatModel)
-                .defaultTools(filesystemInterceptor.getTools())
+        WorkerInterceptor workerInterceptor = WorkerInterceptor.builder().defaultModel(chatModel).defaultTools(filesystemInterceptor.getTools())
 //                .addWorker(WorkerSpec.builder()
 //                        .name("research-analyst")
 //                        .description("用于对复杂主题进行深入研究")
@@ -201,8 +183,7 @@ public class LocalAgent {
         interceptors.add(filesystemInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
-        if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context()
-                .get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
+        if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context().get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
             if (setSessionModeRequest.modeId().equalsIgnoreCase("Workers")) {
                 interceptors.add(workerInterceptor);
                 log.info("Workers mode use workerInterceptor");
@@ -240,25 +221,14 @@ public class LocalAgent {
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
         List<Hook> hooks = getHooks();
         // 使用 PromptTemplate 渲染指令
-        var instruction = PromptTemplate.builder()
-                .template(SYSTEM_PROMPT_TEMPLATE)
-                .variables(Map.of("cwd", cwd, "currentTime", LocalDateTime.now()
-                        .toString(), "osName", System.getProperty("os.name").toLowerCase()))
-                .build()
-                .render();
+        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "currentTime", LocalDateTime.now().toString(), "osName", System.getProperty("os.name").toLowerCase())).build().render();
+        var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
+        if (chatModel.getDefaultOptions().getModel().contains("deepseek-v4")) {
+            chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));
+        }
         var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
-        var agent = ReactAgent.builder()
-                .name("agent")
-                .model(chatModel).tools(tools).parallelToolExecution(true)
-                .saver(FILE_SYSTEM_SAVER).hooks(hooks)
-                .enableLogging(true)
-                .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
-                .systemPrompt(instruction)
-                .interceptors(interceptors)
-                .outputKey("agent_output")
-                .returnReasoningContents(true)
-                .build();
+        var agent = ReactAgent.builder().name("agent").chatOptions(chatOptions.build()).model(chatModel).tools(tools).parallelToolExecution(true).saver(FILE_SYSTEM_SAVER).hooks(hooks).enableLogging(true).description("本地文件操作智能体，主要负责文件创建，编辑,命令执行").systemPrompt(instruction).interceptors(interceptors).outputKey("agent_output").returnReasoningContents(true).build();
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());
         return agent;
     }
@@ -266,16 +236,10 @@ public class LocalAgent {
     @NotNull
     private static List<Hook> getHooks() {
         List<Hook> hooks = new ArrayList<>();
-        Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder()
-                .description("请确认信息收集工具执行")
-                .build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
+        Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder().description("请确认信息收集工具执行").build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
         HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
 //        hooks.add(humanInTheLoopHook);
-        FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder()
-                .userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString())
-                .projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills")
-                .autoLoad(true)
-                .build();
+        FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder().userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString()).projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills").autoLoad(true).build();
         SkillsAgentHook hook = SkillsAgentHook.builder().skillRegistry(registry).autoReload(true).build();
         hooks.add(hook);
         return hooks;
@@ -284,8 +248,7 @@ public class LocalAgent {
     @NotNull
     private static ChatModel getChatModel(RunnableConfig runnableConfig) {
         ChatModel chatModel = null;
-        if (runnableConfig.context().containsKey("SetSessionModelRequest") && runnableConfig.context()
-                .get("SetSessionModelRequest") instanceof AcpSchema.SetSessionModelRequest setSessionModelRequest) {
+        if (runnableConfig.context().containsKey("SetSessionModelRequest") && runnableConfig.context().get("SetSessionModelRequest") instanceof AcpSchema.SetSessionModelRequest setSessionModelRequest) {
             try {
                 chatModel = AiModels.createChatModelFromJson(setSessionModelRequest.modelId());
                 log.info("Using model from JSON config: {}", setSessionModelRequest.modelId());
@@ -296,7 +259,7 @@ public class LocalAgent {
         } else {
             List<ModelsConfig.ModelConfig> configs = ModelConfigLoader.loadConfigs();
             chatModel = AiModels.createChatModelFromJson(ModelConfigLoader.getDefaultConfig(configs).getModelId());
-            log.info("No specific model configuration found, using default model : {}",chatModel);
+            log.info("No specific model configuration found, using default model : {}", chatModel);
         }
         return chatModel;
     }
