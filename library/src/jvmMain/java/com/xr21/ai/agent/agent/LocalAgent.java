@@ -270,7 +270,7 @@ public class LocalAgent {
                 .description("请确认信息收集工具执行")
                 .build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
         HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
-        hooks.add(humanInTheLoopHook);
+//        hooks.add(humanInTheLoopHook);
         FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder()
                 .userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString())
                 .projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills")

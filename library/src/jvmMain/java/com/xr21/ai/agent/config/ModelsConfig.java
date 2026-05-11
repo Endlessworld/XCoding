@@ -120,5 +120,10 @@ public class ModelsConfig {
          * 是否为默认模型
          */
         private Boolean isDefault;
+
+        /**
+         * 是否为默认模型
+         */
+        private Boolean disabled = false;
     }
 }

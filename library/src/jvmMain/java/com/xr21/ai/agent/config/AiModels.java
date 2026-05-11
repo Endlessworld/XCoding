@@ -91,8 +91,7 @@ public enum AiModels {
                             .parallelToolCalls(true)
                             .streamUsage(true)
                             .toolChoice("auto")
-                            .extraBody(Map.of("thinking", Map.of("type", "enabled")))
-                            .reasoningEffort("medium")
+                            .extraBody(Map.of("thinking", Map.of("type", "disabled")))
                             .build())
                     .openAiApi(api)
                     .build();

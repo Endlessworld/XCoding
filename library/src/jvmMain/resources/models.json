@@ -38,7 +38,8 @@
       "temperature": 0.75,
       "maxTokens": 8000,
       "providerId": "volcengine",
-      "isDefault": true
+      "isDefault": true,
+      "disabled": false
     },
     {
       "modelId": "doubao-seed-2.0-code",
@@ -46,7 +47,8 @@
       "temperature": 0.75,
       "maxTokens": 8000,
       "providerId": "volcengine",
-      "isDefault": true
+      "isDefault": false,
+      "disabled": true
     },
     {
       "modelId": "kimi-k2.5",
@@ -54,7 +56,8 @@
       "temperature": 0.75,
       "maxTokens": 8000,
       "providerId": "volcengine",
-      "isDefault": false
+      "isDefault": false,
+      "disabled": true
     },
     {
       "modelId": "glm-4.7",
@@ -62,7 +65,8 @@
       "temperature": 0.75,
       "maxTokens": 8000,
       "providerId": "volcengine",
-      "isDefault": false
+      "isDefault": false,
+      "disabled": true
     },
     {
       "modelId": "deepseek-v3-2",
@@ -70,7 +74,8 @@
       "temperature": 0.75,
       "maxTokens": 8000,
       "providerId": "deepseek",
-      "isDefault": false
+      "isDefault": false,
+      "disabled": true
     },
     {
       "modelId": "mimo-v2-flash",
@@ -78,7 +83,8 @@
       "temperature": 0.75,
       "maxTokens": 8000,
       "providerId": "xiaomi",
-      "isDefault": false
+      "isDefault": false,
+      "disabled": true
     },
     {
       "modelId": "MiniMax-M2.5",
@@ -86,7 +92,8 @@
       "temperature": 0.75,
       "maxTokens": 8000,
       "providerId": "cucloud",
-      "isDefault": false
+      "isDefault": false,
+      "disabled": true
     }
   ]
 }

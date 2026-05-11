@@ -87,12 +87,12 @@ public class ModelConfigLoader {
      */
     private static List<ModelConfig> resolveModelConfigs(ModelsConfig modelsConfig) {
         List<ModelConfig> resolvedConfigs = new ArrayList<>();
-
         for (ModelConfig model : modelsConfig.getModels()) {
             ModelConfig resolved = resolveModelConfig(model, modelsConfig.getProviders());
-            resolvedConfigs.add(resolved);
+            if (resolved.getDisabled() != null && !resolved.getDisabled()) {
+                resolvedConfigs.add(resolved);
+            }
         }
-
         return resolvedConfigs;
     }
 
@@ -128,7 +128,8 @@ public class ModelConfigLoader {
                 model.getProviderId(),
                 baseUrl,
                 apiKey,
-                model.getIsDefault()
+                model.getIsDefault(),
+                model.getDisabled()
         );
     }
 
