@@ -22,7 +22,10 @@ kotlin {
 sourceSets {
     main {
         java {
-            srcDirs("src/jvmMain/java")
+            srcDirs("src/jvmMain/java", "src/jvmMain/kotlin")
+        }
+        kotlin {
+            srcDirs("src/jvmMain/kotlin")
         }
         resources {
             srcDirs("src/jvmMain/resources")
@@ -66,13 +69,16 @@ dependencies {
     implementation(libs.acp.agent.support)
     implementation(libs.acp.websocket.jetty)
 
+    implementation(libs.acp.jvm)
+    implementation(libs.acp.model.jvm)
+    implementation(libs.acp.ktor.jvm)
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.24")
-    implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.24")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
 
     // Test dependencies
-    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.24")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.9.24")
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 }
 
 tasks.register<JavaExec>("runAcpAgent") {

@@ -15,8 +15,9 @@
  */
 package com.xr21.ai.agent.agent;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.spec.AcpSchema.McpServer;
+import com.agentclientprotocol.model.McpServer;
+import com.agentclientprotocol.model.ModelId;
+import com.agentclientprotocol.model.SessionModeId;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.Agent;
@@ -183,8 +184,8 @@ public class LocalAgent {
         interceptors.add(filesystemInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
-        if (runnableConfig.context().containsKey("SetSessionModeRequest") && runnableConfig.context().get("SetSessionModeRequest") instanceof AcpSchema.SetSessionModeRequest setSessionModeRequest) {
-            if (setSessionModeRequest.modeId().equalsIgnoreCase("Workers")) {
+        if (runnableConfig.context().get("SessionModeId") instanceof SessionModeId sessionModeId) {
+            if (sessionModeId.getValue().equalsIgnoreCase("Workers")) {
                 interceptors.add(workerInterceptor);
                 log.info("Workers mode use workerInterceptor");
             }
@@ -219,7 +220,7 @@ public class LocalAgent {
 
         ChatModel chatModel = getChatModel(runnableConfig);
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
-        List<Hook> hooks = getHooks();
+        List<Hook> hooks = getHooks(runnableConfig);
         // 使用 PromptTemplate 渲染指令
         var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "currentTime", LocalDateTime.now().toString(), "osName", System.getProperty("os.name").toLowerCase())).build().render();
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
@@ -234,11 +235,13 @@ public class LocalAgent {
     }
 
     @NotNull
-    private static List<Hook> getHooks() {
+    private static List<Hook> getHooks(RunnableConfig runnableConfig) {
         List<Hook> hooks = new ArrayList<>();
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder().description("请确认信息收集工具执行").build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
-        HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
-//        hooks.add(humanInTheLoopHook);
+        if(runnableConfig.context().get("auto_approve") instanceof Boolean autoApprove && !autoApprove){
+            HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
+            hooks.add(humanInTheLoopHook);
+        }
         FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder().userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString()).projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills").autoLoad(true).build();
         SkillsAgentHook hook = SkillsAgentHook.builder().skillRegistry(registry).autoReload(true).build();
         hooks.add(hook);
@@ -248,12 +251,12 @@ public class LocalAgent {
     @NotNull
     private static ChatModel getChatModel(RunnableConfig runnableConfig) {
         ChatModel chatModel = null;
-        if (runnableConfig.context().containsKey("SetSessionModelRequest") && runnableConfig.context().get("SetSessionModelRequest") instanceof AcpSchema.SetSessionModelRequest setSessionModelRequest) {
+        if (runnableConfig.context().get("ModelId") instanceof ModelId modelId) {
             try {
-                chatModel = AiModels.createChatModelFromJson(setSessionModelRequest.modelId());
-                log.info("Using model from JSON config: {}", setSessionModelRequest.modelId());
+                chatModel = AiModels.createChatModelFromJson(modelId.getValue());
+                log.info("Using model from JSON config: {}", modelId.getValue());
             } catch (Exception e) {
-                log.error("Failed to create chat model from config: {}", setSessionModelRequest.modelId(), e);
+                log.error("Failed to create chat model from config: {}", modelId.getValue(), e);
                 throw new RuntimeException("Failed to initialize chat model", e);
             }
         } else {

@@ -15,6 +15,7 @@
  */
 package com.xr21.ai.agent.entity;
 
+import com.agentclientprotocol.model.SessionId;
 import com.xr21.ai.agent.tools.ShellTools;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.Disposable;
@@ -33,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class CancellableRequest {
     public final String requestId;
-    public final String sessionId;
+    public final SessionId sessionId;
     final Thread executionThread;
     final Flux<?> flux;
     final List<String> activeToolCallIds;
@@ -43,7 +44,7 @@ public class CancellableRequest {
     public volatile boolean cancelled;
     private Disposable fluxDisposable;
 
-    public CancellableRequest(String requestId, String sessionId, Thread executionThread, Flux<?> flux) {
+    public CancellableRequest(String requestId, SessionId sessionId, Thread executionThread, Flux<?> flux) {
         this.requestId = requestId;
         this.sessionId = sessionId;
         this.executionThread = executionThread;

@@ -58,9 +58,10 @@ public enum AiModels {
         return list;
     }
 
+
     public static String defaultModel() {
         List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
-        return Objects.requireNonNull(ModelConfigLoader.getDefaultConfig(configs)).getModelName();
+        return Objects.requireNonNull(ModelConfigLoader.getDefaultConfig(configs)).getModelId();
     }
 
     /**

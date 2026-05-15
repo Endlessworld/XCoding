@@ -39,54 +39,54 @@ import java.util.Map;
 public class AgentOutput<T> {
 
     @JsonProperty(value = "node")
-    private final String node;
+    public final String node;
 
     @JsonProperty(value = "timestamp")
-    private final long timestamp;
+    public final long timestamp;
 
     @JsonProperty(value = "data")
-    private final Map<String, Object> data;
+    public final Map<String, Object> data;
 
     //    @JsonProperty(value = "config")
     @JsonIgnore
-    private final RunnableConfig config;
+    public final RunnableConfig config;
 
     /**
      * 大模型流式输出内容-界面渲染
      */
 //    @Deprecated
     @JsonProperty(value = "chunk")
-    private final String chunk;
+    public final String chunk;
 
     @JsonProperty(value = "think")
-    private final String think;
+    public final String think;
 
     /**
      * 生成的消息
      */
     @JsonProperty(value = "message")
-    private final Message message;
+    public final Message message;
 
     @JsonIgnore
-    private final T originData;
+    public final T originData;
 
     @JsonProperty(value = "metadata")
-    private Map<String, Object> metadata;
+    public Map<String, Object> metadata;
 
     /**
      * 当前执行的智能体
      */
     @JsonProperty(value = "agent")
-    private String agent;
+    public String agent;
 
     @JsonProperty(value = "tokenUsage")
-    private Usage tokenUsage;
+    public Usage tokenUsage;
 
     @JsonProperty(value = "subGraph")
-    private boolean subGraph = false;
+    public boolean subGraph = false;
 
 
-    private InterruptionMetadata interruptionMetadata;
+    public InterruptionMetadata interruptionMetadata;
 
     public static <T> AgentOutputBuilder<T> builder() {
         return new AgentOutputBuilder<T>();

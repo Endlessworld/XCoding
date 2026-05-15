@@ -236,7 +236,7 @@ public class OpenAiChatModel implements ChatModel {
     public Flux<ChatResponse> internalStream(Prompt prompt, ChatResponse previousChatResponse) {
         return Flux.deferContextual(contextView -> {
             ChatCompletionRequest request = createRequest(prompt, true);
-            logger.info("internalStream request {}",request);
+//            logger.info("internalStream request {}",request);
             if (request.outputModalities() != null && request.outputModalities().contains(OpenAiApi.OutputModality.AUDIO)) {
                 logger.warn("Audio output is not supported for streaming requests. Removing audio output.");
                 throw new IllegalArgumentException("Audio output is not supported for streaming requests.");

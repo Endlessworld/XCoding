@@ -15,11 +15,11 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.event.AcpEventBus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
@@ -226,14 +226,16 @@ public class ShellTools {
 
             Process process = processBuilder.start();
 
-            // Get SyncPromptContext if available
-            SyncPromptContext syncPromptContext = null;
+            // Get AcpEventBus if available
+            AcpEventBus eventBus = null;
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                syncPromptContext = (SyncPromptContext) config.context().get("SyncPromptContext");
+                if (config.context().get(AcpEventBus.CONTEXT_KEY) instanceof AcpEventBus bus) {
+                    eventBus = bus;
+                }
             }
 
             // Create interactive shell session with stdin support
-            ShellSession session = new ShellSession(process, syncPromptContext, shellId, command);
+            ShellSession session = new ShellSession(process, eventBus, shellId, command);
             shellSessions.put(shellId, session);
 
             // Wait for completion or timeout
@@ -546,7 +548,7 @@ public class ShellTools {
         final Thread stderrReader;
         final OutputStream stdin;
         final String command;
-        final SyncPromptContext syncPromptContext;
+        final AcpEventBus eventBus;
 
         final AtomicBoolean stdoutFinished = new AtomicBoolean(false);
         final AtomicBoolean stderrFinished = new AtomicBoolean(false);
@@ -554,12 +556,12 @@ public class ShellTools {
         int lastStdoutPosition = 0;
         int lastStderrPosition = 0;
 
-        ShellSession(Process process, SyncPromptContext syncPromptContext, String shellId, String command) {
+        ShellSession(Process process, AcpEventBus eventBus, String shellId, String command) {
             this.process = process;
             this.stdout = new StringBuilder();
             this.stderr = new StringBuilder();
             this.command = command;
-            this.syncPromptContext = syncPromptContext;
+            this.eventBus = eventBus;
 
             // Get the stdin stream for sending commands
             this.stdin = process.getOutputStream();
@@ -571,8 +573,8 @@ public class ShellTools {
                     while ((line = reader.readLine()) != null) {
                         synchronized (stdout) {
                             stdout.append(line).append("\n");
-                            if (syncPromptContext != null) {
-                                syncPromptContext.sendThought(line + "\n");
+                            if (eventBus != null) {
+                                eventBus.emitText(line + "\n");
                             }
                         }
                     }
@@ -592,8 +594,8 @@ public class ShellTools {
                     while ((line = reader.readLine()) != null) {
                         synchronized (stderr) {
                             stderr.append(line).append("\n");
-                            if (syncPromptContext != null) {
-                                syncPromptContext.sendThought(line + "\n");
+                            if (eventBus != null) {
+                                eventBus.emitText(line + "\n");
                             }
                         }
                     }

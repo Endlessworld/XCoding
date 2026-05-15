@@ -15,13 +15,12 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.agentclientprotocol.sdk.agent.SyncPromptContext;
-import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.AgentOutput;
+import com.xr21.ai.agent.event.AcpEventBus;
 import com.xr21.ai.agent.utils.SinksUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
@@ -73,38 +72,31 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
         try {
             // Return the worker's response
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                log.info("config context {}", config.context());
-                log.info("config context PromptRequest {}", config.context().get("PromptRequest"));
-                log.info("config context SyncPromptContext {}", config.context().get("SyncPromptContext"));
-                if (config.context().get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
-                    if (config.context().get("PromptRequest") instanceof AcpSchema.PromptRequest promptRequest) {
-                        StringBuilder builder = new StringBuilder();
-                        Flux<AgentOutput<Object>> flux = SinksUtil.sinksOutput(worker.stream(request.description));
-                        AgentOutput<Object> blockLast = flux.doOnNext(output -> {
-                            if (StringUtils.hasText(output.getChunk())) {
-                                builder.append(output.getChunk());
-//                                syncPromptContext.sendThought(output.getChunk());
-                            }
-                            if (StringUtils.hasText(output.getThink())) {
-//                                syncPromptContext.sendThought(output.getThink());
-                            }
-                        }).doOnComplete(() -> {
-                            log.info("Workers task complete");
-//                            syncPromptContext.sendThought("Worker任务执行结束");
-                        }).doOnError(e -> {
-                            log.error("Workers task failed", e);
-//                            syncPromptContext.sendThought("Worker任务执行失败" + e.getMessage());
-                        }).blockLast();
-                        return builder.toString();
-                    }
+                if (config.context().get(AcpEventBus.CONTEXT_KEY) instanceof AcpEventBus eventBus) {
+                    StringBuilder builder = new StringBuilder();
+                    Flux<AgentOutput<Object>> flux = SinksUtil.sinksOutput(worker.stream(request.description));
+                    flux.doOnNext(output -> {
+                        if (StringUtils.hasText(output.getChunk())) {
+                            builder.append(output.getChunk());
+                            eventBus.emitText(output.getChunk());
+                        }
+                        if (StringUtils.hasText(output.getThink())) {
+                            eventBus.emitThought(output.getThink());
+                        }
+                    }).doOnComplete(() -> {
+                        log.info("Workers task complete");
+                        eventBus.emitText("\n[Worker completed]");
+                    }).doOnError(e -> {
+                        log.error("Workers task failed", e);
+                    }).blockLast();
+                    return builder.toString();
                 }
-                return worker.call(request.description).getText();
-            } else {
-                return worker.call(request.description).getText();
             }
+            return worker.call(request.description).getText();
         } catch (Exception e) {
             return "Error executing worker task: " + e.getMessage();
         }
+
     }
 
     /**

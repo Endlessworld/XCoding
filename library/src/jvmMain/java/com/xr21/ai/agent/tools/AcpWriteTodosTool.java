@@ -15,7 +15,6 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.agentclientprotocol.sdk.agent.SyncPromptContext;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.agentclientprotocol.sdk.spec.AcpSchema.Plan;
 import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntry;
@@ -25,6 +24,7 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.event.AcpEventBus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
@@ -131,16 +131,19 @@ public class AcpWriteTodosTool {
     }
 
     /**
-     * Send ACP Plan update through SyncPromptContext if available
+     * Send ACP Plan update through AcpEventBus or SyncPromptContext if available
      */
     private void sendAcpPlanUpdate(ToolContext toolContext, Plan plan) {
         try {
-            log.info("config context {}", toolContext);
             if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                log.info("config context {}", config.context());
-                log.info("config context PromptRequest {}", config.context().get("PromptRequest"));
-                log.info("config context SyncPromptContext {}", config.context().get("SyncPromptContext"));
-                if (config.context().get("SyncPromptContext") instanceof SyncPromptContext syncPromptContext) {
+                // Try AcpEventBus first (used by SimpleAgentSupport)
+                if (config.context().get(AcpEventBus.CONTEXT_KEY) instanceof AcpEventBus eventBus) {
+                    eventBus.emitText("[Plan Updated] " + plan.toString());
+                    log.info("Sent Plan update via AcpEventBus: {}", plan);
+                    return;
+                }
+                // Fallback to SyncPromptContext (used by AcpAgent)
+                if (config.context().get("SyncPromptContext") instanceof com.agentclientprotocol.sdk.agent.SyncPromptContext syncPromptContext) {
                     if (config.context().get("PromptRequest") instanceof AcpSchema.PromptRequest promptRequest) {
                         var sessionId = promptRequest.sessionId();
                         syncPromptContext.sendUpdate(sessionId, plan);
@@ -148,9 +151,7 @@ public class AcpWriteTodosTool {
                     }
                 }
             }
-
         } catch (Exception e) {
-            // Log but don't fail if we can't send the update
             System.err.println("Warning: Could not send ACP Plan update: " + e.getMessage());
         }
     }
