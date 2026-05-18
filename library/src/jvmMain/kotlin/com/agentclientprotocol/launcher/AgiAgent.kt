@@ -64,35 +64,32 @@ class AgiAgentSession(
     override val configOptions: List<SessionConfigOption>
         get() = listOf(
             SessionConfigOption.boolean(
-                id = "auto_approve",
-                name = "Auto Approve",
-                currentValue = true,
-                description = "Automatically approve all tool calls"
-            ), SessionConfigOption.select(
-                id = "mode",
-                name = "模式",
-                currentValue = "Agent",
-                description = "mode",
-                options = SessionConfigSelectOptions.Flat(
-                    listOf(
-                        SessionConfigSelectOption(
-                            SessionConfigValueId("Agent"), "Agent", "单智能体模式"
-                        ), SessionConfigSelectOption(
-                            SessionConfigValueId("Agent"), "Workers", "动态并行子代理"
-                        )
+            id = "auto_approve",
+            name = "Auto Approve",
+            currentValue = true,
+            description = "Automatically approve all tool calls"
+        ), SessionConfigOption.select(
+            id = "mode",
+            name = "模式",
+            currentValue = "Agent",
+            description = "mode",
+            options = SessionConfigSelectOptions.Flat(
+                listOf(
+                    SessionConfigSelectOption(
+                        SessionConfigValueId("Agent"), "Agent", "单智能体模式"
+                    ), SessionConfigSelectOption(
+                        SessionConfigValueId("Agent"), "Workers", "动态并行子代理"
                     )
                 )
-            ), SessionConfigOption.select(
-                id = "model",
-                name = "模型选择",
-                currentValue = AiModels.defaultModel(),
-                description = "model",
-                options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
-                    SessionConfigSelectOption(SessionConfigValueId(model.modelId()), model.name(), model.name(), null)
-                }
-                )
             )
-        )
+        ), SessionConfigOption.select(
+            id = "model",
+            name = "模型选择",
+            currentValue = AiModels.defaultModel(),
+            description = "model",
+            options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
+                SessionConfigSelectOption(SessionConfigValueId(model.modelId()), model.name(), model.name(), null)
+            })))
     override val availableModes: List<SessionMode>
         get() = listOf(
             SessionMode(SessionModeId("Agent"), "Agent", "单智能体模式"),
@@ -107,7 +104,11 @@ class AgiAgentSession(
         )
         currentCoroutineContext().client.notify(
             notification = SessionUpdate.AvailableCommandsUpdate(
-                availableCommands = listOf(AvailableCommand("ls-model", "列出模型"))
+                availableCommands = listOf(
+                    AvailableCommand("ls-model", "列出模型"),
+                    AvailableCommand("set-model", "列出模型"),
+                    AvailableCommand("init", "初始化AGENT.md文件"),
+                )
             )
         )
     }
@@ -155,6 +156,34 @@ class AgiAgentSession(
     ): Flow<Event> = flow {
         logger.info { "Processing prompt for session $sessionId" }
         try {
+            // 检查第一个 ContentBlock 是否为命令（Text 类型且以 / 开头）
+            if (content.isNotEmpty() && content.first() is ContentBlock.Text) {
+                val firstText = (content.first() as ContentBlock.Text).text
+                if (firstText.startsWith("/")) {
+                    logger.info { firstText == "/ls-model " }
+                    if (firstText.startsWith("/ls-model")) {
+                        logger.info { "exec command: $firstText" }
+                        emit(
+                            Event.SessionUpdateEvent(
+                                SessionUpdate.AgentMessageChunk(
+                                    ContentBlock.Text(
+                                        buildString {
+                                            appendLine("| Model ID | Name |")
+                                            appendLine("|---------|------|")
+                                            AiModels.availableModels().forEach { model ->
+                                                appendLine("| ${model.modelId()} | ${model.name()} |")
+                                            }
+                                        }.trimEnd()
+                                    )
+                                )
+                            )
+                        )
+                    }
+
+                    emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN)))
+                    return@flow
+                }
+            }
             val userMessage = buildUserMessage(content)
             emit(
                 Event.SessionUpdateEvent(
