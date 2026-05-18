@@ -68,8 +68,29 @@ class AgiAgentSession(
                 name = "Auto Approve",
                 currentValue = true,
                 description = "Automatically approve all tool calls"
-            ), SessionConfigOption.boolean(
-                id = "verbose", name = "Verbose", currentValue = true, description = "Verbose logging"
+            ), SessionConfigOption.select(
+                id = "mode",
+                name = "模式",
+                currentValue = "Agent",
+                description = "mode",
+                options = SessionConfigSelectOptions.Flat(
+                    listOf(
+                        SessionConfigSelectOption(
+                            SessionConfigValueId("Agent"), "Agent", "单智能体模式"
+                        ), SessionConfigSelectOption(
+                            SessionConfigValueId("Agent"), "Workers", "动态并行子代理"
+                        )
+                    )
+                )
+            ), SessionConfigOption.select(
+                id = "model",
+                name = "模型选择",
+                currentValue = AiModels.defaultModel(),
+                description = "model",
+                options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
+                    SessionConfigSelectOption(SessionConfigValueId(model.modelId()), model.name(), model.name(), null)
+                }
+                )
             )
         )
     override val availableModes: List<SessionMode>
@@ -375,15 +396,14 @@ class AgiAgent : AgentSupport {
                 auth = AgentAuthCapabilities(logout = LogoutCapabilities()),
                 positionEncoding = PositionEncodingKind.UTF_8,
                 providers = ProvidersCapabilities()
-            ), authMethods = listOf(AuthMethod.AgentAuth(AuthMethodId("login"), "login", "登录鉴权")),
+            ),
+            authMethods = listOf(AuthMethod.AgentAuth(AuthMethodId("login"), "login", "登录鉴权")),
             implementation = Implementation("XCoding", "1.0.0", "agi coding")
         )
     }
 
     override suspend fun listSessions(
-        cwd: String?,
-        additionalDirectories: List<String>?,
-        _meta: JsonElement?
+        cwd: String?, additionalDirectories: List<String>?, _meta: JsonElement?
     ): Sequence<SessionInfo> {
         return sessionsRunnableConfig.map { (key, config) ->
             SessionInfo(
