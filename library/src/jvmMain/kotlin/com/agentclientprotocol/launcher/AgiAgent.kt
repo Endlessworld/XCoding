@@ -64,32 +64,34 @@ class AgiAgentSession(
     override val configOptions: List<SessionConfigOption>
         get() = listOf(
             SessionConfigOption.boolean(
-            id = "auto_approve",
-            name = "Auto Approve",
-            currentValue = true,
-            description = "Automatically approve all tool calls"
-        ), SessionConfigOption.select(
-            id = "mode",
-            name = "模式",
-            currentValue = "Agent",
-            description = "mode",
-            options = SessionConfigSelectOptions.Flat(
-                listOf(
-                    SessionConfigSelectOption(
-                        SessionConfigValueId("Agent"), "Agent", "单智能体模式"
-                    ), SessionConfigSelectOption(
-                        SessionConfigValueId("Agent"), "Workers", "动态并行子代理"
+                id = "auto_approve",
+                name = "Auto Approve",
+                currentValue = true,
+                description = "Automatically approve all tool calls"
+            ), SessionConfigOption.select(
+                id = "mode",
+                name = "mode",
+                currentValue = "Workers",
+                description = "mode",
+                options = SessionConfigSelectOptions.Flat(
+                    listOf(
+                        SessionConfigSelectOption(
+                            SessionConfigValueId("Agent"), "Agent", "单智能体模式"
+                        ), SessionConfigSelectOption(
+                            SessionConfigValueId("Workers"), "Workers", "动态并行子代理"
+                        )
                     )
                 )
+            ), SessionConfigOption.select(
+                id = "model",
+                name = "model",
+                currentValue = AiModels.defaultModel(),
+                description = "model",
+                options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
+                    SessionConfigSelectOption(SessionConfigValueId(model.modelId()), model.name(), model.name(), null)
+                })
             )
-        ), SessionConfigOption.select(
-            id = "model",
-            name = "模型选择",
-            currentValue = AiModels.defaultModel(),
-            description = "model",
-            options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
-                SessionConfigSelectOption(SessionConfigValueId(model.modelId()), model.name(), model.name(), null)
-            })))
+        )
     override val availableModes: List<SessionMode>
         get() = listOf(
             SessionMode(SessionModeId("Agent"), "Agent", "单智能体模式"),
@@ -106,7 +108,6 @@ class AgiAgentSession(
             notification = SessionUpdate.AvailableCommandsUpdate(
                 availableCommands = listOf(
                     AvailableCommand("ls-model", "列出模型"),
-                    AvailableCommand("set-model", "列出模型"),
                     AvailableCommand("init", "初始化AGENT.md文件"),
                 )
             )
@@ -131,21 +132,21 @@ class AgiAgentSession(
             runnableConfig.context().put(configId.value, value.value)
         }
         if (value is SessionConfigOptionValue.StringValue) {
-            runnableConfig.context().put(configId.value, value.value)
+            runnableConfig.context()[configId.value] = value.value
         }
-        logger.info { "Setting config option $configId to $value" }
-        runnableConfig.context().put("SessionModeId", SessionModeId)
+        val context = runnableConfig.context();
+        logger.info { "set config option ${configId.value} to $value  $context" }
         return SetSessionConfigOptionResponse(configOptions = configOptions)
     }
 
     override suspend fun setMode(modeId: SessionModeId, _meta: JsonElement?): SetSessionModeResponse {
-        runnableConfig.context().put("SessionModeId", SessionModeId)
+        runnableConfig.context().put("mode", modeId.value)
         logger.info { "AcpAgent] setMode $SessionModeId" }
         return SetSessionModeResponse()
     }
 
     override suspend fun setModel(modelId: ModelId, _meta: JsonElement?): SetSessionModelResponse {
-        runnableConfig.context().put("ModelId", modelId)
+        runnableConfig.context().put("model", modelId.value)
         logger.info { "[AcpAgent] setModel {} $modelId" }
         return SetSessionModelResponse()
     }
@@ -155,14 +156,14 @@ class AgiAgentSession(
         _meta: JsonElement?,
     ): Flow<Event> = flow {
         logger.info { "Processing prompt for session $sessionId" }
+        val messages = content.toMutableList()
         try {
             // 检查第一个 ContentBlock 是否为命令（Text 类型且以 / 开头）
             if (content.isNotEmpty() && content.first() is ContentBlock.Text) {
                 val firstText = (content.first() as ContentBlock.Text).text
                 if (firstText.startsWith("/")) {
-                    logger.info { firstText == "/ls-model " }
-                    if (firstText.startsWith("/ls-model")) {
-                        logger.info { "exec command: $firstText" }
+                    logger.info { "command: $firstText" }
+                    if (firstText == "/ls-model ") {
                         emit(
                             Event.SessionUpdateEvent(
                                 SessionUpdate.AgentMessageChunk(
@@ -178,13 +179,15 @@ class AgiAgentSession(
                                 )
                             )
                         )
+                        emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN)))
+                        return@flow
                     }
-
-                    emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN)))
-                    return@flow
+                    if (firstText == "/init ") {
+                        messages[0] = ContentBlock.Text("扫描当前项目初始化AGENT.md文件")
+                    }
                 }
             }
-            val userMessage = buildUserMessage(content)
+            val userMessage = buildUserMessage(messages)
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(
@@ -214,8 +217,6 @@ class AgiAgentSession(
             val agentIterator = agentSink.asFlux().toIterable().iterator()
             while (agentIterator.hasNext() && !disposable.isDisposed) {
                 val output = agentIterator.next()
-                logger.info { "events ${output.node}" }
-
                 emitAgentOutputEvents(output)
             }
             runnableConfig.context().put("totalTokens", totalTokens.get())
