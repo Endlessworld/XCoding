@@ -24,7 +24,6 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.xr21.ai.agent.event.AcpEventBus;
 import kotlin.coroutines.jvm.internal.RunSuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
@@ -127,16 +126,11 @@ public class AcpWriteTodosTool {
     }
 
     /**
-     * Send ACP Plan update through AcpEventBus or SyncPromptContext if available
+     * Send ACP Plan update ClientSessionOperations
      */
     private void sendAcpPlanUpdate(ToolContext toolContext, List<PlanEntry> planEntrys) {
         try {
             if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                if (config.context().get(AcpEventBus.CONTEXT_KEY) instanceof AcpEventBus eventBus) {
-                    eventBus.emitText("[Plan Updated] " + planEntrys.toString());
-                    log.info("Sent Plan update via AcpEventBus: {}", planEntrys);
-                    return;
-                }
                 if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
                     RunSuspendKt.runSuspend((completion) -> {
                         SessionUpdate notification = new SessionUpdate.PlanUpdate(planEntrys, null);

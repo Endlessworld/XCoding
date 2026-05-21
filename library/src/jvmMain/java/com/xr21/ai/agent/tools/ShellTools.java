@@ -15,11 +15,14 @@
  */
 package com.xr21.ai.agent.tools;
 
+import com.agentclientprotocol.common.ClientSessionOperations;
+import com.agentclientprotocol.model.ContentBlock;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
-import com.xr21.ai.agent.event.AcpEventBus;
+import kotlin.coroutines.jvm.internal.RunSuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
@@ -28,11 +31,14 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+
+import static com.agentclientprotocol.launcher.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
 
 /**
  * @author Christian Tzolov
@@ -225,17 +231,17 @@ public class ShellTools {
             processBuilder.redirectErrorStream(false);
 
             Process process = processBuilder.start();
-
-            // Get AcpEventBus if available
-            AcpEventBus eventBus = null;
+            ClientSessionOperations sessionOperations = null;
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                if (config.context().get(AcpEventBus.CONTEXT_KEY) instanceof AcpEventBus bus) {
-                    eventBus = bus;
+                if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
+                    sessionOperations = clientSessionOperations;
+
                 }
+
             }
 
             // Create interactive shell session with stdin support
-            ShellSession session = new ShellSession(process, eventBus, shellId, command);
+            ShellSession session = new ShellSession(process, sessionOperations, shellId, command);
             shellSessions.put(shellId, session);
 
             // Wait for completion or timeout
@@ -339,12 +345,12 @@ public class ShellTools {
     private Map<String, Object> handleTimeoutSession(ShellSession session, String shellId, String command, long timeoutMs) {
         String output = String.format(
                 "bash_id: %s\n\n" +
-                "Command timed out after %dms, but shell session is still running.\n\n" +
-                "Interactive shell session started with ID: %s\n" +
-                "Use ShellInput tool with shell_id='%s' and input='your command' to send commands.\n" +
-                "Use BashOutput tool with bash_id='%s' to read the output.\n" +
-                "Use KillShell tool with bash_id='%s' to terminate the session.\n\n" +
-                "Note: The command is still running in the background. You can continue to interact with it.",
+                        "Command timed out after %dms, but shell session is still running.\n\n" +
+                        "Interactive shell session started with ID: %s\n" +
+                        "Use ShellInput tool with shell_id='%s' and input='your command' to send commands.\n" +
+                        "Use BashOutput tool with bash_id='%s' to read the output.\n" +
+                        "Use KillShell tool with bash_id='%s' to terminate the session.\n\n" +
+                        "Note: The command is still running in the background. You can continue to interact with it.",
                 shellId, timeoutMs, shellId, shellId, shellId, shellId);
 
         return ToolResult.builder()
@@ -548,7 +554,7 @@ public class ShellTools {
         final Thread stderrReader;
         final OutputStream stdin;
         final String command;
-        final AcpEventBus eventBus;
+        final ClientSessionOperations clientSessionOperations;
 
         final AtomicBoolean stdoutFinished = new AtomicBoolean(false);
         final AtomicBoolean stderrFinished = new AtomicBoolean(false);
@@ -556,25 +562,30 @@ public class ShellTools {
         int lastStdoutPosition = 0;
         int lastStderrPosition = 0;
 
-        ShellSession(Process process, AcpEventBus eventBus, String shellId, String command) {
+        ShellSession(Process process, ClientSessionOperations clientSessionOperations, String shellId, String command) {
             this.process = process;
             this.stdout = new StringBuilder();
             this.stderr = new StringBuilder();
             this.command = command;
-            this.eventBus = eventBus;
+            this.clientSessionOperations = clientSessionOperations;
 
             // Get the stdin stream for sending commands
             this.stdin = process.getOutputStream();
-
+            String osName = System.getProperty("os.name").toLowerCase();
+            String charsetName = osName.contains("win") ? "GBK" : Charset.defaultCharset().name();
             // Start thread to read stdout
             this.stdoutReader = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), charsetName))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         synchronized (stdout) {
                             stdout.append(line).append("\n");
-                            if (eventBus != null) {
-                                eventBus.emitText(line + "\n");
+                            if (clientSessionOperations != null) {
+                                String finalLine = line + "\n";
+                                RunSuspendKt.runSuspend((completion) -> {
+                                    clientSessionOperations.notify(BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(finalLine, null, null)), null, completion);
+                                    return null;
+                                });
                             }
                         }
                     }
@@ -589,13 +600,17 @@ public class ShellTools {
 
             // Start thread to read stderr
             this.stderrReader = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), charsetName))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         synchronized (stderr) {
                             stderr.append(line).append("\n");
-                            if (eventBus != null) {
-                                eventBus.emitText(line + "\n");
+                            if (clientSessionOperations != null) {
+                                String finalLine = line + "\n";
+                                RunSuspendKt.runSuspend((completion) -> {
+                                    clientSessionOperations.notify(BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(finalLine, null, null)), null, completion);
+                                    return null;
+                                });
                             }
                         }
                     }

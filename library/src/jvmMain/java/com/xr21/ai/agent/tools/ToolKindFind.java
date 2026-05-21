@@ -50,7 +50,7 @@ public class ToolKindFind {
         // FETCH tools
         NAME_TO_KIND.put("webFetch", ToolKind.FETCH);
         // OTHER tools
-        NAME_TO_KIND.put("FeedBackTool", ToolKind.OTHER);
+        NAME_TO_KIND.put("write_todos", ToolKind.EDIT);
     }
 
     /**

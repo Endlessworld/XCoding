@@ -15,6 +15,10 @@
  */
 package com.xr21.ai.agent.bridge
 
+import com.agentclientprotocol.annotations.UnstableApi
+import com.agentclientprotocol.model.ContentBlock
+import com.agentclientprotocol.model.MessageId
+import com.agentclientprotocol.model.SessionUpdate
 import com.agentclientprotocol.model.ToolCallLocation
 import kotlinx.serialization.json.JsonElement
 
@@ -22,6 +26,17 @@ import kotlinx.serialization.json.JsonElement
  * Bridge functions for Java tools to create ACP model types that have Kotlin-specific types (e.g. UInt).
  */
 object BridgeKt {
+    @OptIn(UnstableApi::class)
+    @JvmStatic
+    @JvmOverloads
+    fun buildAgentThoughtChunk(
+        content: ContentBlock,
+        messageId: MessageId? = null
+    ): SessionUpdate.AgentThoughtChunk {
+        return SessionUpdate.AgentThoughtChunk(
+            content,messageId
+        )
+    }
 
     @JvmStatic
     @JvmOverloads
@@ -32,6 +47,7 @@ object BridgeKt {
             _meta = _meta
         )
     }
+
     @JvmStatic
     fun getLine(location: ToolCallLocation): Int {
         return location.line?.toInt() ?: 0

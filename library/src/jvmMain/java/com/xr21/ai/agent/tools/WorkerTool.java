@@ -15,13 +15,18 @@
  */
 package com.xr21.ai.agent.tools;
 
+import com.agentclientprotocol.common.ClientSessionOperations;
+import com.agentclientprotocol.model.ContentBlock;
+import com.agentclientprotocol.model.SessionUpdate;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
+import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.AgentOutput;
-import com.xr21.ai.agent.event.AcpEventBus;
 import com.xr21.ai.agent.utils.SinksUtil;
+import kotlin.coroutines.jvm.internal.RunSuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -31,6 +36,8 @@ import reactor.core.publisher.Flux;
 
 import java.util.Map;
 import java.util.function.BiFunction;
+
+import static com.agentclientprotocol.launcher.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
 
 /**
  * Tool that enables invoking workers to handle complex, isolated tasks.
@@ -72,24 +79,34 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
         try {
             // Return the worker's response
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                if (config.context().get(AcpEventBus.CONTEXT_KEY) instanceof AcpEventBus eventBus) {
-                    StringBuilder builder = new StringBuilder();
-                    Flux<AgentOutput<Object>> flux = SinksUtil.sinksOutput(worker.stream(request.description));
-                    flux.doOnNext(output -> {
-                        if (StringUtils.hasText(output.getChunk())) {
-                            builder.append(output.getChunk());
-                            eventBus.emitText(output.getChunk());
+                if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
+                    RunSuspendKt.runSuspend((completion) -> {
+                        StringBuilder builder = new StringBuilder();
+                        Flux<AgentOutput<Object>> flux = null;
+                        try {
+                            flux = SinksUtil.sinksOutput(worker.stream(request.description));
+                        } catch (GraphRunnerException e) {
+                            return "Error executing worker task: " + e.getMessage();
                         }
-                        if (StringUtils.hasText(output.getThink())) {
-                            eventBus.emitThought(output.getThink());
-                        }
-                    }).doOnComplete(() -> {
-                        log.info("Workers task complete");
-                        eventBus.emitText("\n[Worker completed]");
-                    }).doOnError(e -> {
-                        log.error("Workers task failed", e);
-                    }).blockLast();
-                    return builder.toString();
+                        flux.doOnNext(output -> {
+                            if (StringUtils.hasText(output.getChunk())) {
+                                builder.append(output.getChunk());
+                                SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(output.getChunk(), null, null));
+                                clientSessionOperations.notify(notification, null, completion);
+                            }
+                            if (StringUtils.hasText(output.getThink())) {
+                                SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(output.getThink(), null, null));
+                                clientSessionOperations.notify(notification, null, completion);
+                            }
+                        }).doOnComplete(() -> {
+                            log.info("Workers task complete");
+                            SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text("\n[Worker completed]", null, null));
+                            clientSessionOperations.notify(notification, null, completion);
+                        }).doOnError(e -> {
+                            log.error("Workers task failed", e);
+                        }).blockLast();
+                        return builder.toString();
+                    });
                 }
             }
             return worker.call(request.description).getText();

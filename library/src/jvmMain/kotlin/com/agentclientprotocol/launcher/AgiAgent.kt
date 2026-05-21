@@ -33,7 +33,6 @@ import com.xr21.ai.agent.agent.LocalAgent
 import com.xr21.ai.agent.config.AiModels
 import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
-import com.xr21.ai.agent.event.AcpEventBus
 import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.utils.SinksUtil
 import com.xr21.ai.agent.utils.ToolsUtil
@@ -224,8 +223,7 @@ class AgiAgentSession(
                     )
                 )
             )
-            val acpEventBus = AcpEventBus()
-            runnableConfig.context().put(AcpEventBus.CONTEXT_KEY, acpEventBus)
+
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
             val requestId = "request_${System.currentTimeMillis()}_$sessionId"
             runnableConfig.context().put("requestId", requestId)
