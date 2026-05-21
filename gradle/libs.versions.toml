@@ -6,8 +6,7 @@ springAiAlibaba = "1.1.2.0"
 reactor = "3.6.0"
 jackson = "2.17.0"
 lombok = "1.18.30"
-acpSdk = "0.9.0-SNAPSHOT"
-acpKotlinSdk = "0.20.1"
+agentclientprotocol = "0.23.0"
 
 [libraries]
 spring-core = { group = "org.springframework", name = "spring-core", version.ref = "spring" }
@@ -20,12 +19,9 @@ jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-datab
 spring-ai-alibaba-graph = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-graph-core", version.ref = "springAiAlibaba" }
 spring-ai-alibaba-agent = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-agent-framework", version.ref = "springAiAlibaba" }
 lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
-#acp-core = { group = "com.agentclientprotocol", name = "acp-core", version.ref = "acpSdk" }
-#acp-agent-support = { group = "com.agentclientprotocol", name = "acp-agent-support", version.ref = "acpSdk" }
-#acp-websocket-jetty = { group = "com.agentclientprotocol", name = "acp-websocket-jetty", version.ref = "acpSdk" }
 # ACP SDK
-acp-jvm = { group = "com.agentclientprotocol", name = "acp-jvm", version.ref = "acpKotlinSdk" }
-acp-model-jvm = { group = "com.agentclientprotocol", name = "acp-model-jvm", version.ref = "acpKotlinSdk" }
-acp-ktor-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-jvm", version.ref = "acpKotlinSdk" }
+acp-jvm = { group = "com.agentclientprotocol", name = "acp-jvm", version.ref = "agentclientprotocol" }
+acp-model-jvm = { group = "com.agentclientprotocol", name = "acp-model-jvm", version.ref = "agentclientprotocol" }
+acp-ktor-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-jvm", version.ref = "agentclientprotocol" }
 [plugins]
 vanniktech-mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }

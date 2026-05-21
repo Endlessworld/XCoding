@@ -32,6 +32,14 @@ fun launchStdioAgent(
     transportName: String = "stdio-agent"
 ) {
     runBlocking(Dispatchers.IO) {
+//        val inputChannel = Channel<String>(Channel.UNLIMITED)
+//        val transport = StdioTransport(
+//            parentScope = this,
+//            ioDispatcher = Dispatchers.IO,
+//            input = inputChannel.receiveAsFlow(),
+//            output = { line -> println(line) },
+//            name = transportName,
+//        )
         val transport = StdioTransport(
             this, Dispatchers.IO,
             System.`in`.asSource().buffered(),

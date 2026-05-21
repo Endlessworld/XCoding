@@ -42,10 +42,6 @@ sourceSets {
 }
 
 dependencies {
-    // Spring Framework (minimal)
-    implementation(libs.spring.core)
-    implementation(libs.spring.context)
-
     // Spring AI
     implementation(libs.spring.ai.openai)
     implementation(libs.spring.ai.mcp.client)
@@ -65,13 +61,10 @@ dependencies {
     annotationProcessor(libs.lombok)
 
     // ACP SDK - Agent Client Protocol
-//    implementation(libs.acp.core)
-//    implementation(libs.acp.agent.support)
-//    implementation(libs.acp.websocket.jetty)
-
     implementation(libs.acp.jvm)
     implementation(libs.acp.model.jvm)
     implementation(libs.acp.ktor.jvm)
+
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
