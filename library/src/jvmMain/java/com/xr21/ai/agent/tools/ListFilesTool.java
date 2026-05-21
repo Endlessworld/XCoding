@@ -15,10 +15,11 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
+import com.agentclientprotocol.model.ToolCallLocation;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -77,10 +78,10 @@ public class ListFilesTool {
                 log.info("ls WORKSPACE_ROOT {}", directory);
                 dir = Paths.get(directory);
             }
-            if (!directory.contains(WORKSPACE_ROOT) ) {
-                if("/".equals(directory) || ".".equals(directory)){
+            if (!directory.contains(WORKSPACE_ROOT)) {
+                if ("/".equals(directory) || ".".equals(directory)) {
                     dir = Paths.get(DEFAULT_WORKSPACE_ROOT);
-                }else{
+                } else {
                     dir = Paths.get(DEFAULT_WORKSPACE_ROOT, directory.replaceFirst("/", ""));
                 }
 
@@ -104,7 +105,7 @@ public class ListFilesTool {
                     .forEach(path -> {
                         Path absolutePath = path.toAbsolutePath();
                         String pathStr = absolutePath.toString();
-                        
+
                         if (Files.isRegularFile(path)) {
                             // 统计文件
                             long line;
@@ -117,8 +118,9 @@ public class ListFilesTool {
                                     line = 0;
                                 }
                             }
-                            locations.add(new ToolCallLocation(pathStr, (int) line));
-                            
+
+                            locations.add(BridgeKt.createToolCallLocation(pathStr, (int) line));
+
                             // 更新父目录统计
                             Path parent = path.getParent();
                             while (parent != null && parent.startsWith(basePath)) {
@@ -137,7 +139,7 @@ public class ListFilesTool {
 
             ToolResult result = ToolResult.builder();
             StringBuilder contentBuilder = new StringBuilder();
-            
+
             // 添加目录统计信息
             if (!dirStats.isEmpty()) {
                 contentBuilder.append("## Directories:\n");
@@ -150,32 +152,32 @@ public class ListFilesTool {
                             if (relativePath.isEmpty()) {
                                 relativePath = ".";
                             }
-                            contentBuilder.append(String.format("%s/ (%d dirs, %d files)%n", 
+                            contentBuilder.append(String.format("%s/ (%d dirs, %d files)%n",
                                     relativePath, stats[0], stats[1]));
                         });
                 contentBuilder.append("\n");
             }
-            
+
             // 添加文件列表
             if (!locations.isEmpty()) {
                 contentBuilder.append("## Files:\n");
                 locations.stream()
                         .map(location -> {
-                            String path = location.path();
-                            int lineCount = location.line();
+                            String path = location.getPath();
+                            int lineCount = BridgeKt.getLine(location);
                             String relativePath = basePath.relativize(Paths.get(path)).toString();
                             return String.format("%s (%d lines)", relativePath, lineCount);
                         })
                         .forEach(line -> contentBuilder.append(line).append("\n"));
-                
+
                 // Add locations - limit to first 100 to avoid too many locations
                 result.locations(locations.size() > 100 ? locations.subList(0, 100) : locations);
             }
-            
+
             if (contentBuilder.length() == 0) {
                 contentBuilder.append("No files or directories found in directory: ").append(basePath);
             }
-            
+
             result.content(contentBuilder.toString());
             result.metadata("fileCount", locations.size());
             result.metadata("directoryCount", dirStats.size());

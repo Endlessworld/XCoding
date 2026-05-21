@@ -15,8 +15,7 @@
  */
 package com.xr21.ai.agent.config;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.xr21.ai.agent.config.ModelsConfig.ModelConfig;
+import com.xr21.ai.agent.model.Config.ModelConfig;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +24,6 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,14 +46,8 @@ public enum AiModels {
     private final Supplier<String> baseUrlSupplier;
     private final Supplier<String> apiKeySupplier;
 
-
-    public static List<AcpSchema.ModelInfo> availableModels() {
-        List<AcpSchema.ModelInfo> list = new ArrayList<>();
-        List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
-        for (ModelConfig model : configs) {
-            list.add(new AcpSchema.ModelInfo(model.getModelName(), model.getModelName(), model.getModelName()));
-        }
-        return list;
+    public static List<ModelConfig> availableModels() {
+        return ModelConfigLoader.loadConfigs();
     }
 
 
@@ -78,24 +70,10 @@ public enum AiModels {
             String effectiveBaseUrl = config.getBaseUrl();
             String effectiveApiKey = config.getApiKey();
             String effectiveModelName = config.getModelId();
-            Double temperature = config.getTemperature() != null ? config.getTemperature() : 0.65;
+            Double temperature = config.getTemperature();
             Integer maxTokens = config.getMaxTokens();
-            OpenAiApi api = OpenAiApi.builder()
-                    .baseUrl(effectiveBaseUrl)
-                    .completionsPath(effectiveBaseUrl.endsWith("v3") ? "/chat/completions" : "v1/chat/completions")
-                    .apiKey(effectiveApiKey)
-                    .build();
-            return OpenAiChatModel.builder()
-                    .defaultOptions(OpenAiChatOptions.builder()
-                            .model(effectiveModelName)
-                            .temperature(temperature)
-                            .parallelToolCalls(true)
-                            .streamUsage(true)
-                            .toolChoice("auto")
-                            .extraBody(Map.of("thinking", Map.of("type", "disabled")))
-                            .build())
-                    .openAiApi(api)
-                    .build();
+            OpenAiApi api = OpenAiApi.builder().baseUrl(effectiveBaseUrl).completionsPath(effectiveBaseUrl.endsWith("v3") ? "/chat/completions" : "v1/chat/completions").apiKey(effectiveApiKey).build();
+            return OpenAiChatModel.builder().defaultOptions(OpenAiChatOptions.builder().model(effectiveModelName).temperature(temperature).parallelToolCalls(true).streamUsage(true).toolChoice("auto").extraBody(Map.of("thinking", Map.of("type", "disabled"))).build()).openAiApi(api).build();
         }
         throw new RuntimeException("Model configuration not found in JSON for:  " + modelName);
     }

@@ -15,16 +15,17 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.spec.AcpSchema.Plan;
-import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntry;
-import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryPriority;
-import com.agentclientprotocol.sdk.spec.AcpSchema.PlanEntryStatus;
+import com.agentclientprotocol.common.ClientSessionOperations;
+import com.agentclientprotocol.model.PlanEntry;
+import com.agentclientprotocol.model.PlanEntryPriority;
+import com.agentclientprotocol.model.PlanEntryStatus;
+import com.agentclientprotocol.model.SessionUpdate;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.event.AcpEventBus;
+import kotlin.coroutines.jvm.internal.RunSuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
@@ -33,6 +34,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static com.agentclientprotocol.launcher.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
+import static com.agentclientprotocol.launcher.AgiAgentKt.SESSION_ID_CONTEXT_KEY;
 import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_STATE_FOR_UPDATE_CONTEXT_KEY;
 
 /**
@@ -96,15 +99,8 @@ public class AcpWriteTodosTool {
             if (!(extraStateObj instanceof Map)) {
                 return Map.of("error", "Extra state has invalid type");
             }
-
-            // Convert request entries to ACP PlanEntries
             List<PlanEntry> planEntries = convertToPlanEntries(entries);
-
-            // Create ACP Plan
-            Plan plan = new Plan("plan", planEntries);
-
-            sendAcpPlanUpdate(toolContext, plan);
-
+            sendAcpPlanUpdate(toolContext, planEntries);
             return Map.of("success", true, "message", "Updated todo list with " + entries.size() + " entries using ACP Plan");
 
         } catch (ClassCastException e) {
@@ -123,7 +119,7 @@ public class AcpWriteTodosTool {
         for (int i = 0; i < entries.size(); i++) {
             RequestEntry entry = entries.get(i);
 
-            PlanEntry planEntry = new PlanEntry(i + ". " + entry.content(), PlanEntryPriority.valueOf(entry.priority()), PlanEntryStatus.valueOf(entry.status()));
+            PlanEntry planEntry = new PlanEntry(i + ". " + entry.content(), PlanEntryPriority.valueOf(entry.priority()), PlanEntryStatus.valueOf(entry.status()), null);
             planEntries.add(planEntry);
         }
 
@@ -133,26 +129,27 @@ public class AcpWriteTodosTool {
     /**
      * Send ACP Plan update through AcpEventBus or SyncPromptContext if available
      */
-    private void sendAcpPlanUpdate(ToolContext toolContext, Plan plan) {
+    private void sendAcpPlanUpdate(ToolContext toolContext, List<PlanEntry> planEntrys) {
         try {
             if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                // Try AcpEventBus first (used by SimpleAgentSupport)
                 if (config.context().get(AcpEventBus.CONTEXT_KEY) instanceof AcpEventBus eventBus) {
-                    eventBus.emitText("[Plan Updated] " + plan.toString());
-                    log.info("Sent Plan update via AcpEventBus: {}", plan);
+                    eventBus.emitText("[Plan Updated] " + planEntrys.toString());
+                    log.info("Sent Plan update via AcpEventBus: {}", planEntrys);
                     return;
                 }
-                // Fallback to SyncPromptContext (used by AcpAgent)
-                if (config.context().get("SyncPromptContext") instanceof com.agentclientprotocol.sdk.agent.SyncPromptContext syncPromptContext) {
-                    if (config.context().get("PromptRequest") instanceof AcpSchema.PromptRequest promptRequest) {
-                        var sessionId = promptRequest.sessionId();
-                        syncPromptContext.sendUpdate(sessionId, plan);
-                        log.info("sendUpdate sessionId : {} plan: {}", sessionId, plan);
-                    }
+                if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
+                    RunSuspendKt.runSuspend((completion) -> {
+                        SessionUpdate notification = new SessionUpdate.PlanUpdate(planEntrys, null);
+                        clientSessionOperations.notify(notification, null, completion);
+                        if (config.context().get(SESSION_ID_CONTEXT_KEY) instanceof String sessionId) {
+                            log.info("sendUpdate sessionId : {} plan: {}", sessionId, notification);
+                        }
+                        return null;
+                    });
                 }
             }
         } catch (Exception e) {
-            System.err.println("Warning: Could not send ACP Plan update: " + e.getMessage());
+            log.info("Warning: Could not send ACP Plan update: {}", e.getMessage());
         }
     }
 

@@ -65,9 +65,9 @@ dependencies {
     annotationProcessor(libs.lombok)
 
     // ACP SDK - Agent Client Protocol
-    implementation(libs.acp.core)
-    implementation(libs.acp.agent.support)
-    implementation(libs.acp.websocket.jetty)
+//    implementation(libs.acp.core)
+//    implementation(libs.acp.agent.support)
+//    implementation(libs.acp.websocket.jetty)
 
     implementation(libs.acp.jvm)
     implementation(libs.acp.model.jvm)

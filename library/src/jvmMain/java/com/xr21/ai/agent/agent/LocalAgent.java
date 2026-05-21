@@ -34,11 +34,11 @@ import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonS
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.config.ModelConfigLoader;
-import com.xr21.ai.agent.config.ModelsConfig;
 import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.interceptors.WorkerInterceptor;
+import com.xr21.ai.agent.model.Config;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.WebSearchTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
@@ -256,7 +256,7 @@ public class LocalAgent {
                 throw new RuntimeException("Failed to initialize chat model", e);
             }
         } else {
-            List<ModelsConfig.ModelConfig> configs = ModelConfigLoader.loadConfigs();
+            List<Config.ModelConfig> configs = ModelConfigLoader.loadConfigs();
             chatModel = AiModels.createChatModelFromJson(ModelConfigLoader.getDefaultConfig(configs).getModelId());
             log.info("No specific model configuration found, using default model : {}", chatModel);
         }

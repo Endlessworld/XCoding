@@ -15,9 +15,11 @@
  */
 package com.xr21.ai.agent.entity;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallContent;
-import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
+
+import com.agentclientprotocol.model.ContentBlock;
+import com.agentclientprotocol.model.ToolCallContent;
+import com.agentclientprotocol.model.ToolCallLocation;
+import com.xr21.ai.agent.bridge.BridgeKt;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,15 +51,15 @@ public class ToolResult {
     }
 
     public static ToolCallContent createDiffContent(String path, String oldText, String newText) {
-        return new AcpSchema.ToolCallDiff("diff", path, oldText, newText);
+        return new ToolCallContent.Diff(path, oldText, newText,null);
     }
 
     public static ToolCallContent createTerminalContent(String terminalId) {
-        return new AcpSchema.ToolCallTerminal("terminal", terminalId);
+        return new ToolCallContent.Terminal(terminalId,null);
     }
 
-    public static ToolCallContent createTextContent(String text) {
-        return new AcpSchema.ToolCallContentBlock("content", new AcpSchema.TextContent(text));
+    public static ToolCallContent.Content createTextContent(String text) {
+        return new  ToolCallContent.Content( new ContentBlock.Text(text,null,null));
     }
 
     @SuppressWarnings("unchecked")
@@ -105,7 +107,7 @@ public class ToolResult {
     }
 
     public ToolResult location(String path, Integer line) {
-        return location(new ToolCallLocation(path, line));
+        return location(BridgeKt.createToolCallLocation(path, line));
     }
 
     // Helper methods for common content types

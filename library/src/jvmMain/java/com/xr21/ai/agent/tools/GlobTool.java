@@ -15,9 +15,10 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
+import com.agentclientprotocol.model.ToolCallLocation;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -82,7 +83,7 @@ public class GlobTool {
             for (Path path : matchedPaths) {
                 String absolutePath = path.toAbsolutePath().toString();
                 matchedFiles.add(absolutePath);
-                locations.add(new ToolCallLocation(absolutePath, 1));
+                locations.add(BridgeKt.createToolCallLocation(absolutePath, 1));
             }
 
             ToolResult result = ToolResult.builder();

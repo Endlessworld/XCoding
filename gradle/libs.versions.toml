@@ -20,9 +20,9 @@ jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-datab
 spring-ai-alibaba-graph = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-graph-core", version.ref = "springAiAlibaba" }
 spring-ai-alibaba-agent = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-agent-framework", version.ref = "springAiAlibaba" }
 lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
-acp-core = { group = "com.agentclientprotocol", name = "acp-core", version.ref = "acpSdk" }
-acp-agent-support = { group = "com.agentclientprotocol", name = "acp-agent-support", version.ref = "acpSdk" }
-acp-websocket-jetty = { group = "com.agentclientprotocol", name = "acp-websocket-jetty", version.ref = "acpSdk" }
+#acp-core = { group = "com.agentclientprotocol", name = "acp-core", version.ref = "acpSdk" }
+#acp-agent-support = { group = "com.agentclientprotocol", name = "acp-agent-support", version.ref = "acpSdk" }
+#acp-websocket-jetty = { group = "com.agentclientprotocol", name = "acp-websocket-jetty", version.ref = "acpSdk" }
 # ACP SDK
 acp-jvm = { group = "com.agentclientprotocol", name = "acp-jvm", version.ref = "acpKotlinSdk" }
 acp-model-jvm = { group = "com.agentclientprotocol", name = "acp-model-jvm", version.ref = "acpKotlinSdk" }

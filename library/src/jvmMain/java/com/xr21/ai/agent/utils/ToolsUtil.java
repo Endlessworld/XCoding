@@ -17,11 +17,11 @@ package com.xr21.ai.agent.utils;
 
 import com.agentclientprotocol.model.EnvVariable;
 import com.agentclientprotocol.model.McpServer;
-import com.agentclientprotocol.sdk.spec.AcpSchema;
-import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallContent;
-import com.agentclientprotocol.sdk.spec.AcpSchema.ToolCallLocation;
+import com.agentclientprotocol.model.ToolCallContent;
+import com.agentclientprotocol.model.ToolCallLocation;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -113,13 +113,13 @@ public class ToolsUtil {
         return mcpTools;
     }
 
-    public static String describeMcpServer(AcpSchema.McpServer server) {
-        if (server instanceof AcpSchema.McpServerStdio stdio) {
-            return String.format("STDIO[name=%s, command=%s, args=%s]", stdio.name(), stdio.command(), stdio.args());
-        } else if (server instanceof AcpSchema.McpServerHttp http) {
-            return String.format("HTTP[name=%s, url=%s]", http.name(), http.url());
-        } else if (server instanceof AcpSchema.McpServerSse sse) {
-            return String.format("SSE[name=%s, url=%s]", sse.name(), sse.url());
+    public static String describeMcpServer(McpServer server) {
+        if (server instanceof McpServer.Stdio stdio) {
+            return String.format("STDIO[name=%s, command=%s, args=%s]", stdio.getName(), stdio.getCommand(), stdio.getArgs());
+        } else if (server instanceof McpServer.Http http) {
+            return String.format("HTTP[name=%s, url=%s]", http.getName(), http.getUrl());
+        } else if (server instanceof McpServer.Sse sse) {
+            return String.format("SSE[name=%s, url=%s]", sse.getName(), sse.getUrl());
         } else {
             return server.toString();
         }
@@ -208,9 +208,9 @@ public class ToolsUtil {
                     List<Map<String, Object>> locList = (List<Map<String, Object>>) locs;
                     result.locations = new ArrayList<>();
                     for (Map<String, Object> loc : locList) {
-                        String path = loc.get("path") != null ? String.valueOf(loc.get("path")) : null;
-                        Integer line = loc.get("line") != null ? ((Number) loc.get("line")).intValue() : null;
-                        result.locations.add(new ToolCallLocation(path, line));
+                        String path = loc.get("path") != null ? String.valueOf(loc.get("path")) : "";
+                        int line = loc.get("line") != null ? ((Number) loc.get("line")).intValue() : 0;
+                        result.locations.add(BridgeKt.createToolCallLocation(path, line));
                     }
                 }
             }

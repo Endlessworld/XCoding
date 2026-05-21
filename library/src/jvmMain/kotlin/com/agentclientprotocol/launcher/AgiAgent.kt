@@ -1,3 +1,18 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 @file:OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 
 package com.agentclientprotocol.launcher
@@ -7,6 +22,7 @@ import com.agentclientprotocol.agent.AgentSession
 import com.agentclientprotocol.agent.AgentSupport
 import com.agentclientprotocol.agent.client
 import com.agentclientprotocol.client.ClientInfo
+import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.*
@@ -46,6 +62,14 @@ private val logger = KotlinLogging.logger {}
 private val sessionMcpServers = ConcurrentHashMap<String, List<McpServer>>()
 private val sessionsRunnableConfig = ConcurrentHashMap<String, RunnableConfig>()
 private val activeRequests = ConcurrentHashMap<String, CancellableRequest>()
+
+/**
+ * Context key for storing [ClientSessionOperations] in [RunnableConfig.context].
+ * Tools running on non-coroutine threads can use this to send ACP notifications
+ * back to the client via [CoroutineContext.client].
+ */
+const val CLIENT_SESSION_CONTEXT_KEY = "AcpClientSession"
+const val SESSION_ID_CONTEXT_KEY = "sessionId"
 
 /**
  * ACP Agent session backed by LocalAgent (ReactAgent).
@@ -88,7 +112,12 @@ class AgiAgentSession(
                 currentValue = AiModels.defaultModel(),
                 description = "model",
                 options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
-                    SessionConfigSelectOption(SessionConfigValueId(model.modelId()), model.name(), model.name(), null)
+                    SessionConfigSelectOption(
+                        SessionConfigValueId(model.modelId ?: ""),
+                        model.modelName ?: "",
+                        model.modelName ?: "",
+                        null
+                    )
                 })
             )
         )
@@ -119,7 +148,7 @@ class AgiAgentSession(
 
     override val availableModels: List<ModelInfo>
         get() = AiModels.availableModels().map { model ->
-            ModelInfo(ModelId(model.modelId()), model.name(), model.name(), null)
+            ModelInfo(ModelId(model.modelId ?: ""), model.modelName ?: "", model.modelName ?: "", null)
         }
 
     override val defaultModel: ModelId
@@ -172,7 +201,7 @@ class AgiAgentSession(
                                             appendLine("| Model ID | Name |")
                                             appendLine("|---------|------|")
                                             AiModels.availableModels().forEach { model ->
-                                                appendLine("| ${model.modelId()} | ${model.name()} |")
+                                                appendLine("| ${model.modelId ?: ""} | ${model.modelName ?: ""} |")
                                             }
                                         }.trimEnd()
                                     )
@@ -200,11 +229,13 @@ class AgiAgentSession(
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
             val requestId = "request_${System.currentTimeMillis()}_$sessionId"
             runnableConfig.context().put("requestId", requestId)
-            runnableConfig.context().put("sessionId", sessionId)
+            runnableConfig.context().put(SESSION_ID_CONTEXT_KEY, sessionId)
             runnableConfig.context().putIfAbsent("totalTokens", 0)
             runnableConfig.context().putIfAbsent("responseBuilder", responseBuilder)
             runnableConfig.context().putIfAbsent("isFirst", AtomicBoolean(true))
             runnableConfig.context().putIfAbsent("isFirstMessage", AtomicBoolean(true))
+            // Store client session operations in context so tools running on non-coroutine threads can use it
+            runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
             val recursiveFlux = createRecursiveAgentFlux(agent, userMessage)
             val agentSink = Sinks.many().unicast().onBackpressureBuffer<AgentOutput<Any>>()
             val disposable = recursiveFlux.subscribe({ output -> agentSink.tryEmitNext(output) }, { error ->
@@ -482,3 +513,4 @@ class AgiAgent : AgentSupport {
         return session
     }
 }
+

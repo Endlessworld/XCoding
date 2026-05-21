@@ -16,8 +16,9 @@
 package com.xr21.ai.agent.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.xr21.ai.agent.config.ModelsConfig.ModelConfig;
-import com.xr21.ai.agent.config.ModelsConfig.ProviderConfig;
+import com.xr21.ai.agent.model.Config;
+import com.xr21.ai.agent.model.Config.ModelConfig;
+import com.xr21.ai.agent.model.Config.ProviderConfig;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
@@ -64,12 +65,10 @@ public class ModelConfigLoader {
             createDefaultConfigFile(configPath);
             return new ArrayList<>();
         }
-
         try {
             String content = Files.readString(configPath, StandardCharsets.UTF_8);
-
             // 解析为新格式（ModelsConfig 对象）
-            ModelsConfig modelsConfig = objectMapper.readValue(content, ModelsConfig.class);
+            Config modelsConfig = objectMapper.readValue(content, Config.class);
             List<ModelConfig> resolvedConfigs = resolveModelConfigs(modelsConfig);
             log.info("Loaded {} model configurations from: {}", resolvedConfigs.size(), configPath);
             return resolvedConfigs;
@@ -85,12 +84,14 @@ public class ModelConfigLoader {
      * @param modelsConfig 模型配置容器
      * @return 解析后的模型配置列表
      */
-    private static List<ModelConfig> resolveModelConfigs(ModelsConfig modelsConfig) {
+    private static List<ModelConfig> resolveModelConfigs(Config modelsConfig) {
         List<ModelConfig> resolvedConfigs = new ArrayList<>();
         for (ModelConfig model : modelsConfig.getModels()) {
-            ModelConfig resolved = resolveModelConfig(model, modelsConfig.getProviders());
-            if (resolved.getDisabled() != null && !resolved.getDisabled()) {
-                resolvedConfigs.add(resolved);
+            if (model != null) {
+                ModelConfig resolved = resolveModelConfig(model, modelsConfig.getProviders());
+                if (!resolved.getDisabled()) {
+                    resolvedConfigs.add(resolved);
+                }
             }
         }
         return resolvedConfigs;
@@ -128,7 +129,7 @@ public class ModelConfigLoader {
                 model.getProviderId(),
                 baseUrl,
                 apiKey,
-                model.getIsDefault(),
+                model.isDefault(),
                 model.getDisabled()
         );
     }
@@ -209,7 +210,7 @@ public class ModelConfigLoader {
 
         // 查找标记为默认的配置
         for (ModelConfig config : configs) {
-            if (config.getIsDefault() != null && config.getIsDefault()) {
+            if (config.isDefault() != null && config.isDefault()) {
                 return config;
             }
         }
