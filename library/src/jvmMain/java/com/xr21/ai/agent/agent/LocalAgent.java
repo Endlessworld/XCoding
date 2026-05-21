@@ -16,8 +16,6 @@
 package com.xr21.ai.agent.agent;
 
 import com.agentclientprotocol.model.McpServer;
-import com.agentclientprotocol.model.ModelId;
-import com.agentclientprotocol.model.SessionModeId;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.Agent;
@@ -158,7 +156,7 @@ public class LocalAgent {
         var toolRetryInterceptor = ToolRetryInterceptor.builder().maxRetries(2)   // 设置退避策略
                 .initialDelay(1)  // 初始延迟1秒
                 .backoffFactor(1.5)  // 退避因子1.5倍
-                .maxDelay(5000)     // 最大延迟10秒
+                .maxDelay(5000)     // 最大延迟5秒
                 .onFailure(ToolRetryInterceptor.OnFailureBehavior.RETURN_MESSAGE).errorFormatter(e -> Json.toJson(Map.of("error", "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage()))).jitter(true)        // 启用抖动)
                 .build();
         var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(false).withDefaultSecurity().build();
@@ -184,11 +182,9 @@ public class LocalAgent {
         interceptors.add(filesystemInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
-        if (runnableConfig.context().get("SessionModeId") instanceof SessionModeId sessionModeId) {
-            if (sessionModeId.getValue().equalsIgnoreCase("Workers")) {
-                interceptors.add(workerInterceptor);
-                log.info("Workers mode use workerInterceptor");
-            }
+        if (runnableConfig.context().get("mode") instanceof String mode && mode.equalsIgnoreCase("Workers")) {
+            interceptors.add(workerInterceptor);
+            log.info("Workers mode use workerInterceptor");
         }
         return interceptors;
     }
@@ -251,12 +247,12 @@ public class LocalAgent {
     @NotNull
     private static ChatModel getChatModel(RunnableConfig runnableConfig) {
         ChatModel chatModel = null;
-        if (runnableConfig.context().get("ModelId") instanceof ModelId modelId) {
+        if (runnableConfig.context().get("model") instanceof String modelId) {
             try {
-                chatModel = AiModels.createChatModelFromJson(modelId.getValue());
-                log.info("Using model from JSON config: {}", modelId.getValue());
+                chatModel = AiModels.createChatModelFromJson(modelId);
+                log.info("Using model from JSON config: {}", modelId);
             } catch (Exception e) {
-                log.error("Failed to create chat model from config: {}", modelId.getValue(), e);
+                log.error("Failed to create chat model from config: {}", modelId, e);
                 throw new RuntimeException("Failed to initialize chat model", e);
             }
         } else {
