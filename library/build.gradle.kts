@@ -64,6 +64,15 @@ dependencies {
     implementation(libs.acp.jvm)
     implementation(libs.acp.model.jvm)
     implementation(libs.acp.ktor.jvm)
+    implementation(libs.acp.ktor.client.jvm)
+    implementation(libs.acp.ktor.server.jvm)
+// Source: https://mvnrepository.com/artifact/com.agentclientprotocol/acp-ktor-server
+    implementation("com.agentclientprotocol:acp-ktor-server:0.23.0")
+    // Ktor HTTP Client Engine (required by acp-ktor-jvm at runtime)
+    implementation(libs.ktor.client.okhttp)
+
+    // Ktor HTTP Server Engine (required by acp-ktor-server-jvm for WebSocket server mode)
+    implementation(libs.ktor.server.netty)
 
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib")

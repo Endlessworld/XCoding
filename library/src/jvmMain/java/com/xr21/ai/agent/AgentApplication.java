@@ -18,6 +18,8 @@ package com.xr21.ai.agent;
 import com.agentclientprotocol.launcher.AcpAgentLauncher;
 import com.agentclientprotocol.launcher.AgiAgent;
 
+import java.util.Arrays;
+
 /**
  *
  * @author Endless
@@ -25,6 +27,25 @@ import com.agentclientprotocol.launcher.AgiAgent;
 public class AgentApplication {
 
     public static void main(String[] args) {
-        AcpAgentLauncher.launchStdioAgent(new AgiAgent());
+        if (args.length >= 2) {
+//            if ("--ws".equals(args[0])) {
+//                String wsUrl = args[1];
+//                HttpClient client = AcpAgentLauncher.createWebSocketClient();
+//                AcpAgentLauncher.launchWebSocketAgent(new AgiAgent(), wsUrl, client);
+//            }
+            if ("--ws-server".equals(args[0])) {
+                int port = 8080;
+                try {
+                    port = Integer.parseInt(args[1]);
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid port number: " + args[1] + ", using default port 9988");
+                }
+                AcpAgentLauncher.launchWebSocketServer(new AgiAgent(), "0.0.0.0", port);
+            } else {
+                System.err.println("Invalid args" + Arrays.asList(args));
+            }
+        } else {
+            AcpAgentLauncher.launchStdioAgent(new AgiAgent());
+        }
     }
 }

@@ -7,6 +7,7 @@ reactor = "3.6.0"
 jackson = "2.17.0"
 lombok = "1.18.30"
 agentclientprotocol = "0.23.0"
+ktor = "3.1.3"
 
 [libraries]
 spring-core = { group = "org.springframework", name = "spring-core", version.ref = "spring" }
@@ -23,5 +24,11 @@ lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" 
 acp-jvm = { group = "com.agentclientprotocol", name = "acp-jvm", version.ref = "agentclientprotocol" }
 acp-model-jvm = { group = "com.agentclientprotocol", name = "acp-model-jvm", version.ref = "agentclientprotocol" }
 acp-ktor-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-jvm", version.ref = "agentclientprotocol" }
+acp-ktor-client-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-client-jvm", version.ref = "agentclientprotocol" }
+acp-ktor-server-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-server-jvm", version.ref = "agentclientprotocol" }
+
+# Ktor HTTP Client (engine required by ACP Ktor transport)
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty", version.ref = "ktor" }
 [plugins]
 vanniktech-mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }

@@ -45,6 +45,7 @@ import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.ToolsUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -123,6 +124,12 @@ public class LocalAgent {
      */
     public static Agent createAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
         try {
+            if (!StringUtils.isNotBlank(cwd)) {
+                String tempDir = System.getProperty("java.io.tmpdir");
+                System.out.println("系统临时目录: " + tempDir);
+                cwd = tempDir + File.separator + "cwd_" + System.currentTimeMillis();
+                log.error("create agent with cwd tmpdir: {} ", cwd);
+            }
             return buildAgent(cwd, mcpServers, runnableConfig);
         } catch (Exception e) {
             log.error("Failed to create agent with cwd: {}, mcpServers: {}", cwd, mcpServers != null ? mcpServers.size() : 0, e);
@@ -234,7 +241,7 @@ public class LocalAgent {
     private static List<Hook> getHooks(RunnableConfig runnableConfig) {
         List<Hook> hooks = new ArrayList<>();
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder().description("请确认信息收集工具执行").build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
-        if(runnableConfig.context().get("auto_approve") instanceof Boolean autoApprove && !autoApprove){
+        if (runnableConfig.context().get("auto_approve") instanceof Boolean autoApprove && !autoApprove) {
             HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
             hooks.add(humanInTheLoopHook);
         }
