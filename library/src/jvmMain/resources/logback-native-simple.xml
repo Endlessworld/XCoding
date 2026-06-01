@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration debug="false" scan="false">
+    <!-- 禁用 logback 内部状态日志 -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
     <!-- 定义变量 -->
     <property name="LOG_HOME" value="${user.home}/.agi_working/logs"/>
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
