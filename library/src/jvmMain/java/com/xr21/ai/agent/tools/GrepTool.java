@@ -30,7 +30,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
@@ -40,6 +41,8 @@ import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
  * @author Endless
  */
 public class GrepTool {
+
+    private static final int MAX_RESULTS = 25;
 
     // @formatter:off
     @Tool(name = "grep", description = """
@@ -73,77 +76,84 @@ public class GrepTool {
             List<String> matches = new ArrayList<>();
             List<ToolCallLocation> locations = new ArrayList<>();
             Map<String, Integer> fileMatchCounts = new ConcurrentHashMap<>();
+            AtomicInteger matchCounter = new AtomicInteger(0);
 
             PathMatcher globMatcher = glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + glob) : null;
 
-            // Create gitignore utility for filtering
             GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(searchPath);
 
-            // Use parallel stream for parallel file processing
             Files.walk(searchPath)
                     .parallel()
                     .filter(Files::isRegularFile)
                     .filter(p -> !gitignoreUtil.isIgnored(p))
                     .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))
                     .forEach(p -> {
+                        if (matchCounter.get() >= MAX_RESULTS) {
+                            return;
+                        }
                         try {
                             String absolutePath = p.toAbsolutePath().toString();
-                            boolean fileAdded = false;
+                            boolean[] fileAdded = {false};
 
-                            // Use Files.lines() with UTF-8 encoding to handle various file encodings
-                            List<String> matchedLines = Files.lines(p, StandardCharsets.UTF_8)
+                            // Read file lines with index to track actual line numbers
+                            List<String> lines = Files.readAllLines(p, StandardCharsets.UTF_8);
+                            IntStream.range(0, lines.size())
                                     .parallel()
-                                    .filter(line -> line.contains(pattern))
-                                    .collect(Collectors.toList());
-
-                            for (int i = 0; i < matchedLines.size(); ++i) {
-                                // Get actual line number by re-reading
-                                final int lineNum = i + 1;
-                                String matchEntry;
-                                switch (outputMode != null ? outputMode : "files_with_matches") {
-                                    case "files_with_matches":
-                                        synchronized (this) {
-                                            if (!fileAdded) {
-                                                matchEntry = p.toString();
-                                                fileAdded = true;
-                                            } else {
-                                                continue;
-                                            }
+                                    .filter(i -> lines.get(i).contains(pattern))
+                                    .forEachOrdered(i -> {
+                                        int currentTotal = matchCounter.incrementAndGet();
+                                        if (currentTotal > MAX_RESULTS) {
+                                            return;
                                         }
-                                        break;
-                                    case "content":
-                                        matchEntry = p + ":" + lineNum + ": " + matchedLines.get(i);
-                                        break;
-                                    case "count":
-                                        fileMatchCounts.merge(p.toString(), 1, Integer::sum);
-                                        continue;
-                                    default:
-                                        synchronized (this) {
-                                            if (!fileAdded) {
-                                                matchEntry = p.toString();
-                                                fileAdded = true;
-                                            } else {
-                                                continue;
-                                            }
+
+                                        int currentLine = i + 1; // line numbers are 1-based
+                                        fileMatchCounts.merge(absolutePath, 1, Integer::sum);
+
+                                        String matchEntry;
+                                        switch (outputMode != null ? outputMode : "files_with_matches") {
+                                            case "files_with_matches":
+                                                synchronized (this) {
+                                                    if (!fileAdded[0]) {
+                                                        matchEntry = p.toString();
+                                                        fileAdded[0] = true;
+                                                    } else {
+                                                        return;
+                                                    }
+                                                }
+                                                break;
+                                            case "content":
+                                                matchEntry = p + ":" + currentLine + ": " + lines.get(i);
+                                                break;
+                                            case "count":
+                                                return;
+                                            default:
+                                                synchronized (this) {
+                                                    if (!fileAdded[0]) {
+                                                        matchEntry = p.toString();
+                                                        fileAdded[0] = true;
+                                                    } else {
+                                                        return;
+                                                    }
+                                                }
+                                                break;
                                         }
-                                        break;
-                                }
-                                matches.add(matchEntry);
 
-                                // Add location for this match
-                                locations.add(BridgeKt.createToolCallLocation(absolutePath, lineNum));
-
-                                if ("files_with_matches".equals(outputMode)) {
-                                    break;
-                                }
-                            }
+                                        matches.add(matchEntry);
+                                        locations.add(BridgeKt.createToolCallLocation(absolutePath, currentLine));
+                                    });
                         } catch (Exception e) {
                             // Ignore file read errors (including encoding errors)
                         }
                     });
 
             ToolResult result = ToolResult.builder();
+
+            boolean truncated = matchCounter.get() > MAX_RESULTS;
+            if (truncated) {
+                result.metadata("truncated", true);
+                result.metadata("totalMatches", matchCounter.get());
+            }
 
             if ("count".equals(outputMode) && !fileMatchCounts.isEmpty()) {
                 List<String> countEntries = new ArrayList<>();
@@ -160,10 +170,11 @@ public class GrepTool {
                 result.content(String.join("\n", matches));
             }
 
-            // Add locations
-            result.locations(locations);
-            result.metadata("matchCount", locations.size());
-            result.metadata("fileCount", fileMatchCounts.isEmpty() ? -1 : fileMatchCounts.size());
+            if (!locations.isEmpty()) {
+                result.locations(locations.size() > MAX_RESULTS ? locations.subList(0, MAX_RESULTS) : locations);
+            }
+            result.metadata("matchCount", Math.min(matchCounter.get(), MAX_RESULTS));
+            result.metadata("fileCount", fileMatchCounts.size());
 
             return result.build();
 

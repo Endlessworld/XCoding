@@ -47,7 +47,7 @@ public class GlobTool {
 
         Usage:
         - Supports standard glob patterns: `*` (any characters), `**` (any directories), `?` (single character)
-        - Returns a list of absolute file paths that match the pattern
+        - Returns a list of absolute file paths that match the pattern (maximum 25 results)
 
         Examples:
         - `**/*.java` - Find all Java files
@@ -77,6 +77,13 @@ public class GlobTool {
                     })
                     .collect(Collectors.toList());
 
+            // Limit results to max 25
+            int maxResults = 25;
+            boolean truncated = matchedPaths.size() > maxResults;
+            if (truncated) {
+                matchedPaths = matchedPaths.subList(0, maxResults);
+            }
+
             List<String> matchedFiles = new ArrayList<>();
             List<ToolCallLocation> locations = new ArrayList<>();
 
@@ -88,6 +95,11 @@ public class GlobTool {
 
             ToolResult result = ToolResult.builder();
 
+            if (truncated) {
+                result.metadata("truncated", true);
+                result.metadata("totalMatches", matchedPaths.size());
+            }
+
             if (matchedFiles.isEmpty()) {
                 result.put("files", "No files found matching pattern: " + pattern);
                 result.content("No files found matching pattern: " + pattern);
@@ -96,9 +108,9 @@ public class GlobTool {
                 result.content(String.join("\n", matchedFiles));
             }
 
-            // Add locations - limit to first 100 to avoid too many locations
+            // Add locations - limit to maxResults to avoid too many locations
             if (!locations.isEmpty()) {
-                result.locations(locations.size() > 100 ? locations.subList(0, 100) : locations);
+                result.locations(locations.size() > maxResults ? locations.subList(0, maxResults) : locations);
             }
 
             result.metadata("fileCount", matchedFiles.size());

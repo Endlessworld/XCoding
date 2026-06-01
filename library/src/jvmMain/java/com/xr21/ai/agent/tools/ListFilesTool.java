@@ -61,7 +61,7 @@ public class ListFilesTool {
                                          @JsonPropertyDescription("The directory path to list files from default: (current working directory absolute path)")
                                              String directory,
                                          @JsonProperty(value = "maxDepth",required = true)
-                                         @JsonPropertyDescription("Maximum depth to traverse (default: 5, max: 10)")
+                                         @JsonPropertyDescription("Maximum depth to traverse (default: 3, max: 5)")
                                          Integer maxDepth, ToolContext context) { // @formatter:on
         log.info("ls files context {}", context.getContext());
         if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
