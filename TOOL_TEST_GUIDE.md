@@ -250,7 +250,7 @@ webSearch(arg0=["搜索关键词1", "搜索关键词2"], arg1="oneYear", arg2=tr
 □ 20. KillShell 工具 - 杀死后台进程
 □ 21. ShellInput 工具 - 向交互式 shell 发送命令
 □ 22. ShellSessions 工具 - 列出所有活跃会话
-□ 23. webSearch 工具 - 网络搜索
+□ 23. web_search 工具 - 网络搜索
 ```
 
 ### 快速测试脚本 (PowerShell)
@@ -291,7 +291,8 @@ del "D:\IdeaProjects\agi_working\test_quick.md"
 1. **路径格式**: Windows 路径使用正斜杠 `D:/IdeaProjects/...`
 2. **文件清理**: 测试完成后务必删除创建的测试文件
 3. **后台命令**: 使用 `arg3=true` 启动后台命令，保存返回的 `bash_id`
-4. **网络限制**: webSearch 可能因网络限制返回空结果
+4. **网络限制**: web_search 可能因网络限制返回空结果
+5. **网页抓取**: web_fetch 依赖目标网站可访问性，超时时间 15 秒
 5. **技能系统**: 需要项目中有 `.claude/settings/` 目录下的技能配置
 
 ---
@@ -307,6 +308,7 @@ del "D:\IdeaProjects\agi_working\test_quick.md"
 | glob | `glob("**/*.md")` |
 | grep | `grep("文本", "目录", "*.md", "count")` |
 | Bash | `Bash("命令", "描述")` |
+| web_fetch | `web_fetch("https://example.com")` |
 | KillShell | `KillShell("shell_id")` |
 
 ---

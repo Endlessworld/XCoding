@@ -63,6 +63,7 @@
 | 工具名称 | 描述 | 使用场景 |
 |---------|------|---------|
 | `WebSearch` | 网络搜索 | 查找文档、API 参考 |
+| `web_fetch` | 网页抓取 | 请求指定 URL 并返回清洗后的网页 innerText 内容（最大 1000 字符） |
 | `FeedBack` | 用户反馈收集 | 确认操作、获取输入 |
 | `write_todos` | ACP 任务管理 | 复杂任务规划（ACP Plan 模式） |
 
@@ -140,6 +141,7 @@ ai-agents/
 |-----|------|
 | `FeedBackTool` | 用户反馈收集 |
 | `WebSearchTool` | 网络搜索 |
+| `FetchWebTool` | 网页抓取，使用 Jsoup 请求 URL 并清洗 HTML 提取纯文本 |
 | `ToolKindFind` | 工具类型查找 |
 
 ### ⚙️ Utils 工具类

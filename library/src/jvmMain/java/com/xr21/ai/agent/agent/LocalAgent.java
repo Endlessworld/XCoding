@@ -41,7 +41,7 @@ import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.interceptors.WorkerInterceptor;
 import com.xr21.ai.agent.model.Config;
 import com.xr21.ai.agent.tools.ShellTools;
-import com.xr21.ai.agent.tools.WebSearchTool;
+import com.xr21.ai.agent.tools.WebTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.ToolsUtil;
@@ -139,7 +139,7 @@ public class LocalAgent {
     }
 
     private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers) {
-        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebSearchTool()).build();
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具

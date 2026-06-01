@@ -167,6 +167,7 @@ JSON 配置形式的 AI 模型管理，支持：
 | 工具 | 描述 |
 |------|------|
 | `WebSearch` | 网络搜索 |
+| `web_fetch` | 网页抓取，请求指定 URL 并返回清洗后的网页 innerText 内容（最大 1000 字符） |
 | `FeedBack` | 用户反馈收集 |
 | `contextCacheTool` | 上下文缓存读取 |
 | `write_todos` | ACP 任务管理 |

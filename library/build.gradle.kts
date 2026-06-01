@@ -78,6 +78,9 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
+    // Jsoup - HTML parsing (used by WebSearchTool for DuckDuckGo search)
+    implementation(libs.jsoup)
+
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")

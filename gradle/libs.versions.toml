@@ -8,6 +8,7 @@ jackson = "2.17.0"
 lombok = "1.18.30"
 agentclientprotocol = "0.23.0"
 ktor = "3.1.3"
+jsoup = "1.18.3"
 
 [libraries]
 spring-core = { group = "org.springframework", name = "spring-core", version.ref = "spring" }
@@ -30,5 +31,9 @@ acp-ktor-server-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-serv
 # Ktor HTTP Client (engine required by ACP Ktor transport)
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty", version.ref = "ktor" }
+
+# HTML parsing
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
+
 [plugins]
 vanniktech-mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }
