@@ -24,11 +24,14 @@ import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
@@ -37,6 +40,9 @@ import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
  * <p>
  * 提供读取文件和目录的能力，支持批量读取、分页读取、Gitignore过滤等功能。
  * 被Spring AI框架识别为工具方法，供LLM Agent调用。
+ * <p>
+ * 增强功能：支持缩进可视化标记，自动检测每行使用的缩进类型（tab/空格），
+ * 帮助 LLM 在生成 patch 时使用正确的缩进格式，避免因 tab/空格混用导致的 patch 应用失败。
  *
  * @author Endless
  */
@@ -54,7 +60,8 @@ public class ReadFileTool {
         4. 分页读取：通过offset和limit参数控制读取范围，默认读取前500行
         5. 行号显示：输出格式类似"cat -n"，每行带6位行号
         6. 超长截断：单行超过2000字符自动截断，避免输出爆炸
-        7. 容错处理：路径不存在、权限不足、空文件等场景均有友好提示
+        7. 缩进标记：每行末尾标注缩进类型（[→T]Tab / [·S]Space），帮助确认文件缩进风格
+        8. 容错处理：路径不存在、权限不足、空文件等场景均有友好提示
 
         你可以使用这个工具直接访问任何文件或目录、且一次性可以读取多个文件或目录。
         假设这个工具能够读取机器上的所有文件。如果用户提供了文件/目录路径，则假设该路径有效。
@@ -66,12 +73,15 @@ public class ReadFileTool {
             - 你应该尽量在一次调用中批量读取多个可能有用的文件或目录。
             - 对于目录：
                 - 会递归读取目录下所有子目录和文件
-                - 每个文件的内容会单独显示，并包含完整路径
+                - 每个文件的内容会单独显示，包含完整路径和缩进统计信息
                 - 空目录会显示为"Directory is empty"
             - 对于文件：
                 - 默认从文件开头开始最多读取500行
                 - 使用offset和limit参数进行分页读取
                 - 任何超过2000字符的行将被截断
+                - 缩进标记：每行末尾显示缩进类型
+                  - [→T] 表示该行使用 Tab 缩进
+                  - [·S] 表示该行使用 空格 缩进
                 - 结果采用cat -n格式，行号从1开始
             - 如果读取了存在但内容为空的文件，会收到"File is empty"提示
             - 建议在使用该工具前先使用list_files工具验证文件/目录路径
@@ -111,7 +121,7 @@ public class ReadFileTool {
                 // 路径转换：以"/"开头的绝对路径，拼接WORKSPACE_ROOT作为工作空间相对路径
                 // 例如："/src/main" -> WORKSPACE_ROOT + "/src/main"
                 if (pathStr.startsWith("/")) {
-                    pathStr = WORKSPACE_ROOT + File.pathSeparator + pathStr.replaceFirst("/", "");
+                    pathStr = WORKSPACE_ROOT + File.separator + pathStr.substring(1);
                 }
                 Path path = Paths.get(pathStr).normalize();
                 if (!Files.exists(path)) {
@@ -177,21 +187,23 @@ public class ReadFileTool {
 
     private void processFile(Path file, StringBuilder result, Integer offset, Integer limit, ToolResult toolResult) throws IOException {
         try {
-            // 一次性读取文件所有行到内存，适用于中小文件（大文件需配合limit控制）
-            List<String> allLines = Files.readAllLines(file);
+            // 一次性读取文件所有行到内存（使用readAllBytes避免换行符转换问题）
+            byte[] rawBytes = Files.readAllBytes(file);
+            String fileContent = new String(rawBytes, java.nio.charset.StandardCharsets.UTF_8);
+            // 按行分割，保留所有行（包括空行）
+            String[] allLines = fileContent.split("\n", -1);
             // 获取绝对路径用于输出和位置标记
             String absolutePath = file.toAbsolutePath().toString();
 
-            if (allLines.isEmpty()) {
+            // 空文件检查
+            if (allLines.length == 0 || (allLines.length == 1 && allLines[0].isEmpty())) {
                 result.append("File is empty: ").append(file).append("\n\n");
-                /*
-                 * 位置标记机制：
-                 * 即使文件为空，也记录位置信息（行号=1），
-                 * 方便Agent后续写入操作知道目标文件位置。
-                 */
                 toolResult.location(absolutePath, 1);
                 return;
             }
+
+            // 分析缩进统计信息
+            IndentStats indentStats = analyzeIndentation(allLines);
 
             /*
              * 分页参数计算：
@@ -201,56 +213,136 @@ public class ReadFileTool {
              */
             int start = offset != null ? Math.max(0, offset) : 0;
             int maxLimit = limit != null ? limit : 500;
-            int end = Math.min(start + maxLimit, allLines.size());
+            int end = Math.min(start + maxLimit, allLines.length);
 
             result.append("=== ").append(absolutePath).append(" ===\n");
-            if (start >= allLines.size()) {
+            // 添加缩进统计信息
+            result.append(indentStats.toSummary());
+
+            if (start >= allLines.length) {
                 result.append("Error: Offset ")
                         .append(start)
                         .append(" is beyond file length ")
-                        .append(allLines.size())
+                        .append(allLines.length)
                         .append("\n");
-                // 即使超出范围也添加位置信息
-                toolResult.location(absolutePath, allLines.size());
+                toolResult.location(absolutePath, allLines.length);
             } else {
-                // 添加起始行位置
                 toolResult.location(absolutePath, start + 1);
 
-                List<String> lines = allLines.subList(start, end);
-                for (int i = 0; i < lines.size(); i++) {
-                    String line = lines.get(i);
+                for (int i = start; i < end; i++) {
+                    String rawLine = allLines[i];
+                    String displayLine = rawLine;
+                    String indentMarker = getIndentMarker(rawLine);
+
                     // 截断过长的行
-                    if (line.length() > 2000) {
-                        line = line.substring(0, 1997) + "...";
+                    if (displayLine.length() > 2000) {
+                        displayLine = displayLine.substring(0, 1997) + "...";
                     }
-                    result.append(String.format("%6d\t%s\n", start + i + 1, line));
+
+                    // 输出带缩进标记的行
+                    if (indentMarker != null && !indentMarker.isEmpty()) {
+                        result.append(String.format("%6d\t%s %s\n", i + 1, displayLine, indentMarker));
+                    } else {
+                        result.append(String.format("%6d\t%s\n", i + 1, displayLine));
+                    }
                 }
-                if (end < allLines.size()) {
+
+                if (end < allLines.length) {
                     // 未读完提示：显示剩余行数和总字符数，引导Agent继续分页读取
-                    result.append(String.format("\n... %d more lines not shown (total: %d lines, %d characters)\n", allLines.size() - end, allLines.size(), allLines.stream()
-                            .mapToInt(String::length)
-                            .sum()));
+                    int remaining = allLines.length - end;
+                    int totalChars = 0;
+                    for (String l : allLines) totalChars += l.length();
+                    result.append(String.format("\n... %d more lines not shown (total: %d lines, %d characters)\n",
+                            remaining, allLines.length, totalChars));
                 } else {
-                    result.append("\nTotal: ")
-                            .append(allLines.size())
-                            .append(" lines, ")
-                            // 计算总字符数，帮助Agent评估文件规模
-                            .append(allLines.stream().mapToInt(String::length).sum())
-                            .append(" characters\n");
+                    int totalChars = 0;
+                    for (String l : allLines) totalChars += l.length();
+                    result.append("\nTotal: ").append(allLines.length)
+                            .append(" lines, ").append(totalChars).append(" characters\n");
                 }
             }
         } catch (IOException e) {
             result.append("Error reading file ").append(file).append(": ").append(e.getMessage()).append("\n\n");
-            // 向上抛出IO异常，由外层统一处理
             throw e;
         } catch (Exception e) {
             result.append("Unexpected error processing file ")
-                    .append(file)
-                    .append(": ")
-                    .append(e.getMessage())
-                    .append("\n\n");
-            // 向上抛出其他异常，确保错误不被静默吞掉
+                    .append(file).append(": ").append(e.getMessage()).append("\n\n");
             throw e;
+        }
+    }
+
+    /**
+     * 分析文件的缩进使用情况
+     */
+    private IndentStats analyzeIndentation(String[] lines) {
+        IndentStats stats = new IndentStats();
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.isEmpty() || line.isBlank()) continue;
+            char firstChar = line.charAt(0);
+            if (firstChar == '\t') {
+                stats.tabLines++;
+                String indent = extractIndent(line);
+                if (indent.contains(" ") && indent.contains("\t")) {
+                    stats.mixedLines++;
+                    stats.mixedLineNumbers.add(i + 1);
+                }
+            } else if (firstChar == ' ') {
+                stats.spaceLines++;
+                String indent = extractIndent(line);
+                if (indent.contains("\t") && indent.contains(" ")) {
+                    stats.mixedLines++;
+                    stats.mixedLineNumbers.add(i + 1);
+                }
+            }
+        }
+        return stats;
+    }
+
+    /** 提取行首缩进字符串 */
+    private String extractIndent(String line) {
+        int i = 0;
+        while (i < line.length() && (line.charAt(i) == ' ' || line.charAt(i) == '\t')) {
+            i++;
+        }
+        return line.substring(0, i);
+    }
+
+    /** 获取缩进标记字符串 */
+    private String getIndentMarker(String line) {
+        if (line == null || line.isEmpty() || line.isBlank()) return "";
+        char firstChar = line.charAt(0);
+        if (firstChar == '\t') return " [\u2192T]";
+        if (firstChar == ' ') return " [\u00B7S]";
+        return "";
+    }
+
+    /** 缩进统计内部类 */
+    private static class IndentStats {
+        int tabLines = 0;
+        int spaceLines = 0;
+        int mixedLines = 0;
+        List<Integer> mixedLineNumbers = new ArrayList<>();
+
+        String toSummary() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("Indentation: ");
+            if (tabLines > 0 && spaceLines > 0) {
+                sb.append("MIXED (Tab:").append(tabLines).append(" lines, Space:").append(spaceLines).append(" lines)");
+            } else if (tabLines > 0) {
+                sb.append("Tab (all ").append(tabLines).append(" lines)");
+            } else if (spaceLines > 0) {
+                sb.append("Spaces (all ").append(spaceLines).append(" lines)");
+            } else {
+                sb.append("No indented lines");
+            }
+            if (mixedLines > 0) {
+                sb.append(" [WARNING: ").append(mixedLines).append(" lines with mixed tab/space at lines: ");
+                sb.append(mixedLineNumbers.stream().map(String::valueOf).collect(Collectors.joining(",")));
+                sb.append("]");
+            }
+            sb.append("\n");
+            return sb.toString();
         }
     }
 }

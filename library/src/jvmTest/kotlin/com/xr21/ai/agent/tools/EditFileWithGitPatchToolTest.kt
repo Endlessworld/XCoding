@@ -608,4 +608,118 @@ class EditFileWithGitPatchToolTest {
         assertTrue(result["success"] as Boolean)
         assertTrue(result.containsKey("locations"), "Result should contain locations")
     }
+
+    // ========== Tab 缩进文件用空格 patch 修改 ==========
+
+    @Test
+    fun testTabIndentedFileWithSpacePatch() {
+        // 文件使用 Tab 缩进
+        createAndCommitFile("tabfile.txt", "line1\n\tline2\n\tline3\n")
+        // patch 使用空格缩进（不匹配）
+        val patch = makePatch(
+            "diff --git a/tabfile.txt b/tabfile.txt",
+            "--- a/tabfile.txt",
+            "+++ b/tabfile.txt",
+            "@@ -1,3 +1,3 @@",
+            " line1",
+            "-\tline2",
+            "+    line2-modified",
+            " \tline3"
+        )
+        val result = tool.editFileWithGitPatch(patch, 1)
+        assertTrue(result["success"] as Boolean, "Tab-indented file with space patch should succeed after normalization")
+        val content = readTestFile("tabfile.txt").replace("\r\n", "\n").trimEnd('\n')
+        assertTrue(content.contains("line2-modified"), "Content should be modified")
+    }
+
+    // ========== 空格缩进文件用 Tab patch 修改 ==========
+
+    @Test
+    fun testSpaceIndentedFileWithTabPatch() {
+        // 文件使用 4空格 缩进
+        createAndCommitFile("spacefile.txt", "line1\n    line2\n    line3\n")
+        // patch 使用 Tab 缩进（不匹配）
+        val patch = makePatch(
+            "diff --git a/spacefile.txt b/spacefile.txt",
+            "--- a/spacefile.txt",
+            "+++ b/spacefile.txt",
+            "@@ -1,3 +1,3 @@",
+            " line1",
+            "-    line2",
+            "+\tline2-modified",
+            "     line3"
+        )
+        val result = tool.editFileWithGitPatch(patch, 1)
+        assertTrue(result["success"] as Boolean, "Space-indented file with tab patch should succeed after normalization")
+        val content = readTestFile("spacefile.txt").replace("\r\n", "\n").trimEnd('\n')
+        assertTrue(content.contains("line2-modified"), "Content should be modified")
+    }
+
+    // ========== Patch 使用 Tab，目标文件使用 Tab ==========
+
+    @Test
+    fun testTabPatchOnTabFile() {
+        createAndCommitFile("tabtab.txt", "aaa\n\tbbb\n\tccc\n")
+        val patch = makePatch(
+            "diff --git a/tabtab.txt b/tabtab.txt",
+            "--- a/tabtab.txt",
+            "+++ b/tabtab.txt",
+            "@@ -1,3 +1,3 @@",
+            " aaa",
+            "-\tbbb",
+            "+\tBBB-modified",
+            " \tccc"
+        )
+        val result = tool.editFileWithGitPatch(patch, 1)
+        assertTrue(result["success"] as Boolean, "Tab patch on tab file should succeed")
+        val content = readTestFile("tabtab.txt").replace("\r\n", "\n").trimEnd('\n')
+        assertTrue(content.contains("BBB-modified"), "Content should be modified")
+    }
+
+    // ========== Patch 使用空格，目标文件使用空格 ==========
+
+    @Test
+    fun testSpacePatchOnSpaceFile() {
+        createAndCommitFile("spacespace.txt", "aaa\n    bbb\n    ccc\n")
+        val patch = makePatch(
+            "diff --git a/spacespace.txt b/spacespace.txt",
+            "--- a/spacespace.txt",
+            "+++ b/spacespace.txt",
+            "@@ -1,3 +1,3 @@",
+            " aaa",
+            "-    bbb",
+            "+    BBB-modified",
+            "     ccc"
+        )
+        val result = tool.editFileWithGitPatch(patch, 1)
+        assertTrue(result["success"] as Boolean, "Space patch on space file should succeed")
+        val content = readTestFile("spacespace.txt").replace("\r\n", "\n").trimEnd('\n')
+        assertTrue(content.contains("BBB-modified"), "Content should be modified")
+    }
+
+    // ========== 多级缩进 Tab 文件 ==========
+
+    @Test
+    fun testMultiLevelTabIndentPatch() {
+        createAndCommitFile("multitab.txt",
+            "def func():\n" +
+            "\tif True:\n" +
+            "\t\treturn 1\n" +
+            "\treturn 0\n")
+        val patch = makePatch(
+            "diff --git a/multitab.txt b/multitab.txt",
+            "--- a/multitab.txt",
+            "+++ b/multitab.txt",
+            "@@ -1,4 +1,4 @@",
+            " def func():",
+            " \tif True:",
+            "-\t\treturn 1",
+            "+\t\treturn 42",
+            " \treturn 0"
+        )
+        val result = tool.editFileWithGitPatch(patch, 1)
+        assertTrue(result["success"] as Boolean, "Multi-level tab indent patch should succeed")
+        val content = readTestFile("multitab.txt").replace("\r\n", "\n").trimEnd('\n')
+        assertTrue(content.contains("return 42"), "Content should be modified")
+    }
 }

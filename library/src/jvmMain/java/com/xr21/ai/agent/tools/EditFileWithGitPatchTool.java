@@ -35,6 +35,7 @@ import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
@@ -42,7 +43,9 @@ import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 /**
  * PatchApply工具 - 接收git patch补丁文件内容并执行bash命令应用补丁
  * 返回所有修改后的行，每行前加行号
- *
+ * <p>
+ * 增强功能：自动检测目标文件缩进风格（tab/空格），在应用patch前进行缩进归一化，
+ * 解决因tab/空格混用导致的patch上下文匹配失败问题。
  * @author Endless
  */
 public class EditFileWithGitPatchTool {
@@ -50,14 +53,23 @@ public class EditFileWithGitPatchTool {
     private static final Logger logger = LoggerFactory.getLogger(EditFileWithGitPatchTool.class);
     private static final Pattern NEW_FILE_PATTERN =
             Pattern.compile("^\\+\\+\\+ (?:[ab]/(.+)|(.+))");
+
+    /** Windows 系统判断缓存 */
+    private static final boolean IS_WINDOWS = System.getProperty("os.name", "").toLowerCase().contains("win");
     private static final Pattern HUNK_HEADER_PATTERN =
-            Pattern.compile("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,\\d+)? @@.*");
+            Pattern.compile("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)(?:,(\\d+))? @@.*");
+
+    /** 检测 patch 中上下文行的缩进风格 */
+    private static final Pattern CONTEXT_LINE_PATTERN =
+            Pattern.compile("^ (\\t+| +)");
 
     /** 重试条件配置：错误关键词 -> 修复参数 */
     private static final RetryRule[] RETRY_RULES = {
         new RetryRule("trailing whitespace", "--whitespace=fix", "whitespace issues"),
         new RetryRule("patch failed", "--whitespace=fix", "patch partially failed"),
-        new RetryRule("does not match", "--whitespace=fix", "context mismatch")
+        new RetryRule("does not match", "--whitespace=fix", "context mismatch"),
+        new RetryRule("patch does not apply", "--whitespace=fix", "patch does not apply"),
+        new RetryRule("indent", "--whitespace=fix", "indentation mismatch")
     };
 
     private final List<String> allowedPrefixes;
@@ -79,20 +91,98 @@ public class EditFileWithGitPatchTool {
         if (!ok) throw new SecurityException("Path not allowed: " + path + ". Allowed: " + allowedPrefixes);
     }
 
-    private String normalizeLineEndings(String s) {
-        if (s == null) return "";
-        return s.replace("\r\n", "\n").replace("\r", "\n");
+    /**
+     * 归一化换行符和缩进空白字符。
+     * 将 CRLF/LF 统一，并根据目标文件的缩进风格转换 patch 中的缩进。
+     */
+    private String normalizeWhitespace(String s) {
+        if (s == null || s.isEmpty()) return "";
+        // 1. 统一换行符：CRLF -> LF, 单独的 CR -> LF
+        String result = s.replace("\r\n", "\n").replace('\r', '\n');
+        // 2. 去除所有残留的 \r 字符
+        result = result.replace("\r", "");
+        // 3. 确保以 LF 换行符结尾
+        if (!result.endsWith("\n")) result += "\n";
+        return result;
     }
 
-    /** 构建 git apply 命令，注入 -c core.autocrlf=false 解决 Windows CRLF 问题 */
-    private List<String> buildGitApplyCommand(String flag, String patchFile, int strip) {
+    /**
+     * 归一化 patch 内容中的缩进，使其与目标文件匹配。
+     * 检测目标文件的缩进风格，将 patch 中的上下文行和新增行的缩进进行转换。
+     */
+    private String normalizePatchIndentation(String patchContent, String workDir, int stripLevel) {
+        // 按行分割前先确保没有残留的 \r 字符，避免缩进检测和匹配失败
+        String cleanContent = patchContent.replace("\r", "");
+        String[] lines = cleanContent.split("\n", -1);
+        // 如果内容没有变化，复用原始引用
+        if (cleanContent.equals(patchContent)) cleanContent = patchContent;
+        String currentTargetFile = null;
+        boolean[] hasTabIndent = {false};
+        boolean[] hasSpaceIndent = {false};
+
+        // 第一遍扫描：找出所有目标文件并检测其缩进风格
+        for (String line : lines) {
+            Matcher m = NEW_FILE_PATTERN.matcher(line);
+            if (m.matches()) {
+                String rel = m.group(1) != null ? m.group(1) : m.group(2);
+                if ("/dev/null".equals(rel)) {
+                    currentTargetFile = null;
+                    continue;
+                }
+                currentTargetFile = resolveFilePath(workDir, rel, stripLevel);
+                // 检测目标文件的缩进风格
+                detectFileIndentStyle(currentTargetFile, hasTabIndent, hasSpaceIndent);
+            }
+        }
+
+        // 如果目标文件没有明确的缩进风格，或 patch 和目标文件风格一致，则无需转换
+        if (!hasTabIndent[0] || !hasSpaceIndent[0]) {
+            return cleanContent;
+        }
+
+        // 目标文件使用 tab，但 patch 使用空格 -> 将 patch 中的空格缩进转为 tab
+        // 目标文件使用空格，但 patch 使用 tab -> 将 patch 中的 tab 缩进转为空格
+        boolean targetUsesTab = hasTabIndent[0];
+        boolean targetUsesSpace = hasSpaceIndent[0];
+
+        // 检测 patch 本身的缩进风格
+        boolean patchUsesTab = false;
+        boolean patchUsesSpace = false;
+        for (String line : lines) {
+            Matcher cm = CONTEXT_LINE_PATTERN.matcher(line);
+            if (cm.matches()) {
+                String indent = cm.group(1);
+                if (indent.contains("\t")) patchUsesTab = true;
+                if (indent.contains(" ")) patchUsesSpace = true;
+                if (patchUsesTab && patchUsesSpace) break;
+            }
+        }
+
+        // 如果两者缩进风格一致，无需转换
+        if ((targetUsesTab && patchUsesTab) || (targetUsesSpace && patchUsesSpace)) {
+            return cleanContent;
+        }
+
+        logger.info("Normalizing patch indentation: target={}, patch={}",
+                targetUsesTab ? "Tab" : "Spaces", patchUsesTab ? "Tab" : "Spaces");
+
+        return convertPatchIndentation(cleanContent, targetUsesTab);
+    }
+
+    /** 构建 git apply 命令，注入 -c core.autocrlf=false 和 core.eol=lf 解决 Windows CRLF 问题 */
+    private List<String> buildGitApplyCommand(String flag, String patchFile, int strip, boolean checkOnly) {
         List<String> cmd = new ArrayList<>();
+        // 强制禁用 autocrlf 并设置 eol=lf，确保 git apply 不会自动转换换行符
         cmd.add("git");
-        cmd.add("-c");
-        cmd.add("core.autocrlf=false");
+        cmd.add("-c"); cmd.add("core.autocrlf=false");
+        cmd.add("-c"); cmd.add("core.eol=lf");
         cmd.add("apply");
-        cmd.add(flag);
+        if (checkOnly) cmd.add("--check");
+        cmd.add("--ignore-whitespace");
         cmd.add("--recount");
+        if (flag != null && !flag.trim().isEmpty() && !flag.contains("--ignore-whitespace")) {
+            cmd.add(flag.trim());
+        }
         cmd.add("-p" + strip);
         cmd.add(patchFile);
         return cmd;
@@ -169,33 +259,8 @@ From 9f7a8c3d1b2e4f5a6c7d8e9f0a1b2c3d4e5f6a7b Mon Sep 17 00:00:00 2001
 From: Your Name <your.email@example.com>
 Date: Mon, 1 Jun 2026 10:00:00 +0800
 Subject: [PATCH] Comprehensive demo: all file operations in one patch
-
-This patch demonstrates every Git file operation that can appear in a
-patch file:
-- Add new regular file
-- Modify existing file
-- Delete file
-- Rename file
-- Copy file
-- Change file mode (permissions)
-- Add binary file
-- Add / modify symbolic link
----
- demo.txt          |  3 ++-
- newfile.txt       |  1 +
- oldfile.txt       |  1 -
- binary.png        |  Bin 0 -> 123 bytes
- link.lnk          |  1 +
- {script.sh => app/script.sh} |  2 +-
- README.md => README.txt      |  0
- mode change 100755 => 100644 script.sh
- create mode 100644 newfile.txt
- delete mode 100644 oldfile.txt
- create mode 100644 binary.png
- create mode 120000 link.lnk
- rename {script.sh => app/script.sh} (61%)
- copy README.md => README.txt (100%)
-
+<+>UTF-8
+===================================================================
 diff --git a/demo.txt b/demo.txt
 index 3b18e52..d00491f 100644
 --- a/demo.txt
@@ -322,7 +387,7 @@ index 8be128f..b2f7e6c
         if (patchContent == null || patchContent.trim().isEmpty()) {
             return ToolResult.builder().error("Patch content cannot be null or empty").build();
         }
-        patchContent = normalizeLineEndings(patchContent);
+        patchContent = normalizeWhitespace(patchContent);
 
         if (!patchContent.endsWith("\n")) {
             patchContent += "\n";
@@ -355,17 +420,47 @@ index 8be128f..b2f7e6c
             return ToolResult.builder().error("Working directory does not exist: " + workDir).build();
         }
 
+        // 缩进归一化：让 patch 的缩进风格与目标文件一致
+        patchContent = normalizePatchIndentation(patchContent, workDir, stripLevel);
+
         Path tempPatchFile = null;
         try {
             tempPatchFile = Files.createTempFile("patch_", ".patch");
-            Files.writeString(tempPatchFile, patchContent, StandardCharsets.UTF_8);
+            // 始终使用 byte[] 写入，避免 Windows 上 Files.writeString 自动将 \n 转为 \r\n
+            // 导致 .patch 文件包含 CRLF 而目标文件为 LF，造成 git apply 上下文不匹配
+            // 跨平台统一使用字节写入，确保 patch 文件内容与 patchContent 完全一致
+            byte[] patchBytes = patchContent.getBytes(StandardCharsets.UTF_8);
+            Files.write(tempPatchFile, patchBytes);
         } catch (IOException e) {
             return ToolResult.builder().error("Failed to create temp patch file: " + e.getMessage()).build();
         }
 
         try {
-            List<String> command = buildGitApplyCommand("--ignore-whitespace",
-                    tempPatchFile.toAbsolutePath().toString(), stripLevel);
+            // Step 1: 先执行 git apply --check 验证 patch 是否可应用，不实际修改文件
+            List<String> checkCommand = buildGitApplyCommand("",
+                    tempPatchFile.toAbsolutePath().toString(), stripLevel, true);
+            ProcessResult checkResult = executeProcess(checkCommand, workPath);
+            if (checkResult.exitCode != 0) {
+                String checkStderr = checkResult.stderr;
+                // 收集诊断信息帮助用户定位问题
+                String diagInfo = collectDiagnosticInfo(workPath, patchContent, checkStderr,
+                        "git apply --check 检查失败，patch 无法应用。请根据以下错误信息修改 patch 后重试。\n");
+                String errorMsg = "git apply --check 检查失败，patch 无法应用。\n\n"
+                        + "错误信息:\n" + checkStderr + "\n"
+                        + diagInfo;
+                logger.warn("git apply --check failed for patch, returning error to user");
+                return ToolResult.builder()
+                        .success(false)
+                        .error(errorMsg)
+                        .put("checkFailed", true)
+                        .put("checkStderr", checkStderr)
+                        .put("patchContent", patchContent)
+                        .build();
+            }
+
+            // Step 2: --check 通过后，执行实际的 git apply 应用 patch
+            List<String> command = buildGitApplyCommand("",
+                    tempPatchFile.toAbsolutePath().toString(), stripLevel, false);
             ProcessResult result = executeProcess(command, workPath);
             int exitCode = result.exitCode;
             StringBuilder stdout = new StringBuilder(result.stdout);
@@ -373,15 +468,8 @@ index 8be128f..b2f7e6c
 
             String rejectContent = handleRejectFiles(workPath);
 
+            // 先解析 patch 文件信息（重试逻辑中 tryConvertTargetFileIndentation 需要用到 patchFiles）
             List<PatchFileInfo> patchFiles = parsePatchFiles(patchContent, workDir, stripLevel);
-            Map<String, List<ModifiedLine>> allModifiedLines = new LinkedHashMap<>();
-            for (PatchFileInfo pf : patchFiles) {
-                Path fp = Paths.get(pf.filePath);
-                if (Files.exists(fp)) {
-                    List<ModifiedLine> lines = readModifiedLines(fp, pf);
-                    if (!lines.isEmpty()) allModifiedLines.put(pf.filePath, lines);
-                }
-            }
 
             if (exitCode != 0) {
                 String stderrLow = stderr.toString().toLowerCase();
@@ -390,6 +478,13 @@ index 8be128f..b2f7e6c
                     if (stderrLow.contains(rule.keyword)) {
                         matchedDesc = rule.desc;
                         logger.warn("git apply failed ({}), retrying with {}...", rule.desc, rule.flag);
+
+                    // 如果重试仍因缩进问题失败，尝试转换目标文件缩进
+                    if (rule.keyword.equals("patch does not apply") || rule.keyword.equals("does not match")) {
+                        boolean converted = tryConvertTargetFileIndentation(patchFiles);
+                        if (converted) logger.info("Converted target file indentation, retrying git apply...");
+                    }
+
                         warnings.append("Note: Retried with ").append(rule.flag)
                                 .append(" due to ").append(rule.desc).append(".\n");
                         exitCode = retryGitApply(workPath, tempPatchFile, stripLevel, stdout, stderr, rule.flag);
@@ -400,6 +495,19 @@ index 8be128f..b2f7e6c
                     stderr.append("\n===== DIAGNOSTIC INFO =====\n")
                           .append(collectDiagnosticInfo(workPath, patchContent, stderr.toString(),
                                   matchedDesc != null ? "Retry still failed. " : ""));
+                }
+            }
+
+            // 在 git apply 成功（或重试成功）后，重新读取修改行的内容
+            // 确保 patch 已实际应用到文件上，避免第一次失败但重试成功后读取到未修改的内容
+            Map<String, List<ModifiedLine>> allModifiedLines = new LinkedHashMap<>();
+            if (exitCode == 0) {
+                for (PatchFileInfo pf : patchFiles) {
+                    Path fp = Paths.get(pf.filePath);
+                    if (Files.exists(fp)) {
+                        List<ModifiedLine> lines = readModifiedLines(fp, pf);
+                        if (!lines.isEmpty()) allModifiedLines.put(pf.filePath, lines);
+                    }
                 }
             }
 
@@ -443,8 +551,15 @@ index 8be128f..b2f7e6c
     private int retryGitApply(Path workPath, Path tempPatchFile, int stripLevel,
                                StringBuilder stdout, StringBuilder stderr, String flag)
             throws IOException, InterruptedException {
+        // 重试时组合 flag：始终包含 --ignore-whitespace，再加上额外的 flag（如 --whitespace=fix）
+        String combinedFlag;
+        if (flag != null && !flag.isEmpty() && !flag.contains("--ignore-whitespace")) {
+            combinedFlag = "--ignore-whitespace " + flag;
+        } else {
+            combinedFlag = (flag != null && !flag.isEmpty()) ? flag : "--ignore-whitespace";
+        }
         ProcessResult result = executeProcess(
-                buildGitApplyCommand(flag, tempPatchFile.toAbsolutePath().toString(), stripLevel), workPath);
+                buildGitApplyCommand(combinedFlag, tempPatchFile.toAbsolutePath().toString(), stripLevel, false), workPath);
         stdout.setLength(0); stdout.append(result.stdout);
         stderr.setLength(0); stderr.append(result.stderr);
         return result.exitCode;
@@ -514,7 +629,9 @@ index 8be128f..b2f7e6c
             }
             Matcher hm = HUNK_HEADER_PATTERN.matcher(line);
             if (hm.matches() && current != null) {
-                current.hunks.add(new HunkRange(Integer.parseInt(hm.group(2)), 1));
+                int startLine = Integer.parseInt(hm.group(2));
+                int lineCount = hm.group(3) != null ? Integer.parseInt(hm.group(3)) : 1;
+                current.hunks.add(new HunkRange(startLine, lineCount));
             }
         }
         return files;
@@ -602,6 +719,142 @@ index 8be128f..b2f7e6c
             result.put(currentFilePath, new FileDiffContent(oldText.toString(), newText.toString()));
         }
         return result;
+    }
+
+    /**
+     * 检测文件的缩进风格（tab vs 空格）
+     */
+    private void detectFileIndentStyle(String filePath, boolean[] hasTab, boolean[] hasSpace) {
+        if (filePath == null || filePath.isEmpty()) return;
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path) || !Files.isRegularFile(path)) return;
+        try {
+            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+            for (String line : lines) {
+                if (line.isEmpty() || line.isBlank()) continue;
+                char first = line.charAt(0);
+                if (first == '\t') hasTab[0] = true;
+                else if (first == ' ') hasSpace[0] = true;
+                if (hasTab[0] && hasSpace[0]) break;
+            }
+        } catch (IOException e) {
+            logger.warn("Failed to detect indent style for {}: {}", filePath, e.getMessage());
+        }
+    }
+
+    /**
+     * 转换 patch 内容中的缩进。
+     * 将空格缩进转为 tab（或反之），保持缩进层级不变。
+     */
+    private String convertPatchIndentation(String patchContent, boolean toTab) {
+        StringBuilder result = new StringBuilder();
+        String[] lines = patchContent.split("\n", -1);
+        for (String line : lines) {
+            if (line.isEmpty()) {
+                result.append('\n');
+                continue;
+            }
+            char first = line.charAt(0);
+            // 只转换上下文行（空格开头）、删除行（-开头）和新增行（+开头）
+            if (first == ' ' || first == '-' || first == '+') {
+                String indent = extractLeadingWhitespace(line.substring(1));
+                String rest = line.substring(1 + indent.length());
+                String convertedIndent = convertIndent(indent, toTab);
+                result.append(first).append(convertedIndent).append(rest).append('\n');
+            } else {
+                result.append(line).append('\n');
+            }
+        }
+        return result.toString();
+    }
+
+    /** 提取行首空白（空格和tab） */
+    private String extractLeadingWhitespace(String s) {
+        int i = 0;
+        while (i < s.length() && (s.charAt(i) == ' ' || s.charAt(i) == '\t')) {
+            i++;
+        }
+        return s.substring(0, i);
+    }
+
+    /**
+     * 转换缩进：空格<->tab互转。
+     * toTab=true: 每4个空格转1个tab
+     * toTab=false: 每个tab转4个空格
+     */
+    private String convertIndent(String indent, boolean toTab) {
+        if (indent.isEmpty()) return indent;
+        if (toTab) {
+            // 空格 -> tab：每4个空格转1个tab
+            int spaceCount = 0;
+            for (char c : indent.toCharArray()) {
+                if (c == ' ') spaceCount++;
+                else if (c == '\t') spaceCount += 4;
+            }
+            int tabs = spaceCount / 4;
+            return "\t".repeat(Math.max(1, tabs));
+        } else {
+            // tab -> 空格：每个tab转4个空格
+            return indent.replace("\t", "    ");
+        }
+    }
+
+    /**
+     * 尝试转换目标文件的缩进（tab<->空格），以便 patch 能正确应用。
+     */
+    private boolean tryConvertTargetFileIndentation(List<PatchFileInfo> patchFiles) {
+        boolean converted = false;
+        for (PatchFileInfo pf : patchFiles) {
+            Path fp = Paths.get(pf.filePath);
+            if (!Files.exists(fp)) continue;
+            try {
+                String content = Files.readString(fp, StandardCharsets.UTF_8);
+                String[] lines = content.split("\n", -1);
+                boolean hasTab = false;
+                boolean hasSpace = false;
+                for (String line : lines) {
+                    if (line.isEmpty() || line.isBlank()) continue;
+                    char first = line.charAt(0);
+                    if (first == '\t') hasTab = true;
+                    else if (first == ' ') hasSpace = true;
+                    if (hasTab && hasSpace) break;
+                }
+                // 如果文件同时有 tab 和空格，不做自动转换（风险太大）
+                if (hasTab && hasSpace) continue;
+
+                String newContent;
+                if (hasTab && !hasSpace) {
+                    // 文件全是 tab -> 转为空格
+                    newContent = convertFileIndentation(content, false);
+                    Files.writeString(fp, newContent, StandardCharsets.UTF_8);
+                    converted = true;
+                    logger.info("Converted {} from Tab to Spaces for patch compatibility", pf.filePath);
+                } else if (hasSpace && !hasTab) {
+                    // 文件全是空格 -> 转为 tab
+                    newContent = convertFileIndentation(content, true);
+                    Files.writeString(fp, newContent, StandardCharsets.UTF_8);
+                    converted = true;
+                    logger.info("Converted {} from Spaces to Tab for patch compatibility", pf.filePath);
+                }
+            } catch (IOException e) {
+                logger.warn("Failed to convert indentation for {}: {}", pf.filePath, e.getMessage());
+            }
+        }
+        return converted;
+    }
+
+    /**
+     * 转换整个文件的缩进
+     */
+    private String convertFileIndentation(String content, boolean toTab) {
+        StringBuilder result = new StringBuilder();
+        String[] lines = content.split("\n", -1);
+        for (String line : lines) {
+            String indent = extractLeadingWhitespace(line);
+            String rest = line.substring(indent.length());
+            result.append(convertIndent(indent, toTab)).append(rest).append('\n');
+        }
+        return result.toString();
     }
 
     private static class RetryRule {
