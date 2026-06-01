@@ -54,6 +54,7 @@ import reactor.core.publisher.Sinks
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 private val logger = KotlinLogging.logger {}
 
@@ -83,6 +84,8 @@ class AgiAgentSession(
 ) : AgentSession {
     private val responseBuilder = StringBuilder()
     private val totalTokens = AtomicInteger(0)
+    private val completionTokens = AtomicInteger(0)
+    private val startTime = AtomicLong(0L)
 
     override val configOptions: List<SessionConfigOption>
         get() = listOf(
@@ -184,6 +187,7 @@ class AgiAgentSession(
         _meta: JsonElement?,
     ): Flow<Event> = flow {
         logger.info { "Processing prompt for session $sessionId" }
+        startTime.set(System.currentTimeMillis())
         val messages = content.toMutableList()
         try {
             // 检查第一个 ContentBlock 是否为命令（Text 类型且以 / 开头）
@@ -229,6 +233,7 @@ class AgiAgentSession(
             runnableConfig.context().put("requestId", requestId)
             runnableConfig.context().put(SESSION_ID_CONTEXT_KEY, sessionId)
             runnableConfig.context().putIfAbsent("totalTokens", 0)
+            runnableConfig.context().putIfAbsent("completionTokens", 0)
             runnableConfig.context().putIfAbsent("responseBuilder", responseBuilder)
             runnableConfig.context().putIfAbsent("isFirst", AtomicBoolean(true))
             runnableConfig.context().putIfAbsent("isFirstMessage", AtomicBoolean(true))
@@ -249,7 +254,12 @@ class AgiAgentSession(
                 emitAgentOutputEvents(output)
             }
             runnableConfig.context().put("totalTokens", totalTokens.get())
-            val chunk = "Token usage: total=${totalTokens.get()}"
+            runnableConfig.context().put("completionTokens", completionTokens.get())
+            val latency = System.currentTimeMillis() - startTime.get()
+            val duration = latency / 1000.0
+            val tokens = totalTokens.get()
+            val speed = if (duration > 0) String.format("%.2f", completionTokens.toDouble() / duration) else "0.00"
+            val chunk = "Token usage: total=${tokens}, duration=${duration}s, speed=${speed} tokens/s"
             logger.info { chunk }
             emit(
                 Event.SessionUpdateEvent(
@@ -319,6 +329,7 @@ class AgiAgentSession(
         // Text chunks -> AgentMessageChunk events
         if (output.tokenUsage != null) {
             totalTokens.addAndGet(output.tokenUsage.totalTokens ?: 0)
+            completionTokens.addAndGet(output.tokenUsage.completionTokens ?: 0)
         }
         if (output.chunk != null) {
             responseBuilder.append(output.chunk)
