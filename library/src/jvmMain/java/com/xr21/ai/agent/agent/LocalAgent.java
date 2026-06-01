@@ -104,6 +104,9 @@ public class LocalAgent {
             当前系统：{osName} 您只能执行当前系统平台默认存在的命令，使用当前用户系统语言:{language}回复用户
             对于编码任务 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
             使用Bash编译项目时只输出编译错误或成功信息
+            禁止使用过write_file编辑或重写已有文件！ 禁止使用Bash编辑文件
+            你只能使用edit_file_with_git_patch编辑文件！如果patch内容不正确 你需要重新生成新的patch直到成功应用patch
+            如果patch 应用有残留 使用git命令回退patch合并
             """;
     /**
      * 当前工作空间根目录，可在运行时更新
