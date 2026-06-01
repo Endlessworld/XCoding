@@ -40,13 +40,11 @@ public class WriteFileTool {
 
     // @formatter:off
     @Tool(name = "write_file", description = """
-        写入文件系统中的文件。
+        创建新文件,写入文件系统中的文件。
         Usage:
             - file_path参数必须是绝对路径，且必须在workspace范围内
             - 如果文件包含多级目录将自动创建所有父级目录,所以无需创建父级目录可直接写入文件
-            - 内容参数必须是字符串，长度必须小于500字符，未完成的部分使用edit_file继续添加
-            - write_file工具会创建新文件或覆写已存在的文件
-            - 写入文件时，内容将完全替代现有内容
+            - 内容参数必须是字符串，长度必须小于1000字符，未完成的部分使用edit_file_with_git_patch继续添加
         """)
     public Map<String, Object> writeFile(
             @JsonProperty(value = "filePath", required = true)

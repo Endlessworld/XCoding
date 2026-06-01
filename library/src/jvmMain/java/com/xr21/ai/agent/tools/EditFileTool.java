@@ -49,12 +49,14 @@ public class EditFileTool {
 
     // @formatter:off
     @Tool(name = "edit_file", description = """
+        通过精确字符串替换编辑现有文件
         Usage:
             - filePath: 文件的绝对路径
             - oldText: 要查找和替换的文本
             - newText: 用于替换的新文本
             - replace_all: 是否替换所有出现（默认false，仅替换第一个）
             - normalize_line_endings: 是否自动归一化换行符（默认true）
+            - 使用 edit_file 编辑文件内容时 以行为单位，一次最多不可超过15行
         """)
     public Map<String, Object> editFile(
             @JsonProperty(value = "filePath", required = true)

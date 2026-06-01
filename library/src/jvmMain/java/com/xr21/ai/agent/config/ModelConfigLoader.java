@@ -15,10 +15,10 @@
  */
 package com.xr21.ai.agent.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xr21.ai.agent.model.Config;
 import com.xr21.ai.agent.model.Config.ModelConfig;
 import com.xr21.ai.agent.model.Config.ProviderConfig;
+import com.xr21.ai.agent.utils.Json;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
@@ -41,7 +41,6 @@ public class ModelConfigLoader {
 
     private static final String DEFAULT_CONFIG_DIR = System.getProperty("user.home") + File.separator + ".agi_working";
     private static final String CONFIG_FILE_NAME = "models.json";
-    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 从默认路径加载模型配置
@@ -67,12 +66,11 @@ public class ModelConfigLoader {
         }
         try {
             String content = Files.readString(configPath, StandardCharsets.UTF_8);
-            // 解析为新格式（ModelsConfig 对象）
-            Config modelsConfig = objectMapper.readValue(content, Config.class);
+            Config modelsConfig = Json.to(content, Config.class);
             List<ModelConfig> resolvedConfigs = resolveModelConfigs(modelsConfig);
             log.info("Loaded {} model configurations from: {}", resolvedConfigs.size(), configPath);
             return resolvedConfigs;
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Failed to load model configurations from {}: {}", configPath, e.getMessage());
             return new ArrayList<>();
         }

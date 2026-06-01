@@ -374,9 +374,8 @@ class AgiAgentSession(
                                 kind = ToolKindFind.find(response.name()),
                                 status = if (resultData.success) ToolCallStatus.COMPLETED
                                 else ToolCallStatus.FAILED,
-                                content = listOf(
-                                    ToolCallContent.Content(ContentBlock.Text(response.responseData()))
-                                )
+                                content = resultData.toolCallContents,
+                                locations = resultData.locations,
                             )
                         )
                     )

@@ -107,7 +107,8 @@ public class ToolResult {
     }
 
     public ToolResult location(String path, Integer line) {
-        return location(BridgeKt.createToolCallLocation(path, line));
+        int lineValue = (line != null) ? line : 0;
+        return location(BridgeKt.createToolCallLocation(path, lineValue));
     }
 
     // Helper methods for common content types

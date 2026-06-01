@@ -33,7 +33,10 @@ import java.util.Map;
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
 /**
- * 从文件系统读取文件或目录的工具
+ * 文件系统读取工具类
+ * <p>
+ * 提供读取文件和目录的能力，支持批量读取、分页读取、Gitignore过滤等功能。
+ * 被Spring AI框架识别为工具方法，供LLM Agent调用。
  *
  * @author Endless
  */
@@ -41,7 +44,18 @@ public class ReadFileTool {
 
     // @formatter:off
     @Tool(name = "read_file", description = """
-        从文件系统读取文件或目录。如果是目录，则会递归读取该目录及其所有子目录下的文件。
+        【文件读取工具】
+        功能：从文件系统读取文件内容或递归读取目录下所有文件。
+
+        核心能力：
+        1. 批量读取：支持一次传入多个文件/目录路径，提升执行效率
+        2. 路径处理：以"/"开头的路径会自动拼接WORKSPACE_ROOT前缀
+        3. 目录递归：自动遍历目录及其所有子目录，跳过.gitignore匹配的文件
+        4. 分页读取：通过offset和limit参数控制读取范围，默认读取前500行
+        5. 行号显示：输出格式类似"cat -n"，每行带6位行号
+        6. 超长截断：单行超过2000字符自动截断，避免输出爆炸
+        7. 容错处理：路径不存在、权限不足、空文件等场景均有友好提示
+
         你可以使用这个工具直接访问任何文件或目录、且一次性可以读取多个文件或目录。
         假设这个工具能够读取机器上的所有文件。如果用户提供了文件/目录路径，则假设该路径有效。
         读取不存在的文件/目录是可以的;将返回错误。
@@ -64,30 +78,38 @@ public class ReadFileTool {
         """)
     public Map<String, Object> readFile(
             @JsonProperty(value = "filePaths", required = true)
-            @JsonPropertyDescription("List of absolute paths of files or directory to read")
+            @JsonPropertyDescription("要读取的文件或目录的绝对路径列表，支持批量传入多个路径")
             List<String> filePaths,
             @JsonProperty(value = "offset")
-            @JsonPropertyDescription("Line offset to start reading from (default: 0)")
+            @JsonPropertyDescription("起始行偏移量（从0开始计数），默认从文件开头读取")
             Integer offset,
             @JsonProperty(value = "limit")
-            @JsonPropertyDescription("Maximum number of lines to read (default: 500)")
+            @JsonPropertyDescription("最大读取行数，默认500行，防止一次性读取过大文件")
             Integer limit
     ) { // @formatter:on
+        // 参数校验：路径列表不能为空
         if (filePaths == null || filePaths.isEmpty()) {
             return ToolResult.builder()
                     .error("No file or directory paths provided")
                     .build();
         }
 
+        // 使用StringBuilder累积所有读取结果，最后统一写入ToolResult
         StringBuilder content = new StringBuilder();
+        // 构建结果对象，支持链式调用设置content、metadata、location等
         ToolResult result = ToolResult.builder();
+        // 统计成功读取的文件数量（目录递归的不计入）
         int filesRead = 0;
 
+        // 遍历每个传入的路径，逐个处理
         for (String pathStr : filePaths) {
             try {
+                // 跳过空字符串路径
                 if (!StringUtils.hasText(pathStr)) {
                     continue;
                 }
+                // 路径转换：以"/"开头的绝对路径，拼接WORKSPACE_ROOT作为工作空间相对路径
+                // 例如："/src/main" -> WORKSPACE_ROOT + "/src/main"
                 if (pathStr.startsWith("/")) {
                     pathStr = WORKSPACE_ROOT + File.pathSeparator + pathStr.replaceFirst("/", "");
                 }
@@ -97,6 +119,7 @@ public class ReadFileTool {
                     continue;
                 }
 
+                // 根据路径类型分发处理：目录递归读取，文件直接读取
                 if (Files.isDirectory(path)) {
                     processDirectory(path, content, offset, limit, result);
                 } else {
@@ -104,10 +127,13 @@ public class ReadFileTool {
                     filesRead++;
                 }
             } catch (IOException e) {
+                // IO异常：文件不存在、读取失败等
                 content.append("reading path failed").append(pathStr).append(": ").append(e.getMessage()).append("\n\n");
             } catch (SecurityException e) {
+                // 安全异常：权限不足（如尝试读取/root目录）
                 content.append("Permission denied when accessing path: ").append(pathStr).append("\n\n");
             } catch (Exception e) {
+                // 兜底异常：捕获所有未预期的错误，防止单个路径失败影响其他路径
                 content.append("Unexpected error processing path ")
                         .append(pathStr)
                         .append(": ")
@@ -116,15 +142,23 @@ public class ReadFileTool {
             }
         }
 
+        // 设置最终结果：去除尾部空白，附加元数据
+        // metadata供调用方统计，如Agent判断是否需要继续读取
         result.content(content.toString().trim());
         result.metadata("filesRead", filesRead);
         return result.build();
     }
 
     private void processDirectory(Path dir, StringBuilder result, Integer offset, Integer limit, ToolResult toolResult) throws IOException {
+        // 标记目录是否为空（无文件或全被gitignore过滤）
         boolean isEmpty = true;
 
-        // Create gitignore utility for filtering files in this directory
+        /*
+         * Gitignore过滤机制：
+         * 1. 在每个目录下查找.gitignore文件（支持多层级）
+         * 2. 使用单例模式缓存解析结果，避免重复读取
+         * 3. 被忽略的文件（如node_modules、.git）自动跳过
+         */
         GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(dir);
 
         try (var paths = Files.walk(dir)) {
@@ -143,16 +177,28 @@ public class ReadFileTool {
 
     private void processFile(Path file, StringBuilder result, Integer offset, Integer limit, ToolResult toolResult) throws IOException {
         try {
+            // 一次性读取文件所有行到内存，适用于中小文件（大文件需配合limit控制）
             List<String> allLines = Files.readAllLines(file);
+            // 获取绝对路径用于输出和位置标记
             String absolutePath = file.toAbsolutePath().toString();
 
             if (allLines.isEmpty()) {
                 result.append("File is empty: ").append(file).append("\n\n");
-                // 添加位置信息 - 空文件从第1行开始
+                /*
+                 * 位置标记机制：
+                 * 即使文件为空，也记录位置信息（行号=1），
+                 * 方便Agent后续写入操作知道目标文件位置。
+                 */
                 toolResult.location(absolutePath, 1);
                 return;
             }
 
+            /*
+             * 分页参数计算：
+             * - start: 起始索引，默认0（第1行），负数保护
+             * - maxLimit: 最大行数，默认500，防止输出过长
+             * - end: 实际结束索引，不超过文件总行数
+             */
             int start = offset != null ? Math.max(0, offset) : 0;
             int maxLimit = limit != null ? limit : 500;
             int end = Math.min(start + maxLimit, allLines.size());
@@ -180,6 +226,7 @@ public class ReadFileTool {
                     result.append(String.format("%6d\t%s\n", start + i + 1, line));
                 }
                 if (end < allLines.size()) {
+                    // 未读完提示：显示剩余行数和总字符数，引导Agent继续分页读取
                     result.append(String.format("\n... %d more lines not shown (total: %d lines, %d characters)\n", allLines.size() - end, allLines.size(), allLines.stream()
                             .mapToInt(String::length)
                             .sum()));
@@ -187,12 +234,14 @@ public class ReadFileTool {
                     result.append("\nTotal: ")
                             .append(allLines.size())
                             .append(" lines, ")
+                            // 计算总字符数，帮助Agent评估文件规模
                             .append(allLines.stream().mapToInt(String::length).sum())
                             .append(" characters\n");
                 }
             }
         } catch (IOException e) {
             result.append("Error reading file ").append(file).append(": ").append(e.getMessage()).append("\n\n");
+            // 向上抛出IO异常，由外层统一处理
             throw e;
         } catch (Exception e) {
             result.append("Unexpected error processing file ")
@@ -200,6 +249,7 @@ public class ReadFileTool {
                     .append(": ")
                     .append(e.getMessage())
                     .append("\n\n");
+            // 向上抛出其他异常，确保错误不被静默吞掉
             throw e;
         }
     }

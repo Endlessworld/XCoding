@@ -139,6 +139,7 @@ mavenPublishing {
 
 // 1. 确保基本的 jar 任务存在（打包项目类，不含依赖）
 tasks.named<Jar>("jar") {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes["Main-Class"] = "com.xr21.ai.agent.AgentApplication"
     }

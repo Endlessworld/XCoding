@@ -16,6 +16,7 @@
 package com.xr21.ai.agent.utils;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,9 +31,13 @@ public abstract class Json {
     private static final JsonMapper jsonMapper;
 
     static {
-        jsonMapper = JsonMapper.builder().addModules(ObjectMapper.findModules()).build();
-        jsonMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        jsonMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        jsonMapper = JsonMapper.builder()
+                .addModules(ObjectMapper.findModules())
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .serializationInclusion(JsonInclude.Include.NON_NULL)
+                .configure(JsonParser.Feature.ALLOW_COMMENTS, true)
+                .configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
+                .build();
     }
 
 

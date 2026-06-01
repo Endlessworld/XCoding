@@ -138,10 +138,10 @@ public class FilesystemInterceptor extends ModelInterceptor {
                     ### 可用工具：
                         - 'ls'：目录中带有深度控制的文件列表
                         - 'read_file'：读取文件内容（支持分页）
-                        - “write_file”：创建或覆盖文件（请谨慎使用）
-                        - 'edit_file'：通过精确字符串替换编辑现有文件
+                        - “write_file”：创建文件（请谨慎使用）
                         - 'glob'：查找与模式匹配的文件（例如，'**/*.java'）
                         - “grep”：在文件中搜索文本，查找内容并定位问题（禁止执行**/*类似搜索，使用明确的关键字进行检索）
+                        - 每次编辑优先使用edit_file_with_git_patch编辑多次失败后回退到edit_file，但是对于下次编辑项依然edit_file_with_git_patch优先
                 
                 使用 ls 查看指定目录的文件列表
                     ### 最佳实践：
@@ -149,9 +149,8 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         2. 对于大文件使用带有偏移/限制的“read_file”
                         3. 在重大编辑前创建备份
                         4. 使用描述性路径，避免歧义名称
-                        5. 使用 edit_file 编辑文件内容时 以行为单位，一次最多不可超过15行
-                        6. 创建文件时写入的文件内容 务必小于500字符，未完成的部分使用edit_file继续添加 否则将创建失败！
-                        7. 通过并行工具调用edit_file,write_file实现同时读取或写入多个文件加快执行效率
+                        6. 创建文件时写入的文件内容 务必小于500字符，未完成的部分使用edit_file_with_git_patch继续添加 否则将创建失败！
+                        7. 通过并行工具调用write_file实现同时写入多个文件加快执行效率
                     ### 路径验证：
                         - 所有路径都经过安全性验证
                         - 路径穿越尝试被阻断
@@ -174,6 +173,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
         if (!readOnly) {
             toolObjects.add(new WriteFileTool());
             toolObjects.add(new EditFileTool());
+            toolObjects.add(new EditFileWithGitPatchTool(allowedPrefixes));
         }
 
         // Create provider with all tool objects
@@ -315,6 +315,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
                     normalizedRoot = normalizedRoot + "/";
                 }
                 this.addAllowedPrefix(normalizedRoot);
+                this.addAllowedPrefix(workspaceRoot);
             }
             return this;
         }

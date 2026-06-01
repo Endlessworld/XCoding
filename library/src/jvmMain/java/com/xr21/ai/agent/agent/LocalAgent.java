@@ -27,6 +27,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.hook.skills.SkillsAgentHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
+import com.alibaba.cloud.ai.graph.agent.interceptor.modelretry.ModelRetryInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
@@ -60,6 +61,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -99,8 +101,9 @@ public class LocalAgent {
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
-            当前系统：{osName}
+            当前系统：{osName} 您只能执行当前系统平台默认存在的命令，使用当前用户系统语言:{language}回复用户
             对于编码任务 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+            使用Bash编译项目时只输出编译错误或成功信息
             """;
     /**
      * 当前工作空间根目录，可在运行时更新
@@ -149,7 +152,7 @@ public class LocalAgent {
     }
 
     private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel) {
-        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(10240000)  // 优化：降低到32k，提前触发优化
+        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(262144)  // 优化：降低到32k，提前触发优化
                 .clearAtLeast(15000)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
                 .tokenCounter(new DefaultTokenCounter()).clearToolInputs(true)  // 清理工具输入
@@ -180,11 +183,18 @@ public class LocalAgent {
 //                        .build())
                 .includeGeneralPurpose(true)  // 同时包含通用Worker
                 .build();
+        ModelRetryInterceptor retryInterceptor = ModelRetryInterceptor.builder()
+                .maxAttempts(3)
+                .initialDelay(1000)
+                .maxDelay(10000)
+                .backoffMultiplier(2.0)
+                .build();
         List<Interceptor> interceptors = new ArrayList<>();
         interceptors.add(contextEditingInterceptor);
         interceptors.add(largeResultEvictionInterceptor);
         interceptors.add(toolRetryInterceptor);
         interceptors.add(filesystemInterceptor);
+//        interceptors.add(retryInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
         if (runnableConfig.context().get("mode") instanceof String mode && mode.equalsIgnoreCase("Workers")) {
@@ -221,7 +231,9 @@ public class LocalAgent {
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
         List<Hook> hooks = getHooks(runnableConfig);
         // 使用 PromptTemplate 渲染指令
-        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "osName", System.getProperty("os.name").toLowerCase())).build().render();
+        Locale locale = Locale.getDefault();
+        String displayName = locale.getDisplayLanguage();
+        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "osName", System.getProperty("os.name").toLowerCase(),"language",displayName)).build().render();
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
         if (chatModel.getDefaultOptions().getModel().contains("deepseek-v4")) {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));
