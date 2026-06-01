@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
 import java.io.IOException;
@@ -31,9 +32,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
+import static com.xr21.ai.agent.utils.AcpProgressUtil.sendProgress;
 
 /**
  * 在文件中搜索文本模式的工具
@@ -52,6 +55,7 @@ public class GrepTool {
         - The pattern parameter is the text to search for (literal string, not regex)
         - The path parameter filters which directory to search in
         - The glob parameter accepts a glob pattern to filter which files to search
+        - Real-time progress and matches are pushed via ACP protocol during search
 
         Examples:
         - Search all files: `grep(pattern="TODO")`
@@ -69,28 +73,47 @@ public class GrepTool {
             String glob,
             @JsonProperty(value = "outputMode")
             @JsonPropertyDescription("Output format: 'files_with_matches', 'content', or 'count' (default: 'files_with_matches')")
-            String outputMode
+            String outputMode,
+            ToolContext toolContext
     ) { // @formatter:on
         try {
+            sendProgress(toolContext, "🔍 Searching for pattern: \"" + pattern + "\"...<br/>");
+
             Path searchPath = path != null ? Paths.get(path) : Paths.get(WORKSPACE_ROOT);
             List<String> matches = new ArrayList<>();
             List<ToolCallLocation> locations = new ArrayList<>();
             Map<String, Integer> fileMatchCounts = new ConcurrentHashMap<>();
             AtomicInteger matchCounter = new AtomicInteger(0);
+            AtomicLong fileCounter = new AtomicLong(0);
 
             PathMatcher globMatcher = glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + glob) : null;
 
             GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(searchPath);
 
-            Files.walk(searchPath)
+            // First pass: count total files for progress reporting
+            long totalFiles = Files.walk(searchPath)
                     .parallel()
+                    .filter(Files::isRegularFile)
+                    .filter(p -> !gitignoreUtil.isIgnored(p))
+                    .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))
+                    .count();
+            sendProgress(toolContext, "📁 Scanning " + totalFiles + " files for \"" + pattern + "\"...<br/>");
+
+            // Second pass: search with progress reporting
+            Files.walk(searchPath)
                     .filter(Files::isRegularFile)
                     .filter(p -> !gitignoreUtil.isIgnored(p))
                     .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))
                     .forEach(p -> {
                         if (matchCounter.get() >= MAX_RESULTS) {
                             return;
+                        }
+                        long scanned = fileCounter.incrementAndGet();
+                        // Report progress every 10 files or at 25%/50%/75%/100%
+                        if (scanned % 10 == 0 || scanned == totalFiles) {
+                            sendProgress(toolContext, "  Progress: " + scanned + "/" + totalFiles
+                                    + " files, " + matchCounter.get() + " matches found<br/>");
                         }
                         try {
                             String absolutePath = p.toAbsolutePath().toString();
@@ -117,6 +140,9 @@ public class GrepTool {
                                                     if (!fileAdded[0]) {
                                                         matchEntry = p.toString();
                                                         fileAdded[0] = true;
+                                                        // Push each matched file in real-time
+                                                        sendProgress(toolContext, "  ✅ Match in: "
+                                                                + p.getFileName() + "<br/>");
                                                     } else {
                                                         return;
                                                     }
@@ -146,6 +172,14 @@ public class GrepTool {
                             // Ignore file read errors (including encoding errors)
                         }
                     });
+
+            // Send final summary
+            if (matchCounter.get() == 0) {
+                sendProgress(toolContext, "❌ No matches found for pattern: \"" + pattern + "\"<br/>");
+            } else {
+                sendProgress(toolContext, "✅ Search complete: " + matchCounter.get()
+                        + " matches in " + fileMatchCounts.size() + " files<br/>");
+            }
 
             ToolResult result = ToolResult.builder();
 

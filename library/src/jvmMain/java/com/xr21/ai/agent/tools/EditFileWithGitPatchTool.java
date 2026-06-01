@@ -164,18 +164,121 @@ public class EditFileWithGitPatchTool {
 
         二、完整示例
         ---
-        diff --git a/src/Example.java b/src/Example.java
-        --- a/src/Example.java
-        +++ b/src/Example.java
-        @@ -10,7 +10,7 @@ public class Example {
-             int oldVar = 0;
-        -    System.out.println("old line");
-        +    System.out.println("new line");
-             // unchanged context
-        @@ -20,12 +20,15 @@ public class Example {
-             // more context
-        +    // this is a new addition
-             // end of method
+        <patch_examples>
+From 9f7a8c3d1b2e4f5a6c7d8e9f0a1b2c3d4e5f6a7b Mon Sep 17 00:00:00 2001
+From: Your Name <your.email@example.com>
+Date: Mon, 1 Jun 2026 10:00:00 +0800
+Subject: [PATCH] Comprehensive demo: all file operations in one patch
+
+This patch demonstrates every Git file operation that can appear in a
+patch file:
+- Add new regular file
+- Modify existing file
+- Delete file
+- Rename file
+- Copy file
+- Change file mode (permissions)
+- Add binary file
+- Add / modify symbolic link
+---
+ demo.txt          |  3 ++-
+ newfile.txt       |  1 +
+ oldfile.txt       |  1 -
+ binary.png        |  Bin 0 -> 123 bytes
+ link.lnk          |  1 +
+ {script.sh => app/script.sh} |  2 +-
+ README.md => README.txt      |  0
+ mode change 100755 => 100644 script.sh
+ create mode 100644 newfile.txt
+ delete mode 100644 oldfile.txt
+ create mode 100644 binary.png
+ create mode 120000 link.lnk
+ rename {script.sh => app/script.sh} (61%)
+ copy README.md => README.txt (100%)
+
+diff --git a/demo.txt b/demo.txt
+index 3b18e52..d00491f 100644
+--- a/demo.txt
++++ b/demo.txt
+@@ -1,2 +1,3 @@
+ Hello, world!
+ This file is modified.
++Added line to demonstrate modification.
+
+diff --git a/newfile.txt b/newfile.txt
+new file mode 100644
+index 0000000..257cc56
+--- /dev/null
++++ b/newfile.txt
+@@ -0,0 +1 @@
++This is a brand new file.
+
+diff --git a/oldfile.txt b/oldfile.txt
+deleted file mode 100644
+index e69de29..0000000
+--- a/oldfile.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-This file will be deleted.
+
+diff --git a/script.sh b/app/script.sh
+similarity index 61%
+rename from script.sh
+rename to app/script.sh
+index 8be128f..b2f7e6c 100755
+--- a/script.sh
++++ b/app/script.sh
+@@ -1,3 +1,3 @@
+ #!/bin/bash
+-echo "Old path"
++echo "Moved to app/ and modified"
+
+diff --git a/README.md b/README.txt
+similarity index 100%
+copy from README.md
+copy to README.txt
+index d03e242..d03e242 100644
+--- a/README.md
++++ b/README.txt
+@@ -1 +1 @@
+-# README (copied)
++# README (copied)
+
+diff --git a/binary.png b/binary.png
+new file mode 100644
+index 0000000..4a88ef4
+--- /dev/null
++++ b/binary.png
+@@ -0,0 +1 @@
++GIT binary patch
++literal 123
++zcmZ2X%!T>2_s0aJH8Gmt<2Xj#tB`rT1#3Ld4KJ9QPz~sxV`vBPt;{Wsw8zKw
++PK^r(2Lwx|p6Fp1k
++
++literal 0
++HcmV?d00001
++
+
+diff --git a/link.lnk b/link.lnk
+new file mode 120000
+index 0000000..9f7a8c3
+--- /dev/null
++++ b/link.lnk
+@@ -0,0 +1 @@
++target_file.txt
+\\ No newline at end of file
+
+diff --git a/script.sh b/script.sh
+old mode 100755
+new mode 100644
+index 8be128f..b2f7e6c
+--- a/script.sh
++++ b/script.sh
+@@ -1,3 +1,3 @@
+ #!/bin/bash
+-echo "Old path"
++echo "Mode changed from 755 to 644
+</patch_examples>
 
         三、注意事项
         ---
@@ -187,7 +290,7 @@ public class EditFileWithGitPatchTool {
         6. 文件删除：--- a/path/to/File.java 和 +++ /dev/null
         7. 末尾换行：patch 文件必须以换行符结尾，不可遗漏
         8. 多文件修改：可在同一个 patch 中包含多个文件，用文件头分隔
-
+        9. 参考patch_examples中的样例
         四、常见失败原因
         ---
         - 上下文行与目标文件不匹配（最常见）

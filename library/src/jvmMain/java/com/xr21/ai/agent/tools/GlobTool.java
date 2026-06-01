@@ -21,7 +21,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
+import com.xr21.ai.agent.utils.AcpProgressUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
 import java.io.IOException;
@@ -32,6 +34,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
+import static com.xr21.ai.agent.utils.AcpProgressUtil.sendProgress;
 
 /**
  * 查找匹配 glob 模式的文件的工具
@@ -48,6 +51,7 @@ public class GlobTool {
         Usage:
         - Supports standard glob patterns: `*` (any characters), `**` (any directories), `?` (single character)
         - Returns a list of absolute file paths that match the pattern (maximum 25 results)
+        - Real-time progress is pushed via ACP protocol during search
 
         Examples:
         - `**/*.java` - Find all Java files
@@ -57,25 +61,51 @@ public class GlobTool {
     public Map<String, Object> glob(
             @JsonProperty(value = "pattern", required = true)
             @JsonPropertyDescription("The glob pattern to match files")
-            String pattern
+            String pattern,
+            ToolContext toolContext
     ) { // @formatter:on
         try {
+            sendProgress(toolContext, "🔍 Searching for pattern: " + pattern + "...<br/>");
+
             Path basePathObj = Paths.get(WORKSPACE_ROOT);
             PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);
 
             // Create gitignore utility for filtering
             GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(basePathObj);
 
-            // Use parallel stream for parallel processing
-            List<Path> matchedPaths = Files.walk(basePathObj)
+            // Count total files for progress reporting
+            List<Path> allFiles = Files.walk(basePathObj)
                     .parallel()
                     .filter(Files::isRegularFile)
                     .filter(path -> !gitignoreUtil.isIgnored(path))
+                    .collect(Collectors.toList());
+            sendProgress(toolContext, "📁 Scanning " + allFiles.size() + " files for pattern: " + pattern + "<br/>");
+
+            // Match files against pattern
+            List<Path> matchedPaths = allFiles.parallelStream()
                     .filter(path -> {
                         Path relativePath = basePathObj.relativize(path);
                         return matcher.matches(relativePath) || matcher.matches(path);
                     })
+                    .sorted()
                     .collect(Collectors.toList());
+
+            // Report matching results via ACP in real-time
+            if (matchedPaths.isEmpty()) {
+                sendProgress(toolContext, "❌ No files found matching pattern: " + pattern + "<br/>");
+            } else {
+                sendProgress(toolContext, "✅ Found " + matchedPaths.size() + " file(s) matching: " + pattern + "<br/>");
+                int previewCount = Math.min(matchedPaths.size(), 5);
+                StringBuilder preview = new StringBuilder("📄 Matches:<br/>");
+                for (int i = 0; i < previewCount; i++) {
+                    String relPath = basePathObj.relativize(matchedPaths.get(i)).toString();
+                    preview.append("  ").append(relPath).append("\n");
+                }
+                if (matchedPaths.size() > previewCount) {
+                    preview.append("  ... and ").append(matchedPaths.size() - previewCount).append(" more<br/>");
+                }
+                sendProgress(toolContext, preview.toString());
+            }
 
             // Limit results to max 25
             int maxResults = 25;
