@@ -58,7 +58,6 @@ import org.springframework.util.CollectionUtils;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -100,7 +99,6 @@ public class LocalAgent {
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
-            当前时间：{currentTime}
             当前系统：{osName}
             对于编码任务 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
             """;
@@ -151,7 +149,7 @@ public class LocalAgent {
     }
 
     private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel) {
-        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(65536)  // 优化：降低到32k，提前触发优化
+        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(10240000)  // 优化：降低到32k，提前触发优化
                 .clearAtLeast(15000)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
                 .tokenCounter(new DefaultTokenCounter()).clearToolInputs(true)  // 清理工具输入
@@ -219,13 +217,11 @@ public class LocalAgent {
         log.info("Building LocalAgent for workspace: {}", cwd);
         WORKSPACE_ROOT = cwd;
         log.debug("Setting workspace root to: {}", WORKSPACE_ROOT);
-
-
         ChatModel chatModel = getChatModel(runnableConfig);
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
         List<Hook> hooks = getHooks(runnableConfig);
         // 使用 PromptTemplate 渲染指令
-        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "currentTime", LocalDateTime.now().toString(), "osName", System.getProperty("os.name").toLowerCase())).build().render();
+        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "osName", System.getProperty("os.name").toLowerCase())).build().render();
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
         if (chatModel.getDefaultOptions().getModel().contains("deepseek-v4")) {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));

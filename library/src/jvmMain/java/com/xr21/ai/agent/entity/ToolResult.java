@@ -51,7 +51,7 @@ public class ToolResult {
     }
 
     public static ToolCallContent createDiffContent(String path, String oldText, String newText) {
-        return new ToolCallContent.Diff(path, oldText, newText,null);
+        return new ToolCallContent.Diff(path, newText, oldText, null);
     }
 
     public static ToolCallContent createTerminalContent(String terminalId) {
