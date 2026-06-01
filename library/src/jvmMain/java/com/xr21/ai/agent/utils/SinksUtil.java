@@ -36,6 +36,7 @@ import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+import java.util.function.Consumer;
 
 /**
  *
@@ -65,9 +66,30 @@ public class SinksUtil {
     }
 
     public static Flux<AgentOutput<Object>> sinksOutput(Flux<NodeOutput> outputFlux) {
+        return sinksOutput(outputFlux, null);
+    }
+
+    /**
+     * 创建 AgentOutput Flux，并通过 sinkConsumer 回调暴露内部 Sink，
+     * 以便外部可以在取消时发送 complete 信号终止流。
+     *
+     * @param outputFlux    源 NodeOutput Flux
+     * @param sinkConsumer  用于注册内部 Sink 的回调，可为 null
+     * @return AgentOutput Flux
+     */
+    public static Flux<AgentOutput<Object>> sinksOutput(Flux<NodeOutput> outputFlux, Consumer<Sinks.Many<AgentOutput<Object>>> sinkConsumer) {
         Sinks.Many<AgentOutput<Object>> sink = Sinks.many().unicast().onBackpressureBuffer();
+        if (sinkConsumer != null) {
+            sinkConsumer.accept(sink);
+        }
         processStream(outputFlux, sink, SinksUtil::buildContent);
-        return buildFlux(sink.asFlux());
+        Flux<AgentOutput<Object>> resultFlux = buildFlux(sink.asFlux());
+        // 当结果 Flux 被取消时（订阅者取消），也发送 complete 信号给 sink
+        // 以终止内部 processStream 中可能仍在运行的订阅
+        return resultFlux.doOnCancel(() -> {
+            logger.info("[SinksUtil] Flux cancelled, emitting complete to sink");
+            sink.tryEmitComplete();
+        });
     }
 
     private static <T> void processStream(Flux<NodeOutput> outputFlux, Sinks.Many<T> sink, java.util.function.Function<NodeOutput, T> mapper) {

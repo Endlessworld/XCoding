@@ -41,6 +41,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.serialization.json.JsonElement
 import org.apache.commons.lang3.StringUtils
 import org.springframework.ai.chat.messages.AssistantMessage
@@ -55,6 +56,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+
 
 private val logger = KotlinLogging.logger {}
 
@@ -188,8 +190,10 @@ class AgiAgentSession(
     ): Flow<Event> = flow {
         logger.info { "Processing prompt for session $sessionId" }
         startTime.set(System.currentTimeMillis())
-        val messages = content.toMutableList()
+        val cancelledFlag = AtomicBoolean(false)
+        runnableConfig.context().put("cancelled", cancelledFlag)
         try {
+            val messages = content.toMutableList()
             // 检查第一个 ContentBlock 是否为命令（Text 类型且以 / 开头）
             if (content.isNotEmpty() && content.first() is ContentBlock.Text) {
                 val firstText = (content.first() as ContentBlock.Text).text
@@ -230,8 +234,10 @@ class AgiAgentSession(
 
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
             val requestId = "request_${System.currentTimeMillis()}_$sessionId"
+            val executionThread = Thread.currentThread()
             runnableConfig.context().put("requestId", requestId)
             runnableConfig.context().put(SESSION_ID_CONTEXT_KEY, sessionId)
+            runnableConfig.context().put("executionThread", executionThread)
             runnableConfig.context().putIfAbsent("totalTokens", 0)
             runnableConfig.context().putIfAbsent("completionTokens", 0)
             runnableConfig.context().putIfAbsent("responseBuilder", responseBuilder)
@@ -248,11 +254,31 @@ class AgiAgentSession(
                 logger.info { "disposable dispose" }
                 agentSink.tryEmitComplete()
             })
+
+            // Register cancellable request so cancel() can find and cancel it
+            val cancellableRequest = CancellableRequest(
+                requestId,
+                sessionId as SessionId,
+                executionThread,
+                recursiveFlux
+            )
+            cancellableRequest.setFluxDisposable(disposable)
+            // 将 agentSink 注册到 CancellableRequest，以便 cancel() 时发送 complete 信号
+            // 从而立即终止 toIterable() 迭代器的阻塞等待
+            cancellableRequest.setAgentSink(agentSink)
+            activeRequests[requestId] = cancellableRequest
+
             val agentIterator = agentSink.asFlux().toIterable().iterator()
-            while (agentIterator.hasNext() && !disposable.isDisposed) {
+            while (agentIterator.hasNext()
+                && !disposable.isDisposed
+                && !cancellableRequest.cancelled
+                && currentCoroutineContext().isActive
+            ) {
                 val output = agentIterator.next()
+                if (cancellableRequest.cancelled || !currentCoroutineContext().isActive) break
                 emitAgentOutputEvents(output)
             }
+            activeRequests.remove(requestId)
             runnableConfig.context().put("totalTokens", totalTokens.get())
             runnableConfig.context().put("completionTokens", completionTokens.get())
             val latency = System.currentTimeMillis() - startTime.get()
@@ -282,12 +308,21 @@ class AgiAgentSession(
 
     override suspend fun cancel() {
         logger.info { "Cancellation requested for session: $sessionId" }
-        activeRequests.values.forEach { request ->
-            if (request.sessionId == sessionId) {
+        // Take a snapshot of keys to avoid concurrent modification during iteration
+        val requestIdsToCancel = activeRequests.filterValues { request ->
+            request.sessionId == sessionId
+        }.keys.toList()
+        for (requestId in requestIdsToCancel) {
+            val request = activeRequests[requestId]
+            if (request != null) {
+                // 先 dispose 订阅（会级联取消 recursiveFlux），再发送 complete 信号给 agentSink
+                // 确保上游 Flux 先停止发射，再通知下游迭代器结束
                 request.cancel()
-                activeRequests.remove(request.requestId)
+                activeRequests.remove(requestId)
             }
         }
+
+        logger.info { "Cancelled ${requestIdsToCancel.size} active request(s) for session: $sessionId" }
     }
 
     /**

@@ -20,6 +20,7 @@ import com.xr21.ai.agent.tools.ShellTools;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,8 @@ public class CancellableRequest {
     private final Object lock = new Object();
     public volatile boolean cancelled;
     private Disposable fluxDisposable;
+    private Sinks.Many<?> agentSink;
+    private final List<Sinks.Many<?>> recursiveSinks = new ArrayList<>();
 
     public CancellableRequest(String requestId, SessionId sessionId, Thread executionThread, Flux<?> flux) {
         this.requestId = requestId;
@@ -58,6 +61,33 @@ public class CancellableRequest {
 
     public void setFluxDisposable(Disposable disposable) {
         this.fluxDisposable = disposable;
+    }
+
+    @SuppressWarnings("rawtypes")
+    public void setAgentSink(Sinks.Many sink) {
+        synchronized (lock) {
+            this.agentSink = sink;
+            log.info("[CancellableRequest] AgentSink registered for request: {}", requestId);
+        }
+    }
+
+    /**
+     * 注册一个递归 Sink（来自 expand() 内部创建的 Flux）。
+     * 取消时会向所有注册的递归 Sink 发送 complete 信号，
+     * 以终止 expand() 链中正在等待的递归 Flux。
+     */
+    @SuppressWarnings("rawtypes")
+    public void addRecursiveSink(Sinks.Many sink) {
+        synchronized (lock) {
+            if (!cancelled) {
+                recursiveSinks.add(sink);
+                log.info("[CancellableRequest] Recursive sink registered for request: {}, total: {}", requestId, recursiveSinks.size());
+            } else {
+                // 请求已经取消，立即终止这个新创建的 Sink
+                log.info("[CancellableRequest] Request already cancelled, emitting complete to new recursive sink for request: {}", requestId);
+                sink.tryEmitComplete();
+            }
+        }
     }
 
     public void addShellSession(String shellId, ShellTools.ShellSession session) {
@@ -80,21 +110,38 @@ public class CancellableRequest {
             // 1. 取消所有活跃的工具调用（特别是 shell 进程）
             cancelActiveToolCalls();
 
-            // 2. 取消 Flux 订阅
+            // 2. 发送 complete 信号给所有递归 Sink，终止 expand() 链中的递归 Flux
+            for (Sinks.Many<?> recursiveSink : recursiveSinks) {
+                log.info("[CancellableRequest] Emitting complete signal to recursive sink for request: {}", requestId);
+                recursiveSink.tryEmitComplete();
+            }
+            recursiveSinks.clear();
+
+            // 3. 发送 complete 信号给 agentSink（如果存在）
+            if (agentSink != null) {
+                log.info("[CancellableRequest] Emitting complete signal to agentSink for request: {}", requestId);
+                agentSink.tryEmitComplete();
+            }
+
+            // 4. 取消 Flux 订阅
             if (fluxDisposable != null && !fluxDisposable.isDisposed()) {
                 log.info("[CancellableRequest] Disposing Flux subscription for request: {}", requestId);
                 fluxDisposable.dispose();
             }
 
-            // 3. 中断执行线程
+            // 5. 中断执行线程
             if (executionThread != null && executionThread.isAlive()) {
                 log.info("[CancellableRequest] Interrupting execution thread for request: {}", requestId);
                 executionThread.interrupt();
             }
 
-            // 4. 清理资源
+            // 6. 清理资源
             activeToolCallIds.clear();
             activeShellSessions.clear();
+            recursiveSinks.clear();
+            if (agentSink != null) {
+                agentSink = null;
+            }
 
             log.info("[CancellableRequest] Request {} cancelled successfully", requestId);
         }
