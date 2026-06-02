@@ -99,6 +99,8 @@ public class NativeReflectConfigGenerator {
             "com.xr21.ai.agent.tools.ContextCacheTool",
             "com.xr21.ai.agent.tools.EditFileTool",
             "com.xr21.ai.agent.tools.EditFileTool$MatchResult",
+            "com.xr21.ai.agent.tools.SmartEditTool",
+            "com.xr21.ai.agent.tools.SmartEditTool$EditOperation",
             "com.xr21.ai.agent.tools.FeedBackTool",
             "com.xr21.ai.agent.tools.GlobTool",
             "com.xr21.ai.agent.tools.GrepTool",

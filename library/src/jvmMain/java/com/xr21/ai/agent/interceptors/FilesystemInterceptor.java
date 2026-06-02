@@ -141,7 +141,12 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         - “write_file”：创建文件（请谨慎使用）
                         - 'glob'：查找与模式匹配的文件（例如，'**/*.java'）
                         - “grep”：在文件中搜索文本，查找内容并定位问题（禁止执行**/*类似搜索，使用明确的关键字进行检索）
-                        - 每次编辑优先使用edit_file_with_git_patch编辑多次失败后回退到edit_file，但是对于下次编辑项依然edit_file_with_git_patch优先
+                        - 编辑文件时优先使用 smart_edit 工具，它提供三种高效编辑模式：
+                          • replace_lines：按行号范围替换整段内容，token消耗最少，适合重写函数/方法/类
+                          • search_replace：按唯一搜索文本替换，最稳定可靠，适合局部修改
+                          • insert_at_line：在指定行插入，适合添加import/新方法
+                          • 支持一次调用批量执行多个编辑操作
+                        - smart_edit 失败后回退到 edit_file，大范围批量编辑失败再尝试 edit_file_with_git_patch
                 
                 使用 ls 查看指定目录的文件列表
                     ### 最佳实践：
@@ -149,7 +154,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         2. 对于大文件使用带有偏移/限制的“read_file”
                         3. 在重大编辑前创建备份
                         4. 使用描述性路径，避免歧义名称
-                        6. 创建文件时写入的文件内容 务必小于500字符，未完成的部分使用edit_file_with_git_patch继续添加 否则将创建失败！
+                        6. 创建文件时写入的文件内容务必小于500字符，未完成的部分使用 smart_edit 的 insert_at_line 或 replace_lines 继续添加
                         7. 通过并行工具调用write_file实现同时写入多个文件加快执行效率
                     ### 路径验证：
                         - 所有路径都经过安全性验证
@@ -172,8 +177,9 @@ public class FilesystemInterceptor extends ModelInterceptor {
         // Add write operations only if not read-only
         if (!readOnly) {
             toolObjects.add(new WriteFileTool());
-            toolObjects.add(new EditFileTool());
-            toolObjects.add(new EditFileWithGitPatchTool(allowedPrefixes));
+            toolObjects.add(new SmartEditTool());
+//            toolObjects.add(new EditFileTool());
+//            toolObjects.add(new EditFileWithGitPatchTool(allowedPrefixes));
         }
 
         // Create provider with all tool objects
