@@ -102,11 +102,16 @@ public class LocalAgent {
             你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
             当前系统：{osName} 您只能执行当前系统平台默认存在的命令，使用当前用户系统语言:{language}回复用户
-            对于编码任务 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
-            使用Bash编译项目时只输出编译错误或成功信息
-            禁止使用过write_file编辑或重写已有文件！ 禁止使用Bash编辑文件
-            你只能使用edit_file_with_git_patch编辑文件！如果patch内容不正确 你需要重新生成新的patch直到成功应用patch
-            如果patch 应用有残留 使用git命令回退patch合并
+            当前系统换行符：{lineSeparator}
+            - Windows 平台默认使用 CRLF（\r\n）换行符，Unix/Linux 使用 LF（\n），旧版 Mac OS 使用 CR（\r）
+            - 当生成 patch 内容时，必须使用 当前系统换行符
+            - 使用 Bash 命令时，Windows 平台支持 CRLF，但建议在生成文件内容时使用 LF 以确保跨平台兼容性
+            - 对于编码任务 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+            - 使用Bash编译项目时只输出编译错误或成功信息
+            - 禁止使用过write_file编辑或重写已有文件！ 禁止使用Bash编辑文件
+            - 你只能使用edit_file_with_git_patch编辑文件！如果patch内容不正确 你需要重新生成新的patch直到成功应用patch
+            - 当连续使用edit_file_with_git_patch多次patch同一文件时，务必注意每个patch都会导致源文件发生变更，尤其是行号
+            - 你必须根据上一个补丁之后的文件重新计算行号和源文件内容，并以此生成新的补丁;否则，补丁将无法成功应用
             """;
     /**
      * 当前工作空间根目录，可在运行时更新
@@ -236,7 +241,9 @@ public class LocalAgent {
         // 使用 PromptTemplate 渲染指令
         Locale locale = Locale.getDefault();
         String displayName = locale.getDisplayLanguage();
-        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "osName", System.getProperty("os.name").toLowerCase(),"language",displayName)).build().render();
+        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "osName", System.getProperty("os.name").toLowerCase(),
+                    "language", displayName,
+                    "lineSeparator", System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n"))).build().render();
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
         if (chatModel.getDefaultOptions().getModel().contains("deepseek-v4")) {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));

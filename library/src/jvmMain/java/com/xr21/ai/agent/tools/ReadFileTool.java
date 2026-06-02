@@ -24,6 +24,7 @@ import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -187,11 +188,25 @@ public class ReadFileTool {
 
     private void processFile(Path file, StringBuilder result, Integer offset, Integer limit, ToolResult toolResult) throws IOException {
         try {
-            // 一次性读取文件所有行到内存（使用readAllBytes避免换行符转换问题）
+            // 一次性读取文件所有字节，避免换行符在读取阶段被转换
             byte[] rawBytes = Files.readAllBytes(file);
-            String fileContent = new String(rawBytes, java.nio.charset.StandardCharsets.UTF_8);
+            // 优先 UTF-8 解码，若包含替换字符则尝试系统默认编码
+            String fileContent = decodeFileContent(rawBytes);
+
+            // 去除 UTF-8 BOM（\uFEFF），避免 BOM 作为不可见字符导致 patch 上下文不匹配
+            if (fileContent.startsWith("\uFEFF")) {
+                fileContent = fileContent.substring(1);
+            }
+            // 检测原始文件的换行符类型，用于输出提示
+            String newlineType = detectNewlineType(fileContent);
+
             // 按行分割，保留所有行（包括空行）
             String[] allLines = fileContent.split("\n", -1);
+
+            // 构建换行符信息
+            String platformNewline = System.getProperty("os.name", "").toLowerCase().contains("win") ? "CRLF" : "LF";
+            String newlineInfo = "Newline: " + newlineType + " (platform: " + platformNewline + ")\n";
+
             // 获取绝对路径用于输出和位置标记
             String absolutePath = file.toAbsolutePath().toString();
 
@@ -202,8 +217,7 @@ public class ReadFileTool {
                 return;
             }
 
-            // 分析缩进统计信息
-            IndentStats indentStats = analyzeIndentation(allLines);
+
 
             /*
              * 分页参数计算：
@@ -217,7 +231,10 @@ public class ReadFileTool {
 
             result.append("=== ").append(absolutePath).append(" ===\n");
             // 添加缩进统计信息
-            result.append(indentStats.toSummary());
+            // 分析缩进统计信息
+//            IndentStats indentStats = analyzeIndentation(allLines);
+//            result.append(indentStats.toSummary());
+            result.append(newlineInfo);
 
             if (start >= allLines.length) {
                 result.append("Error: Offset ")
@@ -269,6 +286,53 @@ public class ReadFileTool {
                     .append(file).append(": ").append(e.getMessage()).append("\n\n");
             throw e;
         }
+    }
+
+    /**
+     * 检测文件使用的换行符类型。
+     */
+    private String detectNewlineType(String content) {
+        if (content == null || content.isEmpty()) return "Unknown";
+        int crlfCount = 0;
+        int lfCount = 0;
+        int crCount = 0;
+        for (int i = 0; i < content.length(); i++) {
+            char c = content.charAt(i);
+            if (c == '\r') {
+                if (i + 1 < content.length() && content.charAt(i + 1) == '\n') {
+                    crlfCount++;
+                    i++;
+                } else {
+                    crCount++;
+                }
+            } else if (c == '\n') {
+                lfCount++;
+            }
+        }
+        if (crlfCount > lfCount && crlfCount > crCount) return "CRLF";
+        if (lfCount > crlfCount && lfCount > crCount) return "LF";
+        if (crCount > 0) return "CR (old Mac)";
+        if (crlfCount > 0) return "Mixed (CRLF+" + (lfCount > 0 ? "LF" : "") + ")";
+        if (lfCount > 0) return "LF";
+        return "Unknown";
+    }
+
+    /**
+     * 解码文件字节内容。优先使用 UTF-8，如果解码结果包含替换字符（U+FFFD），
+     * 说明文件可能不是 UTF-8 编码，尝试使用系统默认编码。
+     * 这避免了非 UTF-8 文件（如 GBK 编码的中文文件）内容被错误解码，
+     * 导致 LLM 生成的 patch 上下文与文件实际内容不匹配。
+     */
+    private String decodeFileContent(byte[] bytes) {
+        String utf8Decoded = new String(bytes, StandardCharsets.UTF_8);
+        if (!utf8Decoded.contains("\uFFFD")) {
+            return utf8Decoded;
+        }
+        String fallback = new String(bytes, Charset.defaultCharset());
+        if (!fallback.contains("\uFFFD")) {
+            return fallback;
+        }
+        return utf8Decoded;
     }
 
     /**

@@ -172,7 +172,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
         // Add write operations only if not read-only
         if (!readOnly) {
             toolObjects.add(new WriteFileTool());
-//            toolObjects.add(new EditFileTool());
+            toolObjects.add(new EditFileTool());
             toolObjects.add(new EditFileWithGitPatchTool(allowedPrefixes));
         }
 
