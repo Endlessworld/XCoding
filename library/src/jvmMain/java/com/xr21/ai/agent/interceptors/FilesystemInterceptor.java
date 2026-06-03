@@ -141,11 +141,11 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         - “write_file”：创建文件
                         - 'glob'：查找与模式匹配的文件（例如，'**/*.java'）
                         - “grep”：在文件中搜索文本，查找内容并定位问题（禁止执行**/*类似搜索，使用明确的关键字进行检索）
-                        - 编辑文件时优先使用 smart_edit 工具，它提供三种高效编辑模式：
+                        - 使用smart_edit编辑文件，它提供两种编辑模式：
                           • search_replace：按唯一搜索文本替换，最稳定可靠，适合局部修改
                           • insert_at_line：在指定行插入，适合添加import/新方法
                           • 支持一次调用批量执行多个编辑操作
-                
+                          • 积极使用批量编辑以减少调用次数增加编辑效率
                 使用 ls 查看指定目录的文件列表
                     ### 最佳实践：
                         1. 在阅读/编辑前，始终使用“ls”来探索目录
