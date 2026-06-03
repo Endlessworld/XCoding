@@ -24,6 +24,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
 import java.net.URLEncoder;
@@ -32,6 +33,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static com.xr21.ai.agent.utils.AcpProgressUtil.sendProgress;
 
 /**
  * 网络搜索工具 - 使用 Bing 免费搜索引擎（无需 API Key，国内可正常访问）
@@ -44,11 +47,12 @@ public class WebTool {
     private static final Logger log = LoggerFactory.getLogger(WebTool.class);
 
     // @formatter:off
-    @Tool(name = "web_search", description = "从搜索引擎检索网络信息")
+    @Tool(name = "web_search", description = "使用Bing搜索引擎检索网络信息,该工具返回摘要和网址 你需要搭配web_fetch进一步获取网页详情")
     public Map<String, Object> webSearch(
             @JsonProperty(value = "queryList", required = true)
             @JsonPropertyDescription("Search query List (required) Up to 5 queries")
             List<String> queryList,
+            ToolContext toolContext,
             @JsonProperty(value = "freshness")
             @JsonPropertyDescription("The time range for the search results. (Available options noLimit, oneYear, oneMonth, oneWeek, oneDay. Default is noLimit)")
             String freshness,
@@ -63,13 +67,20 @@ public class WebTool {
         int resultCount = (count != null && count > 0) ? Math.min(count, 10) : 3;
         String timeRange = freshness != null ? freshness : "noLimit";
 
+        sendProgress(toolContext, "🔍 Starting web search for " + queryList.size() + " query(ies)...<br/>");
+
         List<Map<String, Object>> allResults = new ArrayList<>();
+        int queryIndex = 0;
         for (String query : queryList) {
+            queryIndex++;
+            sendProgress(toolContext, "🔎 Searching (" + queryIndex + "/" + queryList.size() + "): \"" + query + "\"...<br/>");
             try {
                 List<Map<String, Object>> searchResults = bingSearch(query, resultCount, timeRange);
                 allResults.addAll(searchResults);
+                sendProgress(toolContext, "✅ Found " + searchResults.size() + " results for \"" + query + "\"<br/>");
             } catch (Exception e) {
                 log.error("Bing search failed for query: {}", query, e);
+                sendProgress(toolContext, "❌ Search failed for \"" + query + "\": " + e.getMessage() + "<br/>");
                 Map<String, Object> errorResult = new HashMap<>();
                 errorResult.put("title", "搜索失败");
                 errorResult.put("error", e.getMessage());
@@ -79,6 +90,7 @@ public class WebTool {
 
         log.info("WebSearch total results: {}", allResults.size());
         result.put("results", allResults);
+        sendProgress(toolContext, "📊 Web search completed, total: " + allResults.size() + " results<br/>");
         return result;
     }
 
@@ -146,11 +158,12 @@ public class WebTool {
         };
     }
 
+
     // @formatter:off
     @Tool(name = "web_fetch", description = """
         请求指定网页并返回清洗之后的网页 innerText 内容（最大 1000 字符）
         功能：抓取指定URL的网页内容，去除HTML标签、样式、脚本等，提取纯文本内容。
-        
+
         使用场景：
         1. 获取实时天气、新闻等动态信息
         2. 查看网页正文内容
@@ -161,6 +174,7 @@ public class WebTool {
             @JsonProperty(value = "url", required = true)
             @JsonPropertyDescription("要抓取的网页 URL（必须是以 http:// 或 https:// 开头的完整 URL）")
             String url,
+            ToolContext toolContext,
             @JsonProperty(value = "maxLength")
             @JsonPropertyDescription("返回内容的最大字符数（默认 1000，最大 5000）")
             Integer maxLength
@@ -170,6 +184,7 @@ public class WebTool {
 
         try {
             log.info("Fetching web page: {} (maxLength={})", url, maxLen);
+            sendProgress(toolContext, "🌐 Fetching web page: " + url + "...<br/>");
 
             // 使用 Jsoup 发送 GET 请求获取网页
             Document doc = Jsoup.connect(url)
@@ -195,9 +210,11 @@ public class WebTool {
 
             log.info("Fetch completed: title='{}', totalChars={}, returnedChars={}",
                     title, text.length(), trimmedText.length());
+            sendProgress(toolContext, "✅ Fetched: " + title + " (" + trimmedText.length() + " chars)<br/>");
 
         } catch (Exception e) {
             log.error("Failed to fetch web page: {}", url, e);
+            sendProgress(toolContext, "❌ Failed to fetch: " + url + " - " + e.getMessage() + "<br/>");
             result.put("error", "抓取失败: " + e.getMessage());
             result.put("url", url);
         }
