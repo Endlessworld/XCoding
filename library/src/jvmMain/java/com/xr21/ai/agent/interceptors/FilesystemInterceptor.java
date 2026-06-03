@@ -126,7 +126,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
 
     private String createDefaultSystemPrompt() {
         return """
-                 ## 文件系统访问工具 
+                 ## 文件系统访问工具
                     你可以访问一个文件系统，可以通过这些工具进行交互。
                     所有文件路径必须是绝对路径。
                     ### 安全指南：
@@ -138,7 +138,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
                     ### 可用工具：
                         - 'ls'：目录中带有深度控制的文件列表
                         - 'read_file'：读取文件内容（支持分页）
-                        - “write_file”：创建文件（请谨慎使用）
+                        - “write_file”：创建文件
                         - 'glob'：查找与模式匹配的文件（例如，'**/*.java'）
                         - “grep”：在文件中搜索文本，查找内容并定位问题（禁止执行**/*类似搜索，使用明确的关键字进行检索）
                         - 编辑文件时优先使用 smart_edit 工具，它提供三种高效编辑模式：

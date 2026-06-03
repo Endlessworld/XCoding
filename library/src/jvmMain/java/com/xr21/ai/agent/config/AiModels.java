@@ -73,7 +73,14 @@ public enum AiModels {
             Double temperature = config.getTemperature();
             Integer maxTokens = config.getMaxTokens();
             OpenAiApi api = OpenAiApi.builder().baseUrl(effectiveBaseUrl).completionsPath(effectiveBaseUrl.endsWith("v3") ? "/chat/completions" : "v1/chat/completions").apiKey(effectiveApiKey).build();
-            return OpenAiChatModel.builder().defaultOptions(OpenAiChatOptions.builder().model(effectiveModelName).temperature(temperature).parallelToolCalls(true).streamUsage(true).toolChoice("auto").extraBody(Map.of("thinking", Map.of("type", "disabled"))).build()).openAiApi(api).build();
+            return OpenAiChatModel.builder().defaultOptions(OpenAiChatOptions.builder()
+                    .model(effectiveModelName)
+                    .temperature(temperature)
+                    .parallelToolCalls(true)
+                    .streamUsage(true)
+                    .toolChoice("auto")
+                    .extraBody(Map.of("thinking", Map.of("type", "false")))
+                    .build()).openAiApi(api).build();
         }
         throw new RuntimeException("Model configuration not found in JSON for:  " + modelName);
     }
