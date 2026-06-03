@@ -98,7 +98,8 @@ public class ShellTools {
 		- The timeout argument is required and must be at least 30000ms (30 seconds) and at most 600000ms (10 minutes).
 		- It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
 		- If the output exceeds 30000 characters, output will be truncated before being returned to you.
-
+        - When using the Bash command, the Windows platform supports CRLF, but it is recommended to use LF when generating file content to ensure cross-platform compatibility
+        - When compiling projects with Bash, only compilation errors or success messages are output
 		- Avoid using Bash with the `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
 			- File search: Use Glob (NOT find or ls)
 			- Content search: Use Grep (NOT grep or rg)

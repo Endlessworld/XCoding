@@ -142,11 +142,9 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         - 'glob'：查找与模式匹配的文件（例如，'**/*.java'）
                         - “grep”：在文件中搜索文本，查找内容并定位问题（禁止执行**/*类似搜索，使用明确的关键字进行检索）
                         - 编辑文件时优先使用 smart_edit 工具，它提供三种高效编辑模式：
-                          • replace_lines：按行号范围替换整段内容，token消耗最少，适合重写函数/方法/类
                           • search_replace：按唯一搜索文本替换，最稳定可靠，适合局部修改
                           • insert_at_line：在指定行插入，适合添加import/新方法
                           • 支持一次调用批量执行多个编辑操作
-                        - smart_edit 失败后回退到 edit_file，大范围批量编辑失败再尝试 edit_file_with_git_patch
                 
                 使用 ls 查看指定目录的文件列表
                     ### 最佳实践：
@@ -154,7 +152,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         2. 对于大文件使用带有偏移/限制的“read_file”
                         3. 在重大编辑前创建备份
                         4. 使用描述性路径，避免歧义名称
-                        6. 创建文件时写入的文件内容务必小于500字符，未完成的部分使用 smart_edit 的 insert_at_line 或 replace_lines 继续添加
+                        6. 创建文件时写入的文件内容务必小于500字符，未完成的部分使用 smart_edit 的 insert_at_line 继续添加
                         7. 通过并行工具调用write_file实现同时写入多个文件加快执行效率
                     ### 路径验证：
                         - 所有路径都经过安全性验证

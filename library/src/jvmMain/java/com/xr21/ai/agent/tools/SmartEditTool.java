@@ -34,11 +34,9 @@ import java.util.*;
 /**
  * 智能文件编辑工具 - 多策略合一的高效文件编辑方案。
  *
- * <p>相比 {@link EditFileTool}（需要完整输出旧文本）和 {@link EditFileWithGitPatchTool}（对格式要求过高），
- * 本工具提供三种更高效的编辑模式，让模型根据场景选择最合适的策略：
+ * 本工具提供两种更高效的编辑模式，让模型根据场景选择最合适的策略：
  *
  * <ul>
- *   <li><b>replace_lines</b>：按行号范围替换，token 消耗最少，适合整段替换/删除</li>
  *   <li><b>search_replace</b>：按唯一搜索文本替换，最稳定可靠，适合局部修改</li>
  *   <li><b>insert_at_line</b>：在指定行插入，适合添加 import、方法等</li>
  * </ul>
@@ -55,18 +53,10 @@ public class SmartEditTool {
 
     // @formatter:off
     @Tool(name = "smart_edit", description = """
-        高效智能文件编辑工具。支持三种编辑策略，一次调用可执行多个编辑操作。
+        高效智能文件编辑工具。支持两种编辑策略，一次调用可执行多个编辑操作。
 
-        【三种编辑模式】
+        【两种编辑模式】
         =================
-
-        1. replace_lines — 按行号范围替换（推荐用于整段替换/删除）
-            - filePath: 绝对路径
-            - startLine: 起始行号（1-based，包含）
-            - endLine: 结束行号（1-based，包含），可等于 startLine 表示替换单行
-            - newContent: 替换后的新内容
-            - 特点：不需要输出任何旧内容，token 消耗最少
-            - 适合：重写函数/方法、删除代码块、替换类定义等
 
         2. search_replace — 按唯一搜索文本替换（推荐用于局部精确修改）
             - filePath: 绝对路径
@@ -90,7 +80,6 @@ public class SmartEditTool {
 
         【最佳实践】
         ============
-        - 优先使用 replace_lines 进行大范围修改（整函数/方法级别）
         - 小范围精确修改使用 search_replace
         - 新增内容使用 insert_at_line
         - 编辑前先使用 read_file 查看文件内容（带行号）
@@ -196,21 +185,10 @@ public class SmartEditTool {
             return "Edit at index " + index + ": filePath is required";
         }
         if (edit.mode == null || edit.mode.isBlank()) {
-            return "Edit at index " + index + ": mode is required (replace_lines, search_replace, or insert_at_line)";
+            return "Edit at index " + index + ": mode is required (search_replace or insert_at_line)";
         }
 
         switch (edit.mode) {
-            case "replace_lines" -> {
-                if (edit.startLine == null || edit.startLine < 1) {
-                    return "Edit at index " + index + ": replace_lines requires startLine >= 1";
-                }
-                if (edit.endLine == null || edit.endLine < edit.startLine) {
-                    return "Edit at index " + index + ": replace_lines requires endLine >= startLine";
-                }
-                if (edit.newContent == null) {
-                    return "Edit at index " + index + ": replace_lines requires newContent";
-                }
-            }
             case "search_replace" -> {
                 if (edit.searchText == null || edit.searchText.isEmpty()) {
                     return "Edit at index " + index + ": search_replace requires non-empty searchText";
@@ -228,7 +206,7 @@ public class SmartEditTool {
                 }
             }
             default -> {
-                return "Edit at index " + index + ": unknown mode '" + edit.mode + "'. Use replace_lines, search_replace, or insert_at_line";
+                return "Edit at index " + index + ": unknown mode '" + edit.mode + "'. Use search_replace or insert_at_line";
             }
         }
         return null;
@@ -236,7 +214,6 @@ public class SmartEditTool {
 
     private int getEffectiveLine(EditOperation edit) {
         return switch (edit.mode) {
-            case "replace_lines" -> edit.startLine != null ? edit.startLine : 0;
             case "insert_at_line" -> edit.line != null ? edit.line : 0;
             case "search_replace" -> {
                 // For search_replace, we don't know the line until execution
@@ -289,75 +266,10 @@ public class SmartEditTool {
 
     private EditResult executeEdit(EditOperation edit, Path path, FileContent fileContent, int lineOffset) {
         return switch (edit.mode) {
-            case "replace_lines" -> executeReplaceLines(edit, path, fileContent, lineOffset);
             case "search_replace" -> executeSearchReplace(edit, path, fileContent);
             case "insert_at_line" -> executeInsertAtLine(edit, path, fileContent, lineOffset);
             default -> new EditResult(-1, false, "Unknown mode: " + edit.mode, null);
         };
-    }
-
-    private EditResult executeReplaceLines(EditOperation edit, Path path, FileContent fileContent, int lineOffset) {
-        int startLine = edit.startLine + lineOffset;
-        int endLine = edit.endLine + lineOffset;
-
-        if (startLine > fileContent.lines.size()) {
-            return new EditResult(-1, false,
-                    "startLine " + startLine + " exceeds file length " + fileContent.lines.size(),
-                    null);
-        }
-
-        // Convert to 0-based index
-        int startIndex = startLine - 1;
-        int endIndex = Math.min(endLine, fileContent.lines.size());
-
-        // Calculate line delta
-        int oldLineCount = endIndex - startIndex;
-        int newLineCount = countLines(edit.newContent);
-        int lineDelta = newLineCount - oldLineCount;
-
-        // Build new content
-        StringBuilder newContent = new StringBuilder();
-        for (int i = 0; i < startIndex; i++) {
-            newContent.append(fileContent.lines.get(i)).append("\n");
-        }
-        newContent.append(edit.newContent);
-        // Ensure newline before remaining content if there is remaining content
-        if (endIndex < fileContent.lines.size()) {
-            if (!edit.newContent.isEmpty() && !edit.newContent.endsWith("\n")) {
-                newContent.append("\n");
-            }
-            for (int i = endIndex; i < fileContent.lines.size(); i++) {
-                newContent.append(fileContent.lines.get(i));
-                if (i < fileContent.lines.size() - 1) {
-                    newContent.append("\n");
-                }
-            }
-        }
-
-        // Preserve trailing newline if original had it
-        if (fileContent.originalContent.endsWith("\n") && !newContent.toString().endsWith("\n")) {
-            newContent.append("\n");
-        }
-
-        String result = saveFile(path, newContent.toString(), fileContent.isWindowsLineEnding);
-        if (result != null) {
-            return new EditResult(-1, false, result, null);
-        }
-
-        // Update fileContent for subsequent edits
-        fileContent.updateFromString(newContent.toString());
-
-        String message = String.format("Replaced lines %d-%d with %d lines (delta: %+d)",
-                startLine, endLine, newLineCount, lineDelta);
-        Map<String, Object> detail = new LinkedHashMap<>();
-        detail.put("type", "replace_lines");
-        detail.put("startLine", startLine);
-        detail.put("endLine", endLine);
-        detail.put("newLineCount", newLineCount);
-        detail.put("lineDelta", lineDelta);
-        detail.put("filePath", edit.filePath);
-
-        return new EditResult(-1, true, message, detail, lineDelta);
     }
 
     private EditResult executeSearchReplace(EditOperation edit, Path path, FileContent fileContent) {
@@ -395,7 +307,7 @@ public class SmartEditTool {
             }
             return new EditResult(-1, false,
                     "Search text appears " + matchLines.size() + " times in the file. Must be unique for search_replace. "
-                            + "Consider using replace_lines mode, or make searchText more specific. "
+                            + "Consider using insert_at_line or make searchText more specific. "
                             + "Match lines: " + matchLines,
                     Map.of("matchCount", matchLines.size(), "matchLines", matchLines));
         }
@@ -611,21 +523,12 @@ public class SmartEditTool {
      */
     public static class EditOperation {
         @JsonProperty(value = "mode", required = true)
-        @JsonPropertyDescription("Edit mode: 'replace_lines', 'search_replace', or 'insert_at_line'")
+        @JsonPropertyDescription("Edit mode: 'search_replace', or 'insert_at_line'")
         public String mode;
 
         @JsonProperty(value = "filePath", required = true)
         @JsonPropertyDescription("Absolute path of the file to edit")
         public String filePath;
-
-        // For replace_lines
-        @JsonProperty("startLine")
-        @JsonPropertyDescription("Start line number (1-based, inclusive). Required for replace_lines.")
-        public Integer startLine;
-
-        @JsonProperty("endLine")
-        @JsonPropertyDescription("End line number (1-based, inclusive). Required for replace_lines. Can equal startLine.")
-        public Integer endLine;
 
         // For search_replace
         @JsonProperty("searchText")
@@ -647,7 +550,7 @@ public class SmartEditTool {
 
         // Shared
         @JsonProperty("newContent")
-        @JsonPropertyDescription("New content to insert or replace with. Required for replace_lines and insert_at_line.")
+        @JsonPropertyDescription("New content to insert or replace with. Required for insert_at_line.")
         public String newContent;
     }
 
