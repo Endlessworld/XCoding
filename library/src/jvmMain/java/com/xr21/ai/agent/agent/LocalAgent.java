@@ -40,6 +40,7 @@ import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.interceptors.WorkerInterceptor;
 import com.xr21.ai.agent.model.Config;
+import com.xr21.ai.agent.tools.ContextCacheTool;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.WebTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
@@ -140,7 +141,7 @@ public class LocalAgent {
     }
 
     private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers) {
-        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool()).build();
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new ContextCacheTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具
@@ -153,8 +154,8 @@ public class LocalAgent {
     }
 
     private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel) {
-        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(262144)  // 优化：降低到32k，提前触发优化
-                .clearAtLeast(15000)  // 优化：至少清理15k，确保效果明显
+        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(21 * 1000)  // 优化：降低到21k，提前触发优化
+                .clearAtLeast(3000)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
                 .tokenCounter(new DefaultTokenCounter()).clearToolInputs(true)  // 清理工具输入
                 .placeholder("[...]")  // 优化：更有意义的占位符

@@ -24,6 +24,7 @@ import com.alibaba.cloud.ai.graph.serializer.AgentInstructionMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.xr21.ai.agent.tools.ContextCacheTool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -209,10 +210,17 @@ public class ContextEditingInterceptor extends ModelInterceptor {
     }
 
     private Message clearMessageContent(Message msg) {
+        log.info("✅ clearMessageContent : {}", msg);
         if (msg instanceof ToolResponseMessage toolMsg) {
             List<ToolResponseMessage.ToolResponse> cleared = toolMsg.getResponses()
                     .stream()
-                    .map(r -> new ToolResponseMessage.ToolResponse(r.id(), r.name(), this.placeholder))
+                    .map(r -> {
+                        // 将原始响应内容缓存到 ContextCacheTool，使用 $ref+id 作为 key
+                        String cacheRef = "$ref+" + r.id();
+                        log.info("✅ message content $ref: {}", cacheRef);
+                        ContextCacheTool.addResponsesRef(cacheRef, r.responseData());
+                        return new ToolResponseMessage.ToolResponse(r.id(), r.name(), cacheRef);
+                    })
                     .toList();
             return ToolResponseMessage.builder().responses(cleared).metadata(toolMsg.getMetadata()).build();
         }
@@ -220,7 +228,12 @@ public class ContextEditingInterceptor extends ModelInterceptor {
         if (msg instanceof AssistantMessage assistantMsg && clearToolInputs) {
             List<AssistantMessage.ToolCall> clearedCalls = assistantMsg.getToolCalls()
                     .stream()
-                    .map(tc -> new AssistantMessage.ToolCall(tc.id(), tc.type(), tc.name(), this.placeholder))
+                    .map(tc -> {
+                        // 将原始工具调用参数缓存到 ContextCacheTool，使用 $ref+id 作为 key
+                        String cacheRef = "$ref+" + tc.id();
+                        ContextCacheTool.addArgumentsRef(cacheRef, tc.arguments());
+                        return new AssistantMessage.ToolCall(tc.id(), tc.type(), tc.name(), cacheRef);
+                    })
                     .toList();
             return AssistantMessage.builder()
                     .content(assistantMsg.getText())
@@ -254,6 +267,14 @@ public class ContextEditingInterceptor extends ModelInterceptor {
     @Override
     public ModelResponse interceptModel(ModelRequest request, ModelCallHandler handler) {
         List<Message> messages = new ArrayList<>();
+        // 找到 AgentInstructionMessage (system prompt) 用于后续追加缓存提示
+        AgentInstructionMessage instructionMsg = null;
+        for (Message msg : request.getMessages()) {
+            if (msg instanceof AgentInstructionMessage aim) {
+                instructionMsg = aim;
+                break;
+            }
+        }
         messages.addAll(request.getMessages().stream().limit(5).toList());
         messages.addAll(request.getMessages()
                 .stream()
@@ -300,6 +321,7 @@ public class ContextEditingInterceptor extends ModelInterceptor {
         for (int i = 0; i < messages.size(); i++) {
             Message msg = messages.get(i);
             if (indicesToClear.contains(i)) {
+
                 updatedMessages.add(clearMessageContent(msg));
             } else {
                 updatedMessages.add(msg);
@@ -310,6 +332,26 @@ public class ContextEditingInterceptor extends ModelInterceptor {
         double savingsPercent = (double) savings / currentTokens * 100;
         log.info("✅ 上下文优化完成: 原始={} | 清理={} ({}%) | 剩余={} | 目标={}",
                 currentTokens, savings, savingsPercent, clearedTokens, this.trigger);
+
+        // 5. 向 AgentInstructionMessage (system prompt) 追加上下文缓存提示
+        if (instructionMsg != null) {
+            String cacheHint = "\n\n### 上下文缓存提示\n"
+                    + "上下文管理器已自动清理了部分超长工具调用内容，并将原始内容缓存到 ContextCacheTool 中。\n"
+                    + "被清理的内容已替换为缓存指针，格式为：$ref+{toolCallId}\n"
+                    + "如果你需要查看被清理的原始内容，请使用 contextCacheTool 工具，传入对应的指针地址列表即可召回。\n"
+                    + "例如：contextCacheTool([\"$ref+tool_call_xxx\", \"$ref+tool_call_yyy\"])\n";
+            AgentInstructionMessage updatedInstruction = instructionMsg.mutate()
+                    .text(instructionMsg.getText() + cacheHint)
+                    .build();
+            // 替换 updatedMessages 中的 instructionMsg
+            for (int i = 0; i < updatedMessages.size(); i++) {
+                if (updatedMessages.get(i) instanceof AgentInstructionMessage) {
+                    updatedMessages.set(i, updatedInstruction);
+                    break;
+                }
+            }
+        }
+
         return handler.call(ModelRequest.builder(request).messages(updatedMessages).build());
     }
 

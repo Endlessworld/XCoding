@@ -290,14 +290,28 @@ BashOutput("shell_1234567890")
 KillShell("shell_1234567890")
 ```
 
-### 上下文缓存（处理超长输出）
-```java
-// 上下文编辑拦截器会自动将超长内容转换为指针
-// 指针格式: $ref+工具调用id
+### 上下文缓存（自动卸载与按需加载）
 
-// 使用 contextCacheTool 重新获取内容
-contextCacheTool(["$ref_tool_call_123", "$ref_tool_call_456"])
+**ContextEditingInterceptor** 在检测到上下文令牌超过阈值时，会自动执行上下文卸载：
+
+1. **自动缓存**：被清理的 `ToolResponseMessage`（工具返回内容）和 `AssistantMessage`（工具调用参数）会自动存入 `ContextCacheTool` 的内存缓存中。
+2. **指针占位符**：原始内容被替换为缓存指针 `$ref+{toolCallId}`，极大减少当前轮次的令牌消耗。
+3. **System Prompt 提示**：拦截器会自动在 System Prompt 末尾追加提示，告知模型可通过 `contextCacheTool(["$ref+id1", "$ref+id2", ...])` 召回被清理的内容。
+
+```java
+// 上下文编辑器会将超长工具调用内容自动转换成指针
+// 指针格式: $ref+{toolCallId}
+// 原始内容已存入 ContextCacheTool 缓存
+
+// 使用 contextCacheTool 根据指针召回原始内容
+contextCacheTool(["$ref+tool_call_123", "$ref+tool_call_456"])
 ```
+
+**配置参数（在 `LocalAgent.java` 的 `getInterceptors` 方法中）：**
+- `trigger(262144)` — 令牌超过 256K 时触发上下文卸载
+- `clearAtLeast(15000)` — 每次至少清理 15K tokens
+- `keep(5)` — 保留最近 5 条工具消息不被清理
+- `clearToolInputs(true)` — 同时清理工具调用输入参数
 
 ### 任务规划
 ```java
