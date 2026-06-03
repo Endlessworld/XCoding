@@ -44,16 +44,31 @@ public class AcpProgressUtil {
     public static void sendProgress(ToolContext toolContext, String message) {
         try {
             if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
-                if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations client) {
-                    RunSuspendKt.runSuspend((completion) -> {
-                        SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(message, null, null));
-                        client.notify(notification, null, completion);
-                        if (config.context().get(SESSION_ID_CONTEXT_KEY) instanceof String sessionId) {
-                            log.debug("ACP progress [{}]: {}", sessionId, message);
-                        }
-                        return null;
-                    });
-                }
+                sendProgress(config, message);
+            }
+        } catch (Exception e) {
+            log.debug("Could not send ACP progress update: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Send a real-time AgentThoughtChunk notification to the ACP client.
+     * This allows tools to stream progress updates as they execute.
+     *
+     * @param config  the RunnableConfig
+     * @param message the progress message to send
+     */
+    public static void sendProgress(RunnableConfig config, String message) {
+        try {
+            if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations client) {
+                RunSuspendKt.runSuspend((completion) -> {
+                    SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(message, null, null));
+                    client.notify(notification, null, completion);
+                    if (config.context().get(SESSION_ID_CONTEXT_KEY) instanceof String sessionId) {
+                        log.debug("ACP progress [{}]: {}", sessionId, message);
+                    }
+                    return null;
+                });
             }
         } catch (Exception e) {
             log.debug("Could not send ACP progress update: {}", e.getMessage());

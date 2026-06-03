@@ -35,10 +35,7 @@ import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonS
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.config.ModelConfigLoader;
-import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
-import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
-import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
-import com.xr21.ai.agent.interceptors.WorkerInterceptor;
+import com.xr21.ai.agent.interceptors.*;
 import com.xr21.ai.agent.model.Config;
 import com.xr21.ai.agent.tools.ContextCacheTool;
 import com.xr21.ai.agent.tools.ShellTools;
@@ -154,8 +151,8 @@ public class LocalAgent {
     }
 
     private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel) {
-        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(21 * 1000)  // 优化：降低到21k，提前触发优化
-                .clearAtLeast(3000)  // 优化：至少清理15k，确保效果明显
+        ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(64 * 1024)  // 优化：降低到21k，提前触发优化
+                .clearAtLeast(10 * 1024)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
                 .tokenCounter(new DefaultTokenCounter()).clearToolInputs(true)  // 清理工具输入
                 .placeholder("[...]")  // 优化：更有意义的占位符
@@ -192,7 +189,7 @@ public class LocalAgent {
                 .backoffMultiplier(2.0)
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
-        interceptors.add(contextEditingInterceptor);
+//        interceptors.add(contextEditingInterceptor);
         interceptors.add(largeResultEvictionInterceptor);
         interceptors.add(toolRetryInterceptor);
         interceptors.add(filesystemInterceptor);
@@ -231,35 +228,55 @@ public class LocalAgent {
         log.debug("Setting workspace root to: {}", WORKSPACE_ROOT);
         ChatModel chatModel = getChatModel(runnableConfig);
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
-        List<Hook> hooks = getHooks(runnableConfig);
+        List<Hook> hooks = getHooks(runnableConfig,chatModel);
         // 使用 PromptTemplate 渲染指令
         Locale locale = Locale.getDefault();
         String displayName = locale.getDisplayLanguage();
         var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "osName", System.getProperty("os.name").toLowerCase(),
-                    "language", displayName,
-                    "lineSeparator", System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n"))).build().render();
+                "language", displayName,
+                "lineSeparator", System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n"))).build().render();
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
         if (chatModel.getDefaultOptions().getModel().contains("deepseek-v4")) {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));
         }
         var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
-        var agent = ReactAgent.builder().name("agent").chatOptions(chatOptions.build()).model(chatModel).tools(tools).parallelToolExecution(true).saver(FILE_SYSTEM_SAVER).hooks(hooks).enableLogging(true).description("本地文件操作智能体，主要负责文件创建，编辑,命令执行").systemPrompt(instruction).interceptors(interceptors).outputKey("agent_output").returnReasoningContents(true).build();
+        var agent = ReactAgent.builder().name("agent")
+                .tools(tools)
+                .hooks(hooks)
+                .model(chatModel)
+                .interceptors(interceptors)
+                .chatOptions(chatOptions.build())
+                .parallelToolExecution(true)
+                .saver(FILE_SYSTEM_SAVER)
+                .enableLogging(true)
+                .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
+                .systemPrompt(instruction)
+                .outputKey("agent_output")
+                .returnReasoningContents(true)
+                .build();
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());
         return agent;
     }
 
     @NotNull
-    private static List<Hook> getHooks(RunnableConfig runnableConfig) {
+    private static List<Hook> getHooks(RunnableConfig runnableConfig, ChatModel chatModel) {
         List<Hook> hooks = new ArrayList<>();
         Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder().description("请确认信息收集工具执行").build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
         if (runnableConfig.context().get("auto_approve") instanceof Boolean autoApprove && !autoApprove) {
             HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
             hooks.add(humanInTheLoopHook);
         }
+        SummarizationHook summarizationHook = SummarizationHook.builder()
+                .model(chatModel)
+                .maxTokensBeforeSummary(55000)     // ← 窗口的 ~84%
+                .messagesToKeep(40)                // ← 保留更多原始消息
+                .keepFirstUserMessage(true)
+                .build();
         FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder().userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString()).projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills").autoLoad(true).build();
         SkillsAgentHook hook = SkillsAgentHook.builder().skillRegistry(registry).autoReload(true).build();
         hooks.add(hook);
+        hooks.add(summarizationHook);
         return hooks;
     }
 
