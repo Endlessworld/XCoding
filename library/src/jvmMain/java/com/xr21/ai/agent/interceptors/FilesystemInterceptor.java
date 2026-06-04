@@ -146,7 +146,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
                           • insert_at_line：在指定行插入，适合添加import/新方法
                           • 支持一次调用批量执行多个编辑操作
                           • 积极使用批量编辑以减少调用次数增加编辑效率
-                使用 ls 查看指定目录的文件列表
+                    使用 ls 查看指定目录的文件列表
                     ### 最佳实践：
                         1. 在阅读/编辑前，始终使用“ls”来探索目录
                         2. 对于大文件使用带有偏移/限制的“read_file”
@@ -154,6 +154,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         4. 使用描述性路径，避免歧义名称
                         6. 创建文件时写入的文件内容务必小于500字符，未完成的部分使用 smart_edit 的 insert_at_line 继续添加
                         7. 通过并行工具调用write_file实现同时写入多个文件加快执行效率
+                        8. 编辑或创建文件时使用当前系统的默认换行符（Windows默认使用CRLF换行符，Unix/Linux 使用LF换行符,旧版 Mac OS 使用CR换行符）
                     ### 路径验证：
                         - 所有路径都经过安全性验证
                         - 路径穿越尝试被阻断

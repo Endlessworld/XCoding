@@ -26,6 +26,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.hook.skills.SkillsAgentHook;
+import com.alibaba.cloud.ai.graph.agent.hook.summarization.SummarizationHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.modelretry.ModelRetryInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
@@ -35,7 +36,10 @@ import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonS
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.config.ModelConfigLoader;
-import com.xr21.ai.agent.interceptors.*;
+import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
+import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
+import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
+import com.xr21.ai.agent.interceptors.WorkerInterceptor;
 import com.xr21.ai.agent.model.Config;
 import com.xr21.ai.agent.tools.ContextCacheTool;
 import com.xr21.ai.agent.tools.ShellTools;
@@ -86,7 +90,7 @@ public class LocalAgent {
     /**
      * 默认工作空间根目录
      */
-    public static final String DEFAULT_WORKSPACE_ROOT = "D:\\IdeaProjects\\agi_working";
+    public static final String DEFAULT_WORKSPACE_ROOT = Path.of(System.getProperty("user.home"), ".agi_working", "workspace", System.currentTimeMillis() + "").toAbsolutePath().toString();
     /**
      * 文件系统保存器的存储目录路径
      */
@@ -97,12 +101,16 @@ public class LocalAgent {
     public static final FileSystemSaver FILE_SYSTEM_SAVER = FileSystemSaver.builder().targetFolder(FILE_SYSTEM_SAVER_FOLDER).stateSerializer(new SpringAIJacksonStateSerializer(OverAllState::new)).build();
     private static final Path FILE_SYSTEM_SKILL_DIR = Path.of(System.getProperty("user.home"), ".agi_working", "skills");
     private static final String SYSTEM_PROMPT_TEMPLATE = """
-            你是一个编码智能体 XAgent，通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
+            你是一个编码智能体 XAgent
+            通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
-            当前系统：{osName} 您只能执行当前系统平台默认存在的命令，使用当前用户系统语言:{language}回复用户
+            当前系统：{osName}
             当前系统换行符：{lineSeparator}
-            - Windows 平台默认使用 CRLF（\r\n）换行符，Unix/Linux 使用 LF（\n），旧版 Mac OS 使用 CR（\r）
-            - 对于编码任务 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+            当前系统语言:{language}
+            您只能执行当前系统平台默认存在的命令
+            请使用当前系统语言:{language}回复用户
+            - 使用批量编辑 一次修改多处进行高效修改
+            - 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
             """;
     /**
      * 当前工作空间根目录，可在运行时更新
@@ -228,7 +236,7 @@ public class LocalAgent {
         log.debug("Setting workspace root to: {}", WORKSPACE_ROOT);
         ChatModel chatModel = getChatModel(runnableConfig);
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
-        List<Hook> hooks = getHooks(runnableConfig,chatModel);
+        List<Hook> hooks = getHooks(runnableConfig, chatModel);
         // 使用 PromptTemplate 渲染指令
         Locale locale = Locale.getDefault();
         String displayName = locale.getDisplayLanguage();
@@ -269,8 +277,8 @@ public class LocalAgent {
         }
         SummarizationHook summarizationHook = SummarizationHook.builder()
                 .model(chatModel)
-                .maxTokensBeforeSummary(55000)     // ← 窗口的 ~84%
-                .messagesToKeep(40)                // ← 保留更多原始消息
+                .maxTokensBeforeSummary(64 * 1024)     // ← 窗口的 ~84%
+                .messagesToKeep(10)                // ← 保留更多原始消息
                 .keepFirstUserMessage(true)
                 .build();
         FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder().userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString()).projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills").autoLoad(true).build();

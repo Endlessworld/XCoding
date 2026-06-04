@@ -26,14 +26,11 @@ import com.alibaba.cloud.ai.graph.agent.hook.messages.UpdatePolicy;
 import com.xr21.ai.agent.utils.AcpProgressUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Hook that summarizes conversation history when token limits are approached.
@@ -55,17 +52,24 @@ public class SummarizationHook extends MessagesModelHook {
 
     private static final Logger log = LoggerFactory.getLogger(SummarizationHook.class);
 
-    private static final String DEFAULT_SUMMARY_PROMPT =
-            "<role>\nContext Extraction Assistant\n</role>\n\n" +
-                    "<primary_objective>\n" +
-                    "Your sole objective in this task is to extract the highest quality/most relevant context " +
-                    "from the conversation history below.\n</primary_objective>\n\n" +
-                    "<instructions>\n" +
-                    "The conversation history below will be replaced with the context you extract in this step. " +
-                    "Extract and record all of the most important context from the conversation history.\n" +
-                    "Respond ONLY with the extracted context. Do not include any additional information.\n" +
-                    "</instructions>\n\n" +
-                    "<messages>\nMessages to summarize:\n%s\n</messages>";
+    private static final String DEFAULT_SUMMARY_PROMPT = """
+            <role>
+           上下文提取助手
+            </role>
+            <primary_objective>
+            你在这项任务中的唯一目标是从下面的对话历史中提取最高质量/最相关的上下文。
+            </primary_objective>
+            <instructions>
+            以下对话历史将被你在此步骤中提取的上下文所取代。
+            从对话历史中提取并记录所有最重要的上下文。
+            包含关键决策，路径，结论等等一切对于 后续对话对你有用的信息
+            只用提取出来的上下文回复。请勿包含任何额外信息。
+            </instructions>
+           
+            <messages>
+            Messages to summarize:
+            %s
+            </messages>""";
 
     private static final String SUMMARY_PREFIX = "## Previous conversation summary:";
     private static final int DEFAULT_MESSAGES_TO_KEEP = 20;
@@ -105,10 +109,8 @@ public class SummarizationHook extends MessagesModelHook {
             return new AgentCommand(previousMessages);
         }
 
-        log.info("Token count {} exceeds threshold {}, triggering summarization",
-                totalTokens, maxTokensBeforeSummary);
-        AcpProgressUtil.sendProgress(config, "Token count %s exceeds threshold %s, triggering summarization".formatted(
-                totalTokens, maxTokensBeforeSummary));
+        log.info("Token count {} exceeds threshold {}, triggering summarization", totalTokens, maxTokensBeforeSummary);
+        AcpProgressUtil.sendProgress(config, "Token count %s exceeds threshold %s, triggering summarization".formatted(totalTokens, maxTokensBeforeSummary));
         int cutoffIndex = findSafeCutoff(previousMessages);
 
         if (cutoffIndex <= 0) {
@@ -137,14 +139,13 @@ public class SummarizationHook extends MessagesModelHook {
 
         String summary = createSummary(toSummarize);
         AcpProgressUtil.sendProgress(config, "Summarized messages: %s".formatted(summary));
-        SystemMessage summaryMessage = new SystemMessage(summaryPrefix + "\n" + summary);
-
         List<Message> recentMessages = new ArrayList<>();
         for (int i = cutoffIndex; i < previousMessages.size(); i++) {
             recentMessages.add(previousMessages.get(i));
         }
-
         List<Message> newMessages = new ArrayList<>();
+        Optional<Message> firstSystemMessage = previousMessages.stream().filter(message -> message instanceof SystemMessage).findFirst();
+        SystemMessage summaryMessage = new SystemMessage(firstSystemMessage.map(Message::getText).orElse("\n") + summaryPrefix + "\n" + summary);
         if (firstUserMessage != null) {
             newMessages.add(firstUserMessage);
         }
@@ -152,22 +153,20 @@ public class SummarizationHook extends MessagesModelHook {
         newMessages.addAll(recentMessages);
 
         if (firstUserMessage != null) {
-            log.info("Summarized {} messages, keeping {} recent messages (First UserMessage preserved)",
-                    toSummarize.size(), recentMessages.size());
+            log.info("Summarized {} messages, keeping {} recent messages (First UserMessage preserved)", toSummarize.size(), recentMessages.size());
             AcpProgressUtil.sendProgress(config, "Summarized %s messages, keeping %s recent messages (First UserMessage preserved)".formatted(toSummarize.size(), recentMessages.size()));
         } else {
-            log.info("Summarized {} messages, keeping {} recent messages",
-                    toSummarize.size(), recentMessages.size());
+            log.info("Summarized {} messages, keeping {} recent messages", toSummarize.size(), recentMessages.size());
             AcpProgressUtil.sendProgress(config, "Summarized %s messages, keeping %s recent messages".formatted(toSummarize.size(), recentMessages.size()));
         }
         return new AgentCommand(newMessages, UpdatePolicy.REPLACE);
     }
 
     /**
-     * Find safe cutoff point that preserves AI/Tool message pairs.
+     * 找到保持 AI/工具消息配对的安全截止点。
      * <p>
-     * Returns the index where messages can be safely cut without separating
-     * related AI and Tool messages. Returns 0 if no safe cutoff is found.
+     * 返回可以安全切断消息且不分离的索引
+     * 相关的AI和工具信息。如果找不到安全截止点，则返回0。
      */
     private int findSafeCutoff(List<Message> messages) {
         if (messages.size() <= messagesToKeep) {
@@ -234,11 +233,7 @@ public class SummarizationHook extends MessagesModelHook {
     /**
      * Check if cutoff separates an AI message from its corresponding tool messages.
      */
-    private boolean cutoffSeparatesToolPair(
-            List<Message> messages,
-            int aiMessageIndex,
-            int cutoffIndex,
-            Set<String> toolCallIds) {
+    private boolean cutoffSeparatesToolPair(List<Message> messages, int aiMessageIndex, int cutoffIndex, Set<String> toolCallIds) {
         for (int j = aiMessageIndex + 1; j < messages.size(); j++) {
             Message message = messages.get(j);
             if (message instanceof ToolResponseMessage toolResponseMessage) {
@@ -261,21 +256,28 @@ public class SummarizationHook extends MessagesModelHook {
         if (messages.isEmpty()) {
             return "No previous conversation.";
         }
-
         StringBuilder messageText = new StringBuilder();
         for (Message msg : messages) {
             String role = getRoleName(msg);
-            messageText.append(role).append(": ").append(msg.getText()).append("\n");
+            messageText.append("\n-----------\n").append(role).append(": ").append(msg.getText()).append("\n");
+            if (msg instanceof ToolResponseMessage tool) {
+                for (ToolResponseMessage.ToolResponse response : tool.getResponses()) {
+                    messageText.append("tool_call: ").append("\n id: ").append(response.id()).append("\n").append(response.name())
+                            .append("responseData :").append(response.responseData()).append("\n");
+                }
+
+            }
         }
-
-        String prompt = String.format(summaryPrompt, messageText.toString());
-
         try {
-            Prompt summaryPromptObj = new Prompt(List.of(new UserMessage(prompt)));
-            var response = model.call(summaryPromptObj);
-            return response.getResult().getOutput().getText();
+            String prompt = String.format(summaryPrompt, messageText.toString().replaceAll("\\{", "").replaceAll("}", ""));
+            log.debug("create summary prompt ：{}", prompt);
+            log.debug("create summary model default options ：{}", model.getDefaultOptions());
+            var response = ChatClient.builder(model).defaultSystem(DEFAULT_SUMMARY_PROMPT).build().prompt().user(prompt).call().content();
+            System.out.println("response "+response);
+            log.debug("Summary generation success ：{}", response);
+            return response;
         } catch (Exception e) {
-            log.error("Failed to create summary: {}", e.getMessage());
+            log.error("Failed to create summary ", e);
             return "Summary generation failed: " + e.getMessage();
         }
     }

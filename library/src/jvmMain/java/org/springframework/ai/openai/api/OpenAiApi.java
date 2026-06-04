@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.*;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.xr21.ai.agent.utils.Json;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.model.*;
 import org.springframework.ai.openai.api.common.OpenAiApiConstants;
 import org.springframework.ai.retry.RetryUtils;
@@ -64,6 +65,7 @@ import java.util.stream.Collectors;
  * @author Alexandros Pappas
  * @author Filip Hrisafov
  */
+@Slf4j
 public class OpenAiApi {
 
     public static final String HTTP_USER_AGENT_HEADER = "User-Agent";
@@ -178,7 +180,15 @@ public class OpenAiApi {
      * and headers.
      */
     public ResponseEntity<ChatCompletion> chatCompletionEntity(ChatCompletionRequest chatRequest) {
-        return chatCompletionEntity(chatRequest, new LinkedMultiValueMap<>());
+        try{
+            log.error("chatCompletionEntity chatRequest >>> ", chatRequest);
+            return chatCompletionEntity(chatRequest, new LinkedMultiValueMap<>());
+        } catch (Throwable e) {
+            log.error("chatCompletionEntity ", chatRequest);
+            log.error("chatRequest>>> ", Json.toJson(chatRequest));
+            log.error("chatCompletionEntity failed",e);
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -195,18 +205,25 @@ public class OpenAiApi {
         Assert.notNull(chatRequest, REQUEST_BODY_NULL_MESSAGE);
         Assert.isTrue(!chatRequest.stream(), STREAM_FALSE_MESSAGE);
         Assert.notNull(additionalHttpHeader, ADDITIONAL_HEADERS_NULL_MESSAGE);
-
-        // @formatter:off
-        return this.restClient.post()
-                .uri(this.completionsPath)
-                .headers(headers -> {
-                    headers.addAll(additionalHttpHeader);
-                    addDefaultHeadersIfMissing(headers);
-                })
-                .body(chatRequest)
-                .retrieve()
-                .toEntity(ChatCompletion.class);
-        // @formatter:on
+        try {
+            log.error("chatRequest>>> ", chatRequest);
+            log.error("chatRequest>>> ", Json.toJson(chatRequest));
+            // @formatter:off
+            return this.restClient.post()
+                    .uri(this.completionsPath)
+                    .headers(headers -> {
+                        headers.addAll(additionalHttpHeader);
+                        addDefaultHeadersIfMissing(headers);
+                    })
+                    .body(chatRequest)
+                    .retrieve()
+                    .toEntity(ChatCompletion.class);
+            // @formatter:on
+        } catch (Throwable e) {
+            log.error("chatRequest>>> ", Json.toJson(chatRequest));
+            log.error("chatCompletionEntity failed", e);
+            throw new RuntimeException(e);
+        }
     }
 
     /**

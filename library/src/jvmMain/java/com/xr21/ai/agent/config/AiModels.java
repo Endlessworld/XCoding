@@ -25,7 +25,6 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -76,10 +75,10 @@ public enum AiModels {
             return OpenAiChatModel.builder().defaultOptions(OpenAiChatOptions.builder()
                     .model(effectiveModelName)
                     .temperature(temperature)
-                    .parallelToolCalls(true)
-                    .streamUsage(true)
-                    .toolChoice("auto")
-                    .extraBody(Map.of("thinking", Map.of("type", "false")))
+//                    .parallelToolCalls(true)
+//                    .streamUsage(true)
+//                    .toolChoice("auto")
+//                    .extraBody(Map.of("thinking", Map.of("type", "false")))
                     .build()).openAiApi(api).build();
         }
         throw new RuntimeException("Model configuration not found in JSON for:  " + modelName);
