@@ -15,34 +15,46 @@
  */
 package com.xr21.ai.agent.tui.acp
 
+import com.agentclientprotocol.client.Client
+import com.agentclientprotocol.client.ClientInfo
+import com.agentclientprotocol.client.ClientSession
+import com.agentclientprotocol.common.ClientSessionOperations
+import com.agentclientprotocol.common.Event
+import com.agentclientprotocol.common.SessionCreationParameters
+import com.agentclientprotocol.launcher.AgiAgent
+import com.agentclientprotocol.launcher.launchWebSocketServer
+import com.agentclientprotocol.model.*
+import com.agentclientprotocol.protocol.Protocol
+import com.agentclientprotocol.protocol.ProtocolOptions
+import com.agentclientprotocol.transport.acpProtocolOnClientWebSocket
+import com.xr21.ai.agent.tui.config.TuiConfig
 import com.xr21.ai.agent.tui.state.AppState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import io.ktor.client.*
+import io.ktor.client.plugins.websocket.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 import java.io.BufferedReader
 
 /**
  * ACP 客户端管理器
  *
- * 管理与 Agent 子进程的通信。
- * 通过 Stdio 与 Agent 建立 ACP 协议连接。
- *
- * 通信协议：
- * - 发送：NDJSON 格式的 JSON-RPC 请求到子进程的 stdin
- * - 接收：从子进程的 stdout 读取 NDJSON 格式的响应和事件
- *
- * 握手流程：
- * 1. 启动 Agent 子进程
- * 2. 发送 initialize 请求
- * 3. 接收 initialized 响应
- * 4. 发送 session/new 请求
- * 5. 接收 sessionId 响应
+ * 支持两种连接模式：
+ * 1. WebSocket 模式（默认）：通过 WebSocket 连接到 ACP Agent 服务
+ *    - 如果未配置外部 ws-url，自动在后台启动内部 WebSocket 服务器
+ * 2. Stdio 模式（兼容）：通过 --command 参数启动 Agent 子进程
  */
 class AcpClientManager(private val appState: AppState) {
 
+    // WebSocket 模式状态
+    private var httpClient: HttpClient? = null
+    private var protocol: Protocol? = null
+    private var acpClient: Client? = null
+    private var clientSession: ClientSession? = null
+    private var serverThread: Thread? = null
+
+    // Stdio 模式状态（向后兼容）
     private var process: Process? = null
     private var isConnected = false
     private var reader: BufferedReader? = null
@@ -53,25 +65,85 @@ class AcpClientManager(private val appState: AppState) {
     var sessionId: String? = null
         private set
 
-    /** 启动 Agent 子进程并建立连接 */
-    suspend fun connect(command: List<String>): Result<Unit> {
+    private var eventHandler: ((Event) -> Unit)? = null
+
+    /** 建立 ACP 连接（WebSocket 优先，回退到 Stdio） */
+    suspend fun connect(config: TuiConfig): Result<Unit> {
+        return if (config.agentCommand.isNotEmpty()) {
+            connectStdio(config.agentCommand)
+        } else {
+            connectWebSocket(config)
+        }
+    }
+
+    /** WebSocket 模式连接 */
+    private suspend fun connectWebSocket(config: TuiConfig): Result<Unit> {
         return try {
             appState.connectionState = ConnectionState.CONNECTING
 
-            val pb = ProcessBuilder(command)
-                .redirectErrorStream(true)
+            val wsUrl = if (config.webSocketUrl.isNotEmpty()) {
+                config.webSocketUrl
+            } else {
+                startInternalServer(config.webSocketServerPort)
+                delay(800)
+                "ws://127.0.0.1:${config.webSocketServerPort}/acp"
+            }
 
+            val client = HttpClient { install(WebSockets) }
+            httpClient = client
+
+            val proto = client.acpProtocolOnClientWebSocket(wsUrl, ProtocolOptions())
+            proto.start()
+            protocol = proto
+
+            val acpClient = Client(proto)
+            this.acpClient = acpClient
+
+            val agentInfo = acpClient.initialize(
+                ClientInfo(implementation = Implementation("XAgent TUI", "0.1.0", "XAgent TUI"))
+            )
+            appState.agentName = agentInfo.implementation?.name ?: "Unknown"
+            appState.agentVersion = agentInfo.implementation?.version ?: ""
+
+            val session = acpClient.newSession(
+                SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
+            ) { _, _ -> TuiClientOperations() }
+
+            clientSession = session
+            sessionId = session.sessionId.toString()
+
+            appState.connectionState = ConnectionState.CONNECTED
+            Result.success(Unit)
+        } catch (e: Exception) {
+            appState.connectionState = ConnectionState.DISCONNECTED_ERROR
+            appState.errorMessage = "WebSocket 连接失败: ${e.message}"
+            Result.failure(e)
+        }
+    }
+
+    /** 启动内部 WebSocket 服务器（后台线程） */
+    private fun startInternalServer(port: Int) {
+        val thread = Thread {
+            launchWebSocketServer(AgiAgent(), "127.0.0.1", port)
+        }
+        thread.isDaemon = true
+        thread.start()
+        serverThread = thread
+    }
+
+    /** Stdio 模式连接（向后兼容） */
+    private suspend fun connectStdio(command: List<String>): Result<Unit> {
+        return try {
+            appState.connectionState = ConnectionState.CONNECTING
+            val pb = ProcessBuilder(command).redirectErrorStream(true)
             process = pb.start()
             reader = process!!.inputStream.bufferedReader()
             isConnected = true
-
-            // 执行 ACP 握手
             val handshakeResult = performHandshake()
             if (handshakeResult.isFailure) {
                 disconnect()
                 return handshakeResult
             }
-
             appState.connectionState = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
@@ -81,37 +153,17 @@ class AcpClientManager(private val appState: AppState) {
         }
     }
 
-    /**
-     * ACP 握手流程
-     */
+    /** Stdio 模式握手 */
     private suspend fun performHandshake(): Result<Unit> {
         return try {
-            // 步骤1: 发送 initialize 请求
-            val initializeRequest = buildJsonRpcRequest("initialize", mapOf(
+            sendRaw(buildJsonRpcRequest("initialize", mapOf(
                 "protocolVersion" to "0.1.0",
-                "clientInfo" to mapOf(
-                    "name" to "XAgent TUI",
-                    "version" to "0.1.0"
-                )
-            ))
-            sendRaw(initializeRequest)
-
-            // 等待 initialized 响应
-            val initResponse = readResponse() ?: return Result.failure(Exception("未收到 initialize 响应"))
-
-            // 步骤2: 发送 session/new 请求
-            val sessionRequest = buildJsonRpcRequest("session/new", mapOf(
-                "cwd" to System.getProperty("user.dir")
-            ))
-            sendRaw(sessionRequest)
-
-            // 等待 session 创建响应
+                "clientInfo" to mapOf("name" to "XAgent TUI", "version" to "0.1.0")
+            )))
+            readResponse() ?: return Result.failure(Exception("未收到 initialize 响应"))
+            sendRaw(buildJsonRpcRequest("session/new", mapOf("cwd" to System.getProperty("user.dir"))))
             val sessionResponse = readResponse() ?: return Result.failure(Exception("未收到 session/new 响应"))
-
-            // 解析 sessionId
-            val sessionId = extractSessionId(sessionResponse)
-            this.sessionId = sessionId
-
+            sessionId = extractSessionId(sessionResponse)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -121,16 +173,26 @@ class AcpClientManager(private val appState: AppState) {
     /** 发送 ACP prompt 消息 */
     suspend fun sendPrompt(content: String): Result<Unit> {
         return try {
-            val sid = sessionId ?: return Result.failure(Exception("会话未创建"))
-            val promptRequest = buildJsonRpcRequest("session/prompt", mapOf(
-                "sessionId" to sid,
-                "content" to listOf(mapOf(
-                    "type" to "text",
-                    "text" to content
+            val session = clientSession
+            if (session != null) {
+                // WebSocket 模式：收集事件流
+                val handler = eventHandler ?: return Result.failure(Exception("事件处理器未设置"))
+                session.prompt(listOf(ContentBlock.Text(content))).collect { event ->
+                    handler(event)
+                }
+                Result.success(Unit)
+            } else if (isConnected && process != null) {
+                // Stdio 模式
+                val sid = sessionId ?: return Result.failure(Exception("会话未创建"))
+                val promptRequest = buildJsonRpcRequest("session/prompt", mapOf(
+                    "sessionId" to sid,
+                    "content" to listOf(mapOf("type" to "text", "text" to content))
                 ))
-            ))
-            sendRaw(promptRequest)
-            Result.success(Unit)
+                sendRaw(promptRequest)
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("未连接"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -139,37 +201,40 @@ class AcpClientManager(private val appState: AppState) {
     /** 发送中断信号 */
     suspend fun sendCancel(): Result<Unit> {
         return try {
-            val sid = sessionId ?: return Result.failure(Exception("会话未创建"))
-            val cancelRequest = buildJsonRpcRequest("session/cancel", mapOf(
-                "sessionId" to sid
-            ))
-            sendRaw(cancelRequest)
-            Result.success(Unit)
+            val session = clientSession
+            if (session != null) {
+                session.cancel()
+                Result.success(Unit)
+            } else if (isConnected) {
+                val sid = sessionId ?: return Result.failure(Exception("会话未创建"))
+                val cancelRequest = buildJsonRpcRequest("session/cancel", mapOf("sessionId" to sid))
+                sendRaw(cancelRequest)
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("未连接"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    /** 接收 ACP 事件流 */
+    /** 接收 ACP 事件流（Stdio 模式） */
     fun receiveEvents(): Flow<String> = flow {
         val r = reader ?: return@flow
         while (isConnected) {
             try {
                 val line = r.readLine() ?: break
-                if (line.isNotBlank()) {
-                    emit(line)
-                }
-            } catch (e: Exception) {
-                break
-            }
+                if (line.isNotBlank()) emit(line)
+            } catch (e: Exception) { break }
         }
     }
 
     /** 启动后台事件收集协程 */
-    fun startEventCollection(onEvent: (String) -> Unit) {
+    fun startEventCollection(onEvent: (Event) -> Unit) {
+        eventHandler = onEvent
         eventCollectorJob = scope.launch {
-            receiveEvents().collect { event ->
-                onEvent(event)
+            receiveEvents().collect { line ->
+                onEvent(Event.SessionUpdateEvent(SessionUpdate.AgentMessageChunk(ContentBlock.Text(line))))
             }
         }
     }
@@ -179,30 +244,38 @@ class AcpClientManager(private val appState: AppState) {
         isConnected = false
         eventCollectorJob?.cancel()
         eventCollectorJob = null
-        try {
-            process?.destroy()
-        } catch (_: Exception) {}
+
+        // WebSocket 模式清理
+        try { protocol?.close() } catch (_: Exception) {}
+        try { httpClient?.close() } catch (_: Exception) {}
+        serverThread?.interrupt()
+        serverThread = null
+        clientSession = null
+        acpClient = null
+        protocol = null
+        httpClient = null
+
+        // Stdio 模式清理
+        try { process?.destroy() } catch (_: Exception) {}
         process = null
         reader = null
         sessionId = null
         appState.connectionState = ConnectionState.DISCONNECTED
     }
 
-    /** 发送中断信号到子进程 */
+    /** 发送中断信号到子进程（Stdio 模式） */
     fun interrupt() {
         process?.let {
-            // Windows: 使用 Ctrl+Break 信号
             if (System.getProperty("os.name").lowercase().contains("windows")) {
                 it.destroyForcibly()
             } else {
-                // Unix: 发送 SIGINT
                 it.destroy()
             }
         }
     }
 
     /** 检查是否已连接 */
-    val isActive: Boolean get() = isConnected && process?.isAlive == true
+    val isActive: Boolean get() = (clientSession != null) || (isConnected && process?.isAlive == true)
 
     // ========== 私有辅助方法 ==========
 
@@ -250,17 +323,83 @@ class AcpClientManager(private val appState: AppState) {
     }
 
     private fun extractSessionId(response: String): String? {
-        // 尝试从 JSON 响应中提取 sessionId
-        // 格式: {"jsonrpc":"2.0","id":1,"result":{"sessionId":"xxx",...}}
         val sessionIdMarker = "\"sessionId\":\""
         val start = response.indexOf(sessionIdMarker)
         if (start >= 0) {
             val valueStart = start + sessionIdMarker.length
             val end = response.indexOf('"', valueStart)
-            if (end >= 0) {
-                return response.substring(valueStart, end)
-            }
+            if (end >= 0) return response.substring(valueStart, end)
         }
         return null
     }
+}
+
+/** TUI 客户端操作实现（WebSocket 模式） */
+@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+private class TuiClientOperations : ClientSessionOperations {
+    private val activeTerminals = mutableMapOf<String, Process>()
+
+    override suspend fun requestPermissions(
+        toolCall: SessionUpdate.ToolCallUpdate,
+        permissions: List<PermissionOption>,
+        _meta: JsonElement?
+    ): RequestPermissionResponse {
+        return RequestPermissionResponse(RequestPermissionOutcome.Selected(permissions.first().optionId))
+    }
+
+    override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {}
+
+    override suspend fun fsReadTextFile(path: String, line: UInt?, limit: UInt?, _meta: JsonElement?): ReadTextFileResponse {
+        return ReadTextFileResponse(java.io.File(path).readText())
+    }
+
+    override suspend fun fsWriteTextFile(path: String, content: String, _meta: JsonElement?): WriteTextFileResponse {
+        java.io.File(path).writeText(content)
+        return WriteTextFileResponse()
+    }
+
+    override suspend fun terminalCreate(
+        command: String, args: List<String>, cwd: String?, env: List<EnvVariable>,
+        outputByteLimit: ULong?, _meta: JsonElement?
+    ): CreateTerminalResponse {
+        val pb = ProcessBuilder(listOf(command) + args)
+        if (cwd != null) pb.directory(java.io.File(cwd))
+        env.forEach { pb.environment()[it.name] = it.value }
+        val process = pb.start()
+        val terminalId = java.util.UUID.randomUUID().toString()
+        activeTerminals[terminalId] = process
+        return CreateTerminalResponse(terminalId)
+    }
+
+    override suspend fun terminalOutput(terminalId: String, _meta: JsonElement?): TerminalOutputResponse {
+        val process = activeTerminals[terminalId] ?: error("Terminal not found")
+        val stdout = process.inputStream.bufferedReader().readText()
+        val stderr = process.errorStream.bufferedReader().readText()
+        val output = if (stderr.isNotEmpty()) "$stdout\nSTDERR:\n$stderr" else stdout
+        return TerminalOutputResponse(output, truncated = false)
+    }
+
+    override suspend fun terminalRelease(terminalId: String, _meta: JsonElement?): ReleaseTerminalResponse {
+        activeTerminals.remove(terminalId)
+        return ReleaseTerminalResponse()
+    }
+
+    override suspend fun terminalWaitForExit(terminalId: String, _meta: JsonElement?): WaitForTerminalExitResponse {
+        val process = activeTerminals[terminalId] ?: error("Terminal not found")
+        val exitCode = process.waitFor()
+        return WaitForTerminalExitResponse(exitCode.toUInt())
+    }
+
+    override suspend fun terminalKill(terminalId: String, _meta: JsonElement?): KillTerminalCommandResponse {
+        activeTerminals[terminalId]?.destroy()
+        return KillTerminalCommandResponse()
+    }
+
+    override suspend fun createElicitation(params: CreateElicitationRequest): CreateElicitationResponse {
+        return CreateElicitationResponse(
+            ElicitationAction.Accept(content = emptyMap())
+        )
+    }
+
+    override suspend fun completeElicitation(params: CompleteElicitationNotification) {}
 }

@@ -32,19 +32,14 @@ class AppLayout(
     private val terminal: Terminal,
     private val appState: AppState
 ) {
-    companion object {
-        private var cachedWidth: Int? = null
-    }
-
     fun render(): String {
         val focus = appState.focusPanel
-        // 获取终端尺寸（检测一次后缓存）
-        val tw = cachedWidth ?: terminal.size.width.also { cachedWidth = it }
-        val terminalWidth = tw.coerceIn(40, 400)
+        // 每次渲染都重新检测终端尺寸（支持窗口 resize）
+        val terminalWidth = terminal.size.width.coerceIn(40, 400)
         val sidebarWidth = (terminalWidth * 0.22f).toInt().coerceIn(15, 40)
         val infoWidth = (terminalWidth * 0.20f).toInt().coerceIn(15, 35)
 
-        // 估算终端高度（默认 24 行，减去状态栏 1 行、输入面板内容 3 行、边框/标题等开销约 4 行）
+        // 计算可用高度：终端总高度 - 状态栏1行 - 输入面板预留3行 - 边框/标题等开销约4行
         val terminalHeight = terminal.size.height.coerceIn(10, 200)
         val inputAvailableLines = 3
         val chatAvailableLines = (terminalHeight - inputAvailableLines - 5).coerceAtLeast(5)
@@ -59,7 +54,7 @@ class AppLayout(
             header {
                 row {
                     cell(SidebarPanel(appState).render(focus == PanelType.LEFT))
-                    cell(ChatPanel(appState).render(focus == PanelType.CENTER, chatAvailableLines))
+                    cell(ChatPanel(appState, terminal).render(focus == PanelType.CENTER, chatAvailableLines))
                     cell(InfoPanel(appState).render(focus == PanelType.RIGHT))
                 }
             }

@@ -21,13 +21,18 @@ package com.xr21.ai.agent.tui.layout
  * TODO: 1.11 阶段实现完整的消息流渲染
  */
 
+import com.github.ajalt.mordant.markdown.Markdown
 import com.github.ajalt.mordant.rendering.BorderType
 import com.github.ajalt.mordant.rendering.TextAlign
+import com.github.ajalt.mordant.terminal.Terminal
 import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
 import com.xr21.ai.agent.tui.state.MessageRole
 
-class ChatPanel(private val appState: AppState) {
+class ChatPanel(
+    private val appState: AppState,
+    private val terminal: Terminal? = null
+) {
 
     fun render(isFocused: Boolean = false, availableLines: Int = 30): Panel {
         val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
@@ -53,7 +58,23 @@ class ChatPanel(private val appState: AppState) {
             }
             val timestamp = msg.timestamp.format(timeFormatter)
             val suffix = if (msg.isStreaming) " ▌" else ""
-            val contentLines = msg.content.lines().ifEmpty { listOf("") }
+            // 工具消息折叠时只显示摘要
+            val effectiveContent = when {
+                (msg.role == MessageRole.TOOL_CALL || msg.role == MessageRole.TOOL_RESULT) && !msg.isExpanded -> {
+                    val firstLine = msg.content.lineSequence().firstOrNull() ?: ""
+                    val hint = if (isFocused) " [Space 展开]" else " [折叠]"
+                    "$firstLine…$hint"
+                }
+                msg.role == MessageRole.ASSISTANT && terminal != null -> {
+                    try {
+                        terminal.render(Markdown(msg.content))
+                    } catch (_: Exception) {
+                        msg.content
+                    }
+                }
+                else -> msg.content
+            }
+            val contentLines = effectiveContent.lines().ifEmpty { listOf("") }
             // 首行带角色和时间戳
             listOf("$role  [$timestamp]") + contentLines.map { it + suffix }
         }

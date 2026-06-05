@@ -15,112 +15,101 @@
  */
 package com.xr21.ai.agent.tui.acp
 
-import com.xr21.ai.agent.tui.state.AppState
-import com.xr21.ai.agent.tui.state.TodoItem
-import com.xr21.ai.agent.tui.state.TodoStatus
-import com.xr21.ai.agent.tui.state.TokenUsage
+import com.agentclientprotocol.common.Event
+import com.agentclientprotocol.model.*
+import com.xr21.ai.agent.tui.state.*
 import kotlinx.coroutines.flow.Flow
 
 /**
  * ACP 事件处理器
  *
- * 将 ACP 协议事件转换为应用状态更新。
- *
- * TODO: 1.10 阶段实现完整的 ACP 事件处理
+ * 将 ACP SDK 事件转换为应用状态更新。
  */
 class AcpEventProcessor(private val appState: AppState) {
 
-    suspend fun processEventStream(events: Flow<String>) {
+    suspend fun processEventStream(events: Flow<Event>) {
         events.collect { event ->
             processEvent(event)
         }
     }
 
-    fun processEvent(event: String) {
-        when {
-            // 文本增量
-            event.startsWith("text:") -> {
-                val content = event.removePrefix("text:")
-                appState.appendStreamingContent(content)
+    fun processEvent(event: Event) {
+        when (event) {
+            is Event.SessionUpdateEvent -> processSessionUpdate(event.update)
+            is Event.PromptResponseEvent -> processPromptResponse(event.response)
+        }
+    }
+
+    private fun processSessionUpdate(update: SessionUpdate) {
+        when (update) {
+            is SessionUpdate.AgentMessageChunk -> {
+                val text = (update.content as? ContentBlock.Text)?.text ?: ""
+                appState.appendStreamingContent(text)
             }
-            // 完成
-            event.startsWith("done") -> {
-                appState.finishStreaming()
+            is SessionUpdate.AgentThoughtChunk -> {
+                val text = (update.content as? ContentBlock.Text)?.text ?: ""
+                appState.appendThoughtContent(text)
             }
-            // 错误
-            event.startsWith("error:") -> {
-                val error = event.removePrefix("error:")
-                appState.errorMessage = error
-                appState.finishStreaming()
+            is SessionUpdate.ToolCall -> {
+                val args = extractTextFromToolContent(update.content)
+                appState.addToolCall(update.title, args)
             }
-            // 思考过程（thought chunk）
-            event.startsWith("thought:") -> {
-                val content = event.removePrefix("thought:")
-                appState.appendThoughtContent(content)
-            }
-            // 工具调用
-            event.startsWith("tool_call:") -> {
-                val parts = event.removePrefix("tool_call:").split("|", limit = 2)
-                val toolName = parts.getOrElse(0) { "unknown" }
-                val args = parts.getOrElse(1) { "" }
-                appState.addToolCall(toolName, args)
-            }
-            // 工具调用更新（增量）
-            event.startsWith("tool_call_update:") -> {
-                val content = event.removePrefix("tool_call_update:")
-                appState.appendToolCallUpdate(content)
-            }
-            // 工具结果
-            event.startsWith("tool_result:") -> {
-                val content = event.removePrefix("tool_result:")
-                appState.addToolResult(content)
-            }
-            // Todo 项
-            event.startsWith("todo:") -> {
-                val todoContent = event.removePrefix("todo:")
-                appState.todos.add(TodoItem(content = todoContent))
-            }
-            // Todo 状态更新
-            event.startsWith("todo_status:") -> {
-                val parts = event.removePrefix("todo_status:").split(":", limit = 2)
-                if (parts.size == 2) {
-                    val id = parts[0]
-                    val status = when (parts[1]) {
-                        "completed" -> TodoStatus.COMPLETED
-                        "in_progress" -> TodoStatus.IN_PROGRESS
-                        "failed" -> TodoStatus.FAILED
-                        "skipped" -> TodoStatus.SKIPPED
-                        else -> TodoStatus.PENDING
+            is SessionUpdate.ToolCallUpdate -> {
+                when (update.status) {
+                    ToolCallStatus.COMPLETED -> {
+                        val result = extractTextFromToolContent(update.content ?: emptyList())
+                        appState.addToolResult(result)
                     }
-                    val idx = appState.todos.indexOfFirst { it.id == id }
-                    if (idx >= 0) {
-                        appState.todos[idx] = appState.todos[idx].copy(status = status)
+                    else -> {
+                        val content = extractTextFromToolContent(update.content ?: emptyList())
+                        if (content.isNotEmpty()) appState.appendToolCallUpdate(content)
                     }
                 }
             }
-            // Token 用量
-            event.startsWith("token:") -> {
-                val parts = event.removePrefix("token:").split(",")
-                if (parts.size == 3) {
-                    appState.tokenUsage = TokenUsage(
-                        promptTokens = parts[0].toLongOrNull() ?: 0,
-                        completionTokens = parts[1].toLongOrNull() ?: 0,
-                        totalTokens = parts[2].toLongOrNull() ?: 0
-                    )
+            is SessionUpdate.PlanUpdate -> {
+                appState.todos.clear()
+                update.entries.forEach { entry ->
+                    val priority = when (entry.priority) {
+                        PlanEntryPriority.HIGH -> TodoPriority.HIGH
+                        PlanEntryPriority.MEDIUM -> TodoPriority.MEDIUM
+                        PlanEntryPriority.LOW -> TodoPriority.LOW
+                    }
+                    val status = when (entry.status) {
+                        PlanEntryStatus.PENDING -> TodoStatus.PENDING
+                        PlanEntryStatus.IN_PROGRESS -> TodoStatus.IN_PROGRESS
+                        PlanEntryStatus.COMPLETED -> TodoStatus.COMPLETED
+                    }
+                    appState.todos.add(TodoItem(content = entry.content, priority = priority, status = status))
                 }
             }
-            // Agent 信息
-            event.startsWith("agent:") -> {
-                val parts = event.removePrefix("agent:").split("/")
-                if (parts.size >= 1) {
-                    appState.agentName = parts[0]
-                    if (parts.size >= 2) appState.agentVersion = parts[1]
-                }
+            is SessionUpdate.UsageUpdate -> {
+                appState.tokenUsage = TokenUsage(totalTokens = update.used)
             }
-            // 模型名称
-            event.startsWith("model:") -> {
-                appState.modelName = event.removePrefix("model:")
+            else -> {}
+        }
+    }
+
+    private fun processPromptResponse(response: PromptResponse) {
+        when (response.stopReason) {
+            StopReason.END_TURN, StopReason.CANCELLED -> appState.finishStreaming()
+            StopReason.MAX_TOKENS -> {
+                appState.appendStreamingContent("\n[响应因 token 限制被截断]")
+                appState.finishStreaming()
+            }
+            StopReason.MAX_TURN_REQUESTS -> {
+                appState.appendStreamingContent("\n[达到最大请求次数限制]")
+                appState.finishStreaming()
+            }
+            StopReason.REFUSAL -> {
+                appState.appendStreamingContent("\n[Agent 拒绝响应]")
+                appState.finishStreaming()
             }
         }
+    }
+
+    private fun extractTextFromToolContent(content: List<ToolCallContent>): String {
+        return content.firstOrNull()?.let { c ->
+            (c as? ToolCallContent.Content)?.let { (it.content as? ContentBlock.Text)?.text }
+        } ?: ""
     }
 }

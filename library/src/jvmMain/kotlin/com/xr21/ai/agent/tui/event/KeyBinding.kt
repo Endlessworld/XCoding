@@ -42,6 +42,7 @@ sealed class KeyEvent {
     data object CtrlS : KeyEvent()
     data object CtrlEnter : KeyEvent()
     data object AltEnter : KeyEvent()
+    data object Space : KeyEvent()
     data object Unknown : KeyEvent()
 }
 
@@ -65,6 +66,10 @@ enum class Action {
     SCROLL_BOTTOM,
     INPUT_HISTORY_PREV,
     INPUT_HISTORY_NEXT,
+    SELECT_UP,
+    SELECT_DOWN,
+    SELECT_CONFIRM,
+    TOGGLE_EXPAND,
     NOOP,
 }
 

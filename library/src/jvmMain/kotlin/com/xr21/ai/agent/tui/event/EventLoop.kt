@@ -15,6 +15,7 @@
  */
 package com.xr21.ai.agent.tui.event
 
+import com.xr21.ai.agent.tui.layout.PanelType
 import com.xr21.ai.agent.tui.state.AppState
 
 /**
@@ -50,8 +51,30 @@ class EventLoop(
     /**
      * 将 KeyEvent 解析为 Action
      * 优先匹配快捷键映射，再处理普通字符输入
+     * Up/Down/Enter 根据当前焦点面板做上下文分发
      */
     private fun resolveAction(keyEvent: KeyEvent): Action? {
+        // 上下文敏感的按键：根据焦点面板分发不同 Action
+        when (keyEvent) {
+            KeyEvent.Up -> {
+                return when (appState.focusPanel) {
+                    PanelType.LEFT -> Action.SELECT_UP
+                    PanelType.CENTER -> Action.SCROLL_UP
+                    PanelType.INPUT -> Action.INPUT_HISTORY_PREV
+                    else -> Action.NOOP
+                }
+            }
+            KeyEvent.Down -> {
+                return when (appState.focusPanel) {
+                    PanelType.LEFT -> Action.SELECT_DOWN
+                    PanelType.CENTER -> Action.SCROLL_DOWN
+                    PanelType.INPUT -> Action.INPUT_HISTORY_NEXT
+                    else -> Action.NOOP
+                }
+            }
+            else -> { }
+        }
+
         // 先查快捷键映射表
         val boundAction = DEFAULT_KEY_BINDINGS[keyEvent]
         if (boundAction != null) return boundAction
@@ -77,11 +100,16 @@ class EventLoop(
                 Action.NOOP
             }
             KeyEvent.Enter -> {
-                // Enter 发送消息（输入缓冲非空时）
-                if (appState.inputBuffer.isNotBlank()) {
-                    Action.SEND_MESSAGE
-                } else {
-                    null
+                // Enter 根据焦点面板分发：Sidebar 确认选择，Input 发送消息
+                when (appState.focusPanel) {
+                    PanelType.LEFT -> Action.SELECT_CONFIRM
+                    else -> {
+                        if (appState.inputBuffer.isNotBlank()) {
+                            Action.SEND_MESSAGE
+                        } else {
+                            null
+                        }
+                    }
                 }
             }
             KeyEvent.AltEnter -> {
@@ -90,6 +118,19 @@ class EventLoop(
                 appState.inputBuffer = appState.inputBuffer.substring(0, pos) + "\n" + appState.inputBuffer.substring(pos)
                 appState.inputCursorPos = pos + 1
                 Action.NOOP
+            }
+            KeyEvent.Space -> {
+                // Space 在 ChatPanel 焦点时切换工具消息展开，否则输入空格
+                when (appState.focusPanel) {
+                    PanelType.CENTER -> Action.TOGGLE_EXPAND
+                    PanelType.INPUT -> {
+                        val pos = appState.inputCursorPos.coerceIn(0, appState.inputBuffer.length)
+                        appState.inputBuffer = appState.inputBuffer.substring(0, pos) + " " + appState.inputBuffer.substring(pos)
+                        appState.inputCursorPos = pos + 1
+                        Action.NOOP
+                    }
+                    else -> Action.NOOP
+                }
             }
             KeyEvent.Left -> {
                 if (appState.inputCursorPos > 0) {

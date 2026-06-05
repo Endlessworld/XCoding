@@ -36,6 +36,7 @@ data class ChatMessage(
     val content: String,
     val timestamp: LocalDateTime = LocalDateTime.now(),
     val isStreaming: Boolean = false,
+    val isExpanded: Boolean = false,
     val metadata: Map<String, String> = emptyMap()
 )
 
@@ -54,8 +55,16 @@ data class TodoItem(
     val id: String = UUID.randomUUID().toString().take(8),
     val content: String,
     val status: TodoStatus = TodoStatus.PENDING,
+    val priority: TodoPriority = TodoPriority.MEDIUM,
     val createdAt: LocalDateTime = LocalDateTime.now()
 )
+
+/** Todo 优先级 */
+enum class TodoPriority {
+    HIGH,
+    MEDIUM,
+    LOW
+}
 
 /** Todo 状态 */
 enum class TodoStatus {
@@ -108,6 +117,9 @@ class AppState {
     var focusPanel: PanelType = PanelType.CENTER
         private set
 
+    /** 侧边栏选中索引（独立于 currentSessionIndex，用于预览选择） */
+    var sidebarSelectedIndex: Int = 0
+
     /** 切换焦点到下一个面板 */
     fun focusNext() {
         focusPanel = when (focusPanel) {
@@ -116,6 +128,7 @@ class AppState {
             PanelType.RIGHT -> PanelType.INPUT
             PanelType.INPUT -> PanelType.LEFT
         }
+        onFocusChanged()
     }
 
     /** 切换焦点到上一个面板 */
@@ -125,6 +138,57 @@ class AppState {
             PanelType.CENTER -> PanelType.LEFT
             PanelType.RIGHT -> PanelType.CENTER
             PanelType.INPUT -> PanelType.RIGHT
+        }
+        onFocusChanged()
+    }
+
+    /** 焦点变化时同步状态 */
+    private fun onFocusChanged() {
+        when (focusPanel) {
+            PanelType.LEFT -> sidebarSelectedIndex = currentSessionIndex
+            else -> { }
+        }
+    }
+
+    /** 侧边栏选择上移 */
+    fun selectUp() {
+        if (sidebarSelectedIndex > 0) {
+            sidebarSelectedIndex--
+        }
+    }
+
+    /** 侧边栏选择下移 */
+    fun selectDown() {
+        if (sidebarSelectedIndex < sessions.size - 1) {
+            sidebarSelectedIndex++
+        }
+    }
+
+    /** 确认切换会话 */
+    fun confirmSelection() {
+        if (focusPanel == PanelType.LEFT && sidebarSelectedIndex in sessions.indices) {
+            currentSessionIndex = sidebarSelectedIndex
+            scrollOffset = 0
+        }
+    }
+
+    /** 切换指定消息的展开状态 */
+    fun toggleMessageExpanded(messageId: String) {
+        val idx = currentSession.messages.indexOfFirst { it.id == messageId }
+        if (idx >= 0) {
+            val msg = currentSession.messages[idx]
+            currentSession.messages[idx] = msg.copy(isExpanded = !msg.isExpanded)
+        }
+    }
+
+    /** 切换最后一条工具相关消息的展开状态 */
+    fun toggleLastToolMessage() {
+        val idx = currentSession.messages.indexOfLast {
+            it.role == MessageRole.TOOL_CALL || it.role == MessageRole.TOOL_RESULT
+        }
+        if (idx >= 0) {
+            val msg = currentSession.messages[idx]
+            currentSession.messages[idx] = msg.copy(isExpanded = !msg.isExpanded)
         }
     }
 

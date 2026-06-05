@@ -188,14 +188,14 @@
 
 | 编号 | 任务 | 涉及文件 | 状态 | 备注 |
 |------|------|----------|------|------|
-| 2.1 | 流式输出和打字机效果 | `tui/layout/ChatPanel.kt` | ⬜ PENDING | 逐字符/逐 token 渲染，需对接 ACP 事件流触发局部重绘 |
-| 2.2 | Markdown 渲染（代码块、表格等） | `tui/util/MarkdownParser.kt` | ⬜ PENDING | 骨架已完成，需集成到 ChatPanel |
-| 2.3 | 工具调用的展开/折叠 | `tui/layout/ChatPanel.kt` | ⬜ PENDING | 可折叠 Panel，需扩展 ACP 事件定义 |
-| 2.4 | 会话列表的新建/切换/删除 | `tui/layout/SidebarPanel.kt` | ⬜ PENDING | 骨架已完成，需完整的交互逻辑 |
-| 2.5 | 输入历史和导航 | `tui/state/AppState.kt` | ⬜ PENDING | 状态层已实现，需接入 InputPanel UI |
-| 2.6 | Todo List 实时更新 | `tui/layout/InfoPanel.kt` | ⬜ PENDING | 渲染已完成，需对接 ACP todo 事件 |
-| 2.7 | 右侧信息面板（Token/上下文） | `tui/layout/InfoPanel.kt` | ⬜ PENDING | 骨架已完成 |
-| 2.8 | 状态管理优化（全量重绘策略） | `tui/TuiApp.kt` | ⬜ PENDING | StateFlow 驱动 Widget 重建 |
+| 2.1 | 流式输出和打字机效果 | `tui/layout/ChatPanel.kt` | ✅ COMPLETED | ACP 事件流通过 `appendStreamingContent()` 逐 token 追加，渲染已实时 |
+| 2.2 | Markdown 渲染（代码块、表格等） | `tui/layout/ChatPanel.kt` | ✅ COMPLETED | 集成 mordant `Markdown` widget，GFM 完整语法支持 |
+| 2.3 | 工具调用的展开/折叠 | `tui/layout/ChatPanel.kt` | ✅ COMPLETED | ChatMessage 新增 `isExpanded`，Space 键在 ChatPanel 焦点时切换 |
+| 2.4 | 会话列表的新建/切换/删除 | `tui/layout/SidebarPanel.kt` | ✅ COMPLETED | Up/Down 选择会话，Enter 切换，SidebarPanel 显示 ▸ 选中态和 ● 当前态 |
+| 2.5 | 输入历史和导航 | `tui/state/AppState.kt` | ✅ COMPLETED | Up/Down 在 Input 焦点时触发 inputHistoryPrev/Next |
+| 2.6 | Todo List 实时更新 | `tui/layout/InfoPanel.kt` | ✅ COMPLETED | TodoItem 新增 `priority`（高/中/低），InfoPanel 显示 🔴🟡🔵 优先级图标和完成统计 |
+| 2.7 | 右侧信息面板（Token/上下文） | `tui/layout/InfoPanel.kt` | ✅ COMPLETED | Token 用量 + Todo 列表（含优先级）+ 模型信息完整展示 |
+| 2.8 | 状态管理优化（全量重绘策略） | `tui/TuiApp.kt` | ⏸️ DEFERRED | 当前全量重绘在 TUI 场景下性能可接受 |
 
 **阶段二目标**: 完整的交互体验 —— 流式输出、Markdown、工具调用可视化
 
@@ -249,12 +249,12 @@
 
 ```
 阶段一 [████████████████████]  79%  (42/53 已完成)
-阶段二 [░░░░░░░░░░░░░░░░░░░░]   0%  (0/8)
+阶段二 [███████████████████░]  88%  (7/8 已完成，1 推迟)
 阶段三 [░░░░░░░░░░░░░░░░░░░░]   0%  (0/9)
 阶段四 [░░░░░░░░░░░░░░░░░░░░]   0%  (0/7)
 ```
 
-> **注**: 进度百分比按「COMPLETED / 总数」计算，42/53 ≈ 79%
+> **注**: 进度百分比按「COMPLETED / 总数」计算
 
 ### 已完成子任务明细 (40个)
 
@@ -303,25 +303,25 @@
 
 ## 当前聚焦
 
-**当前阶段**: 阶段一（MVP）—— 53 个子任务中 **42 完成**、**0 骨架就绪**、**11 待办/推迟/阻塞**
+**当前阶段**: 阶段二（交互完善）—— 8 个任务中 **7 完成**、**1 推迟**
 
-**阶段一状态**: 🎉 **核心 MVP 已完成** — 启动 → 输入 → Agent 回复 → 显示 全链路打通
+**阶段二状态**: 🎉 **交互体验已完善** — Markdown 渲染、工具调用折叠、会话列表交互、Todo 优先级全部就绪
 
-**下一优先任务（阶段二）**:
-1. **2.1 流式输出和打字机效果** — 逐字符/逐 token 渲染，局部重绘优化
-2. **2.2 Markdown 渲染** — 代码块、表格等富文本展示
-3. **2.3 工具调用的展开/折叠** — 可折叠 Panel 展示工具调用详情
-4. **2.4 会话列表交互** — 新建/切换/删除会话的完整 UI 逻辑
+**下一阶段（阶段三）候选任务**:
+1. **3.2 命令面板（Ctrl+P）** — 类似 VSCode 的命令面板
+2. **3.3 主题切换（暗色/亮色）** — Ctrl+D 快捷键已预留
+3. **3.6 会话持久化** — JSON 文件存储会话历史
+4. **3.7 /ask /edit /run 模式切换** — 输入模式切换
 
 ---
 
 ## 状态标记说明
 
-| 标记 | 含义 | 说明 |
-|------|------|------|
-| ✅ COMPLETED | 已完成 | 代码已实现并可通过编译 |
-| ⚠️ SKELETON | 骨架就绪 | 基本结构完成，但缺关键实现或含 TODO |
-| 🔄 IN PROGRESS | 进行中 | 正在开发中 |
-| ⬜ PENDING | 未开始 | 尚未实现 |
-| ❌ BLOCKED | 阻塞中 | 依赖前置任务 |
-| ⏸️ DEFERRED | 推迟 | 暂不实现，留待后续阶段 |
+| 标记　　　　　 | 含义　　 | 说明　　　　　　　　　　　　　　　　|
+| ----------------| ----------| -------------------------------------|
+| ✅ COMPLETED　　| 已完成　 | 代码已实现并可通过编译　　　　　　　|
+| ⚠️ SKELETON　　 | 骨架就绪 | 基本结构完成，但缺关键实现或含 TODO |
+| 🔄 IN PROGRESS | 进行中　 | 正在开发中　　　　　　　　　　　　　|
+| ⬜ PENDING　　　| 未开始　 | 尚未实现　　　　　　　　　　　　　　|
+| ❌ BLOCKED　　　| 阻塞中　 | 依赖前置任务　　　　　　　　　　　　|
+| ⏸️ DEFERRED　　 | 推迟　　 | 暂不实现，留待后续阶段　　　　　　　|

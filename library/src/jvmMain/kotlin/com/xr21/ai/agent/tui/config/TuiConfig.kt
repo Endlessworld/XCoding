@@ -44,8 +44,14 @@ data class TuiConfig(
     /** 颜色配置 */
     val colors: TuiColors = TuiColors(),
 
-    /** Agent 启动命令 */
+    /** Agent 启动命令（Stdio 模式） */
     val agentCommand: List<String> = emptyList(),
+
+    /** WebSocket 连接地址（为空时启动内部 WebSocket 服务器） */
+    val webSocketUrl: String = "",
+
+    /** WebSocket 服务器端口（内部启动时使用） */
+    val webSocketServerPort: Int = 9988,
 
     /** 自动重连 */
     val autoReconnect: Boolean = true,

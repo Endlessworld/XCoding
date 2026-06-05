@@ -24,6 +24,7 @@ import com.github.ajalt.mordant.rendering.BorderType
 import com.github.ajalt.mordant.rendering.TextAlign
 import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
+import com.xr21.ai.agent.tui.state.TodoPriority
 import com.xr21.ai.agent.tui.state.TodoStatus
 
 class InfoPanel(private val appState: AppState) {
@@ -42,16 +43,23 @@ class InfoPanel(private val appState: AppState) {
 
             // Todo 列表
             if (appState.todos.isNotEmpty()) {
-                appendLine("📋 Todo")
+                val completed = appState.todos.count { it.status == TodoStatus.COMPLETED }
+                val total = appState.todos.size
+                appendLine("📋 Todo ($completed/$total)")
                 appState.todos.forEach { todo ->
-                    val icon = when (todo.status) {
+                    val statusIcon = when (todo.status) {
                         TodoStatus.PENDING -> "○"
                         TodoStatus.IN_PROGRESS -> "◌"
                         TodoStatus.COMPLETED -> "✓"
                         TodoStatus.FAILED -> "✗"
                         TodoStatus.SKIPPED -> "—"
                     }
-                    appendLine("  $icon ${todo.content}")
+                    val priorityIcon = when (todo.priority) {
+                        TodoPriority.HIGH -> "🔴"
+                        TodoPriority.MEDIUM -> "🟡"
+                        TodoPriority.LOW -> "🔵"
+                    }
+                    appendLine("  $priorityIcon $statusIcon ${todo.content}")
                 }
                 appendLine()
             }

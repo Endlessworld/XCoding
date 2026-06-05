@@ -28,8 +28,16 @@ import com.xr21.ai.agent.tui.state.AppState
 class SidebarPanel(private val appState: AppState) {
     fun render(isFocused: Boolean = false): Panel {
         val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
+        val selectedIdx = if (isFocused) appState.sidebarSelectedIndex else appState.currentSessionIndex
         val sessionList = appState.sessions.mapIndexed { index, session ->
-            val prefix = if (index == appState.currentSessionIndex) "▸ " else "  "
+            val isSelected = index == selectedIdx
+            val isCurrent = index == appState.currentSessionIndex
+            val prefix = when {
+                isSelected && isCurrent -> "▸ "
+                isSelected -> "▸ "
+                isCurrent -> "● "
+                else -> "  "
+            }
             val name = session.name
             "$prefix$name"
         }.joinToString("\n")

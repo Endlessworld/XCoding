@@ -44,7 +44,7 @@ class TuiApp(
 ) {
     private val appState = AppState()
     private val inputHandler = InputHandler(terminal)
-    private val mainLayout = MainLayout(appState)
+    private val mainLayout = MainLayout(appState, terminal)
     private val acpClient = AcpClientManager(appState)
     private val acpProcessor = AcpEventProcessor(appState)
     private lateinit var eventLoop: EventLoop
@@ -54,6 +54,9 @@ class TuiApp(
     suspend fun start() {
         // 1. 进入原始模式（返回 AutoCloseable，在 finally 中自动退出）
         val rawMode = terminal.enterRawMode()
+
+        // 进入 alternate screen buffer，避免旧帧进入 scrollback
+        terminal.rawPrint("\u001b[?1049h")
 
         // 2. 初始化事件循环
         eventLoop = EventLoop(appState, inputHandler, buildActionHandlers())
@@ -81,21 +84,11 @@ class TuiApp(
     }
 
     /**
-     * 连接 Agent 子进程
+     * 连接 ACP Agent（WebSocket 模式或 Stdio 模式）
      */
     private suspend fun connectToAgent() {
-        val command = config.agentCommand
-        if (command.isEmpty()) {
-            // 没有配置 Agent 命令，使用默认提示
-            appState.connectionState = com.xr21.ai.agent.tui.acp.ConnectionState.DISCONNECTED
-            appState.agentName = "XAgent"
-            appState.modelName = "未配置"
-            render()
-            return
-        }
-
         scope.launch {
-            val result = acpClient.connect(command)
+            val result = acpClient.connect(config)
             if (result.isSuccess) {
                 // 启动 ACP 事件收集
                 acpClient.startEventCollection { event ->
@@ -104,7 +97,7 @@ class TuiApp(
                 }
                 render()
             } else {
-                appState.errorMessage = "Agent 连接失败"
+                appState.errorMessage = "Agent 连接失败: ${result.exceptionOrNull()?.message}"
                 render()
             }
         }
@@ -176,13 +169,34 @@ class TuiApp(
                 appState.focusPrevious()
                 render()
             },
+            Action.SELECT_UP to {
+                appState.selectUp()
+                render()
+            },
+            Action.SELECT_DOWN to {
+                appState.selectDown()
+                render()
+            },
+            Action.SELECT_CONFIRM to {
+                appState.confirmSelection()
+                render()
+            },
+            Action.TOGGLE_EXPAND to {
+                appState.toggleLastToolMessage()
+                render()
+            },
         )
     }
 
     private fun render() {
-        terminal.cursor.move { setPosition(0, 0) }
+        terminal.cursor.hide()
+        // 重新检测终端尺寸（支持窗口 resize）
+        terminal.updateSize()
+        // 清屏 + 光标移到左上角
+        terminal.cursor.move { clearScreen(); setPosition(0, 0) }
         val rendered = mainLayout.render()
         terminal.println(rendered)
+        terminal.cursor.show()
     }
 
     /**
@@ -206,8 +220,8 @@ class TuiApp(
                 }
             }
         } else {
-            // 没有 Agent 连接时，模拟回显
-            appState.appendStreamingContent("Agent 未连接，无法处理消息。请配置 --command 参数启动 Agent。")
+            // 没有 Agent 连接时，提示用户
+            appState.appendStreamingContent("Agent 未连接，无法处理消息。使用 --ws-url 连接或 --command 启动 Agent。")
             appState.finishStreaming()
             render()
         }
@@ -244,10 +258,18 @@ class TuiApp(
         // 恢复终端状态
         try {
             terminal.cursor.show()
-            terminal.cursor.move { setPosition(0, 0) }
+            terminal.cursor.move { clearScreen(); setPosition(0, 0) }
             terminal.println((TextColors.brightGreen + TextStyles.bold)("Goodbye!"))
         } catch (_: Exception) {
             // 忽略清理时的异常
+        } finally {
+            // 清屏后退出 alternate screen buffer，防止内容残留在主屏幕
+            try {
+                terminal.cursor.move { clearScreen(); setPosition(0, 0) }
+                terminal.rawPrint("\u001b[?1049l")
+            } catch (_: Exception) {
+                // 忽略清理时的异常
+            }
         }
     }
 }

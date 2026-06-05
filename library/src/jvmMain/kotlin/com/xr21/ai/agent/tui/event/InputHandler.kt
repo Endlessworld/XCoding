@@ -45,6 +45,7 @@ class InputHandler(private val terminal: Terminal) {
             '\r' -> KeyEvent.Enter
             '\b' -> KeyEvent.Backspace
             0x7f.toChar() -> KeyEvent.Backspace
+            ' ' -> KeyEvent.Space
             '\t' -> KeyEvent.Tab
             0x1b.toChar() -> {
                 // ESC 序列

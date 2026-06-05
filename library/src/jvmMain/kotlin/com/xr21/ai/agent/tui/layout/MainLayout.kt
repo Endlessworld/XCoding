@@ -23,8 +23,7 @@ import com.xr21.ai.agent.tui.state.AppState
  *
  * 封装 AppLayout，提供与 TuiApp 的接口。
  */
-class MainLayout(appState: AppState) {
-    private val terminal = Terminal()
+class MainLayout(appState: AppState, terminal: Terminal) {
     private val appLayout = AppLayout(terminal, appState)
 
     fun render(): String {

@@ -67,16 +67,44 @@ private fun parseArgs(args: Array<String>): TuiConfig {
     while (i < args.size) {
         when (args[i]) {
             "--command" -> {
-                if (i + 1 < args.size) {
-                    config = config.copy(agentCommand = listOf(args[i + 1]))
+                // 收集 --command 后面所有非 `-` 开头的参数作为命令列表
+                val commandParts = mutableListOf<String>()
+                var j = i + 1
+                while (j < args.size && !args[j].startsWith("-")) {
+                    commandParts.add(args[j])
+                    j++
+                }
+                if (commandParts.isNotEmpty()) {
+                    config = config.copy(agentCommand = commandParts)
+                }
+                i = j - 1 // 外层循环会 i++，回退到下一个 flag 前一个位置
+            }
+            "--ws-url" -> {
+                if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
+                    config = config.copy(webSocketUrl = args[i + 1])
                     i++
                 }
             }
+            "--ws-server-port" -> {
+                if (i + 1 < args.size) {
+                    val port = args[i + 1].toIntOrNull()
+                    if (port != null) {
+                        config = config.copy(webSocketServerPort = port)
+                    }
+                    i++
+                }
+            }
+            "--tui" -> {
+                // 显式忽略 --tui，当前入口就是 TUI 模式
+            }
             "--help" -> {
-                println("Usage: ai-agent-tui [options]")
+                println("Usage: java -jar XAgent.jar --tui [options]")
                 println("Options:")
-                println("  --command <cmd>    Agent startup command")
-                println("  --help             Show this help")
+                println("  --command <cmd>          Agent startup command (stdio mode)")
+                println("  --ws-url <url>           WebSocket URL to connect to (e.g. ws://localhost:9988/acp)")
+                println("  --ws-server-port <port>  Port for internal WebSocket server (default: 9988)")
+                println("  --tui                    Start in TUI mode (default)")
+                println("  --help                   Show this help")
                 kotlin.system.exitProcess(0)
             }
         }
