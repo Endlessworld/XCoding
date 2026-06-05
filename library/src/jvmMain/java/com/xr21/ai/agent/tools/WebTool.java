@@ -18,6 +18,7 @@ package com.xr21.ai.agent.tools;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -67,20 +68,26 @@ public class WebTool {
         int resultCount = (count != null && count > 0) ? Math.min(count, 10) : 3;
         String timeRange = freshness != null ? freshness : "noLimit";
 
-        sendProgress(toolContext, "🔍 Starting web search for " + queryList.size() + " query(ies)...<br/>");
+        sendProgress(toolContext, "🔎 Starting web search for %d query(ies)...<br/>".formatted(queryList.size()));
 
         List<Map<String, Object>> allResults = new ArrayList<>();
         int queryIndex = 0;
         for (String query : queryList) {
             queryIndex++;
-            sendProgress(toolContext, "🔎 Searching (" + queryIndex + "/" + queryList.size() + "): \"" + query + "\"...<br/>");
+            sendProgress(toolContext, "🔎 Searching (%d/%d): \"%s\"...<br/>".formatted(queryIndex, queryList.size(), query));
             try {
                 List<Map<String, Object>> searchResults = bingSearch(query, resultCount, timeRange);
                 allResults.addAll(searchResults);
-                sendProgress(toolContext, "✅ Found " + searchResults.size() + " results for \"" + query + "\"<br/>");
+                sendProgress(toolContext, "✅ Found %d results for \"%s\"<br/>".formatted(searchResults.size(), query));
+                for (Map<String, Object> searchResult : searchResults) {
+                    if (searchResult.get("name") instanceof String name) {
+                        sendProgress(toolContext, "✅ " + StringUtils.abbreviate(name,10) + "<br/>");
+                    }
+                }
+
             } catch (Exception e) {
                 log.error("Bing search failed for query: {}", query, e);
-                sendProgress(toolContext, "❌ Search failed for \"" + query + "\": " + e.getMessage() + "<br/>");
+                sendProgress(toolContext, "❌ Search failed for \"%s\": %s<br/>".formatted(query, e.getMessage()));
                 Map<String, Object> errorResult = new HashMap<>();
                 errorResult.put("title", "搜索失败");
                 errorResult.put("error", e.getMessage());
@@ -90,7 +97,7 @@ public class WebTool {
 
         log.info("WebSearch total results: {}", allResults.size());
         result.put("results", allResults);
-        sendProgress(toolContext, "📊 Web search completed, total: " + allResults.size() + " results<br/>");
+        sendProgress(toolContext, "📊 Web search completed, total: %d results<br/>".formatted(allResults.size()));
         return result;
     }
 
@@ -150,11 +157,11 @@ public class WebTool {
     private String convertTimeRange(String freshness) {
         // Bing 时间筛选参数：qft 参数格式
         return switch (freshness) {
-            case "oneDay"   -> "interval=7";
-            case "oneWeek"  -> "interval=14";
+            case "oneDay" -> "interval=7";
+            case "oneWeek" -> "interval=14";
             case "oneMonth" -> "interval=30";
-            case "oneYear"  -> "interval=365";
-            default         -> null;
+            case "oneYear" -> "interval=365";
+            default -> null;
         };
     }
 
@@ -184,7 +191,7 @@ public class WebTool {
 
         try {
             log.info("Fetching web page: {} (maxLength={})", url, maxLen);
-            sendProgress(toolContext, "🌐 Fetching web page: " + url + "...<br/>");
+            sendProgress(toolContext, "🌐 Fetching web page: %s...<br/>".formatted(url));
 
             // 使用 Jsoup 发送 GET 请求获取网页
             Document doc = Jsoup.connect(url)
@@ -202,7 +209,7 @@ public class WebTool {
             String text = doc.body().text();
 
             // 截取最大字符数
-            String trimmedText = text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
+            String trimmedText = text.length() > maxLen ? "%s...".formatted(text.substring(0, maxLen)) : text;
             result.put("content", trimmedText);
             result.put("totalLength", text.length());
             result.put("returnedLength", trimmedText.length());
@@ -210,12 +217,12 @@ public class WebTool {
 
             log.info("Fetch completed: title='{}', totalChars={}, returnedChars={}",
                     title, text.length(), trimmedText.length());
-            sendProgress(toolContext, "✅ Fetched: " + title + " (" + trimmedText.length() + " chars)<br/>");
+            sendProgress(toolContext, "✅ Fetched: <a href=\"%s\">%s</a> (%d chars)<br/>".formatted(url, StringUtils.abbreviate(title, 10), trimmedText.length()));
 
         } catch (Exception e) {
             log.error("Failed to fetch web page: {}", url, e);
-            sendProgress(toolContext, "❌ Failed to fetch: " + url + " - " + e.getMessage() + "<br/>");
-            result.put("error", "抓取失败: " + e.getMessage());
+            sendProgress(toolContext, "❌ Failed to fetch: %s - %s<br/>".formatted(url, e.getMessage()));
+            result.put("error", "抓取失败: %s".formatted(e.getMessage()));
             result.put("url", url);
         }
 
