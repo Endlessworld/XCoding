@@ -26,3 +26,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "ai-agents"
 include(":library")
+
+//includeBuild("E:/local-github/tamboui")

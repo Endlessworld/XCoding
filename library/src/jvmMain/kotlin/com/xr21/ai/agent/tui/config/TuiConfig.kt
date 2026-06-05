@@ -1,0 +1,58 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.xr21.ai.agent.tui.config
+
+import com.xr21.ai.agent.tui.theme.TuiTheme
+import com.xr21.ai.agent.tui.theme.modernDarkTheme
+
+/** TUI 配置 */
+data class TuiConfig(
+    /** 布局比例（三栏：左侧会话列表、中间对话流、右侧信息面板） */
+    val sidebarRatio: Float = 0.22f,
+    val chatRatio: Float = 0.58f,
+    val infoRatio: Float = 0.20f,
+
+    /** 输入框高度（行数） */
+    val inputHeight: Int = 4,
+    /** 状态栏高度 */
+    val statusBarHeight: Int = 1,
+
+    /** 最大消息数量 */
+    val maxMessages: Int = 500,
+    /** 最大会话数量 */
+    val maxSessions: Int = 50,
+
+    /** 输入历史大小 */
+    val inputHistorySize: Int = 100,
+
+    /** 主题 */
+    val theme: TuiTheme = modernDarkTheme(),
+
+    /** Agent 启动命令（Stdio 模式） */
+    val agentCommand: List<String> = emptyList(),
+
+    /** WebSocket 连接地址（为空时启动内部 WebSocket 服务器） */
+    val webSocketUrl: String = "",
+
+    /** WebSocket 服务器端口（内部启动时使用） */
+    val webSocketServerPort: Int = 9988,
+
+    /** 自动重连 */
+    val autoReconnect: Boolean = true,
+
+    /** 重连间隔（毫秒） */
+    val reconnectIntervalMs: Long = 3000
+)
