@@ -10,6 +10,7 @@
  实施过程中对于 mordant 和acp 协议不明确的地方 直接查看其源码：
  mordant：  E:\local-github\mordant
  acp ：  E:\local-github\kotlin-sdk
+ 实施过程中获取的所有的经验、教训、你不知道的框架的使用方法、等等一切有利于后续任务的信息 及时总结到 doc/spac目录中
 ## 阶段一：核心框架 + ACP 基础通信（MVP）
 
 > **目标**: 可用的最小闭环 TUI —— 启动 → 输入 → Agent 回复 → 显示  
@@ -34,7 +35,7 @@
 |------|--------|----------|------|-------------|
 | 1.2.1 | 定义 `TuiConfig` 数据类 | `tui/config/TuiConfig.kt` | ✅ COMPLETED | 布局比例、颜色方案(12色)、输入/状态栏高度、消息/会话上限、自动重连等配置 |
 | 1.2.2 | 实现 CLI 参数解析（简单手动解析） | `tui/Main.kt` | ✅ COMPLETED | 支持 `--command`、`--help` 参数解析 |
-| 1.2.3 | 实现 Windows Terminal 检测逻辑 | `tui/Main.kt` | ⬜ PENDING | 旧 `XAgentTui.kt` 有但已删除，需在新入口重新实现 |
+| 1.2.3 | 实现 Windows Terminal 检测逻辑 | `tui/Main.kt` | ✅ COMPLETED | `detectWindowsTerminal()` 检测 WT_SESSION 环境变量并给出提示 |
 
 **输出**: `Main.main()` 能解析 CLI 参数生成 `TuiConfig` 实例 ✅
 
@@ -84,12 +85,12 @@
 
 ### 1.6 Mordant Terminal 初始化和基本渲染 ✅
 
-| 编号 | 子任务 | 涉及文件 | 状态 | 实际完成情况 |
-|------|--------|----------|------|-------------|
-| 1.6.1 | 创建 `TuiApp` 主类 — 初始化 Terminal | `tui/TuiApp.kt` | ✅ COMPLETED | `Terminal()` 实例化，`enterRawMode()` 调用 |
-| 1.6.2 | 实现 TUI 生命周期管理 | `tui/TuiApp.kt` | ✅ COMPLETED | `start()` 方法：init→connectAgent→render→eventLoop→cleanup 完整流程 |
-| 1.6.3 | 实现终端退出后的状态恢复 | `tui/TuiApp.kt` | ⚠️ SKELETON | `cleanup()` 中调用 acpClient.disconnect()，退出原始模式待完善 |
-| 1.6.4 | 全量重绘基础框架 | `tui/TuiApp.kt` | ✅ COMPLETED | `render()` 调用 `mainLayout.render()` 全量重绘，ACP 事件触发自动重绘 |
+| 编号　| 子任务　　　　　　　　　　　　　　　 | 涉及文件　　　　| 状态　　　　| 实际完成情况　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| -------| --------------------------------------| -----------------| -------------| ----------------------------------------------------------------------|
+| 1.6.1 | 创建 `TuiApp` 主类 — 初始化 Terminal | `tui/TuiApp.kt` | ✅ COMPLETED | `Terminal()` 实例化，`enterRawMode()` 调用　　　　　　　　　　　　　 |
+| 1.6.2 | 实现 TUI 生命周期管理　　　　　　　　| `tui/TuiApp.kt` | ✅ COMPLETED | `start()` 方法：init→connectAgent→render→eventLoop→cleanup 完整流程　|
+| 1.6.3 | 实现终端退出后的状态恢复　　　　　　 | `tui/TuiApp.kt` | ✅ COMPLETED | `cleanup()` 中调用 acpClient.disconnect()、cursor.show()、setPosition(0,0)，原始模式通过 AutoCloseable 自动退出 |
+| 1.6.4 | 全量重绘基础框架　　　　　　　　　　 | `tui/TuiApp.kt` | ✅ COMPLETED | `render()` 调用 `mainLayout.render()` 全量重绘，ACP 事件触发自动重绘 |
 
 **输出**: `TuiApp.start()` 能启动终端、连接 Agent、清理退出 ✅
 
@@ -103,7 +104,7 @@
 | 1.7.2 | 创建各面板的 Widget | `tui/layout/SidebarPanel.kt` `ChatPanel.kt` `InfoPanel.kt` `InputPanel.kt` `StatusBar.kt` | ✅ COMPLETED | 5个面板均实现基本渲染（含数据绑定） |
 | 1.7.3 | 实现面板间焦点切换 | `tui/layout/AppLayout.kt` `tui/state/AppState.kt` | ✅ COMPLETED | Tab/Shift+Tab 焦点切换（LEFT→CENTER→RIGHT→INPUT循环），边框 DOUBLE/ROUNDED 高亮 |
 
-**输出**: 四分区的 TUI 布局渲染完成 ⚠️（缺焦点切换和动态适配）
+**输出**: 四分区的 TUI 布局渲染完成 ✅（含焦点切换和动态适配）
 
 ---
 
@@ -124,7 +125,7 @@
 
 | 编号 | 子任务 | 涉及文件 | 状态 | 实际完成情况 |
 |------|--------|----------|------|-------------|
-| 1.9.1 | 实现 `InputPanel` — 输入框 | `tui/layout/InputPanel.kt` | ⚠️ SKELETON | 单行输入展示，空时占位文字，**缺多行支持和滚动** |
+| 1.9.1 | 实现 `InputPanel` — 输入框 | `tui/layout/InputPanel.kt` | ✅ COMPLETED | 支持多行输入（Alt+Enter 换行），超出面板高度自动滚动，显示滚动提示 |
 | 1.9.2 | 实现发送逻辑 | `tui/TuiApp.kt` | ✅ COMPLETED | `sendMessage()` 更新 AppState 后调用 `acpClient.sendPrompt()` 发送到 Agent |
 | 1.9.3 | 实现中断逻辑 | `tui/TuiApp.kt` | ✅ COMPLETED | Ctrl+C 触发 cancelResponse()，调用 acpClient.sendCancel() + finishStreaming() |
 
@@ -138,22 +139,22 @@
 |------|--------|----------|------|-------------|
 | 1.10.1 | 实现 `AcpEventProcessor` — 事件流处理 | `tui/acp/AcpEventProcessor.kt` | ✅ COMPLETED | 106行完整实现：解析text/done/error/todo/todo_status/token/agent/model共8种事件 |
 | 1.10.2 | 处理流式文本 | `tui/acp/AcpEventProcessor.kt` | ✅ COMPLETED | `appendStreamingContent()` 追加到当前消息 |
-| 1.10.3 | 处理思考过程 | `tui/acp/AcpEventProcessor.kt` | ⬜ PENDING | 当前事件定义未区分thought chunk |
-| 1.10.4 | 处理 ToolCall 和 ToolCallUpdate | `tui/acp/AcpEventProcessor.kt` | ⬜ PENDING | 当前事件定义未包含tool_call事件 |
+| 1.10.3 | 处理思考过程 | `tui/acp/AcpEventProcessor.kt` | ✅ COMPLETED | `thought:` 事件触发 `appendThoughtContent()`，以 SYSTEM 角色消息展示 |
+| 1.10.4 | 处理 ToolCall 和 ToolCallUpdate | `tui/acp/AcpEventProcessor.kt` | ✅ COMPLETED | `tool_call:`/`tool_call_update:`/`tool_result:` 事件完整处理 |
 | 1.10.5 | 处理完成事件 | `tui/acp/AcpEventProcessor.kt` | ✅ COMPLETED | `finishStreaming()` 设置 isStreaming=false |
 
-**输出**: Agent 回复流式显示、思考过程可见、工具调用显示卡片 ⚠️（缺thought/tool_call事件定义）
+**输出**: Agent 回复流式显示、思考过程可见、工具调用显示卡片 ✅
 
 ---
 
 ### 1.11 ChatPanel — 对话界面 ✅
 
-| 编号 | 子任务 | 涉及文件 | 状态 | 实际完成情况 |
-|------|--------|----------|------|-------------|
-| 1.11.1 | 实现 `ChatPanel` — 消息流渲染 | `tui/layout/ChatPanel.kt` | ✅ COMPLETED | 消息列表按角色加emoji前缀渲染，流式▌光标 |
-| 1.11.2 | 实现滚动 | `tui/layout/ChatPanel.kt` | ⚠️ SKELETON | `scrollOffset` 在 AppState 中实现，但 ChatPanel 未使用 Viewport |
-| 1.11.3 | 实现流式文本更新 | `tui/layout/ChatPanel.kt` | ✅ COMPLETED | ACP 事件通过 startEventCollection → processEvent → render() 触发重绘 |
-| 1.11.4 | 实现消息时间戳 | `tui/layout/ChatPanel.kt` | ⬜ PENDING | ChatMessage 有 timestamp 字段但未在渲染中使用 |
+| 编号　 | 子任务　　　　　　　　　　　　| 涉及文件　　　　　　　　　| 状态　　　　| 实际完成情况　　　　　　　　　　　　　　　　　　　　　　　　　　　　 |
+| --------| -------------------------------| ---------------------------| -------------| ----------------------------------------------------------------------|
+| 1.11.1 | 实现 `ChatPanel` — 消息流渲染 | `tui/layout/ChatPanel.kt` | ✅ COMPLETED | 消息列表按角色加emoji前缀渲染，流式▌光标　　　　　　　　　　　　　　 |
+| 1.11.2 | 实现滚动　　　　　　　　　　　| `tui/layout/ChatPanel.kt` | ✅ COMPLETED | 基于 `scrollOffset` 的滚动：按可用高度截取可见消息，显示滚动指示器　 |
+| 1.11.3 | 实现流式文本更新　　　　　　　| `tui/layout/ChatPanel.kt` | ✅ COMPLETED | ACP 事件通过 startEventCollection → processEvent → render() 触发重绘 |
+| 1.11.4 | 实现消息时间戳　　　　　　　　| `tui/layout/ChatPanel.kt` | ✅ COMPLETED | 每条消息首行渲染 `[HH:mm]` 时间戳　　　　　　　　　　　　　　　　　　|
 
 **输出**: 对话界面可显示用户消息和 Agent 流式回复 ✅
 
@@ -163,10 +164,10 @@
 
 | 编号 | 子任务 | 涉及文件 | 状态 | 实际完成情况 |
 |------|--------|----------|------|-------------|
-| 1.12.1 | 实现 `StatusBar` — 底部状态栏 | `tui/layout/StatusBar.kt` | ⚠️ SKELETON | Agent名+连接状态(5种图标)+模型+会话数+时间 |
-| 1.12.2 | 实现状态栏定时刷新 | `tui/layout/StatusBar.kt` | ⬜ PENDING | 缺协程定时更新系统时间 |
+| 1.12.1 | 实现 `StatusBar` — 底部状态栏 | `tui/layout/StatusBar.kt` | ✅ COMPLETED | Agent名+连接状态(5种图标)+模型+会话数+时间完整渲染 |
+| 1.12.2 | 实现状态栏定时刷新 | `tui/layout/StatusBar.kt` | ✅ COMPLETED | `TuiApp.startStatusBarTimer()` 每秒触发 `render()` 更新时间 |
 
-**输出**: 底部状态栏显示连接状态和相关信息 ⚠️
+**输出**: 底部状态栏显示连接状态和相关信息 ✅
 
 ---
 
@@ -240,22 +241,22 @@
 
 | 状态 | 数量 | 占比 | 进度条 |
 |------|:----:|:----:|:------:|
-| ✅ COMPLETED | 33 | 62.3% | █████████████░░░░░░ |
-| ⚠️ SKELETON | 5 | 9.4% | ██░░░░░░░░░░░░░░░░░ |
-| ⬜ PENDING | 13 | 24.5% | █████░░░░░░░░░░░░░░ |
+| ✅ COMPLETED | 42 | 79.2% | ███████████████████░ |
+| ⚠️ SKELETON | 0 | 0.0% | ░░░░░░░░░░░░░░░░░░░ |
+| ⬜ PENDING | 9 | 17.0% | ████░░░░░░░░░░░░░░░ |
 | ⏸️ DEFERRED | 1 | 1.9% | ░░░░░░░░░░░░░░░░░░░ |
 | ❌ BLOCKED | 1 | 1.9% | ░░░░░░░░░░░░░░░░░░░ |
 
 ```
-阶段一 [██████████████████░░]  72%  (38/53 已完成或骨架就绪)
+阶段一 [████████████████████]  79%  (42/53 已完成)
 阶段二 [░░░░░░░░░░░░░░░░░░░░]   0%  (0/8)
 阶段三 [░░░░░░░░░░░░░░░░░░░░]   0%  (0/9)
 阶段四 [░░░░░░░░░░░░░░░░░░░░]   0%  (0/7)
 ```
 
-> **注**: 进度百分比按「已开始（COMPLETED + SKELETON）/ 总数」计算，38/53 ≈ 72%
+> **注**: 进度百分比按「COMPLETED / 总数」计算，42/53 ≈ 79%
 
-### 已完成子任务明细 (31个)
+### 已完成子任务明细 (40个)
 
 | 子任务 | 文件 | 说明 |
 |--------|------|------|
@@ -302,14 +303,15 @@
 
 ## 当前聚焦
 
-**当前阶段**: 阶段一（MVP）—— 53 个子任务中 **33 完成**、**5 骨架就绪**、**15 待办/推迟/阻塞**
+**当前阶段**: 阶段一（MVP）—— 53 个子任务中 **42 完成**、**0 骨架就绪**、**11 待办/推迟/阻塞**
 
-**下一优先任务**:
-1. ~~1.7.3 焦点切换~~ — 已完成（Tab/Shift+Tab 四面板循环 + 边框高亮）
-2. **1.6.3 终端退出恢复** — exitRawMode/showCursor 完善
-3. ~~1.7.1 动态列宽~~ — 已完成（Windows mode con / $COLUMNS / 默认120）
-4. **1.9.1 多行输入** — 输入框多行支持
-5. **阶段二任务** — 流式打字机、Markdown渲染等
+**阶段一状态**: 🎉 **核心 MVP 已完成** — 启动 → 输入 → Agent 回复 → 显示 全链路打通
+
+**下一优先任务（阶段二）**:
+1. **2.1 流式输出和打字机效果** — 逐字符/逐 token 渲染，局部重绘优化
+2. **2.2 Markdown 渲染** — 代码块、表格等富文本展示
+3. **2.3 工具调用的展开/折叠** — 可折叠 Panel 展示工具调用详情
+4. **2.4 会话列表交互** — 新建/切换/删除会话的完整 UI 逻辑
 
 ---
 

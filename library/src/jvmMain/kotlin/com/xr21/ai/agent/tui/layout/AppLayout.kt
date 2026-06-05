@@ -34,48 +34,20 @@ class AppLayout(
 ) {
     companion object {
         private var cachedWidth: Int? = null
-
-        /**
-         * 获取终端宽度（缓存，仅首次检测）
-         *
-         * 策略：
-         * 1. 尝试执行 Windows 的 `mode con` 命令获取列数
-         * 2. 尝试读取环境变量 COLUMNS
-         * 3. 回退默认值 120
-         */
-        private fun detectTerminalWidth(): Int {
-            try {
-                // Windows: 使用 mode con 命令
-                if (System.getProperty("os.name").lowercase().contains("windows")) {
-                    val process = ProcessBuilder("cmd", "/c", "mode", "con")
-                        .redirectErrorStream(true)
-                        .start()
-                    val output = process.inputStream.bufferedReader().readText()
-                    process.waitFor()
-                    // 解析 "Columns: xxx"
-                    val regex = Regex("Columns:\\s+(\\d+)")
-                    val match = regex.find(output)
-                    if (match != null) {
-                        return match.groupValues[1].toInt().coerceIn(40, 400)
-                    }
-                }
-            } catch (_: Exception) {}
-
-            // 尝试环境变量
-            val envWidth = System.getenv("COLUMNS")?.toIntOrNull()
-            if (envWidth != null) return envWidth.coerceIn(40, 400)
-
-            return 120
-        }
     }
 
     fun render(): String {
         val focus = appState.focusPanel
-        // 获取终端宽度（检测一次后缓存）
-        val tw = cachedWidth ?: detectTerminalWidth().also { cachedWidth = it }
+        // 获取终端尺寸（检测一次后缓存）
+        val tw = cachedWidth ?: terminal.size.width.also { cachedWidth = it }
         val terminalWidth = tw.coerceIn(40, 400)
         val sidebarWidth = (terminalWidth * 0.22f).toInt().coerceIn(15, 40)
         val infoWidth = (terminalWidth * 0.20f).toInt().coerceIn(15, 35)
+
+        // 估算终端高度（默认 24 行，减去状态栏 1 行、输入面板内容 3 行、边框/标题等开销约 4 行）
+        val terminalHeight = terminal.size.height.coerceIn(10, 200)
+        val inputAvailableLines = 3
+        val chatAvailableLines = (terminalHeight - inputAvailableLines - 5).coerceAtLeast(5)
 
         // 使用 table 构建四分区布局
         val layout = table {
@@ -87,14 +59,14 @@ class AppLayout(
             header {
                 row {
                     cell(SidebarPanel(appState).render(focus == PanelType.LEFT))
-                    cell(ChatPanel(appState).render(focus == PanelType.CENTER))
+                    cell(ChatPanel(appState).render(focus == PanelType.CENTER, chatAvailableLines))
                     cell(InfoPanel(appState).render(focus == PanelType.RIGHT))
                 }
             }
             footer {
                 row {
                     cell("")
-                    cell(InputPanel(appState).render(focus == PanelType.INPUT))
+                    cell(InputPanel(appState).render(focus == PanelType.INPUT, inputAvailableLines))
                     cell("")
                 }
             }

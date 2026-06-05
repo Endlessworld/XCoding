@@ -53,6 +53,28 @@ class AcpEventProcessor(private val appState: AppState) {
                 appState.errorMessage = error
                 appState.finishStreaming()
             }
+            // 思考过程（thought chunk）
+            event.startsWith("thought:") -> {
+                val content = event.removePrefix("thought:")
+                appState.appendThoughtContent(content)
+            }
+            // 工具调用
+            event.startsWith("tool_call:") -> {
+                val parts = event.removePrefix("tool_call:").split("|", limit = 2)
+                val toolName = parts.getOrElse(0) { "unknown" }
+                val args = parts.getOrElse(1) { "" }
+                appState.addToolCall(toolName, args)
+            }
+            // 工具调用更新（增量）
+            event.startsWith("tool_call_update:") -> {
+                val content = event.removePrefix("tool_call_update:")
+                appState.appendToolCallUpdate(content)
+            }
+            // 工具结果
+            event.startsWith("tool_result:") -> {
+                val content = event.removePrefix("tool_result:")
+                appState.addToolResult(content)
+            }
             // Todo 项
             event.startsWith("todo:") -> {
                 val todoContent = event.removePrefix("todo:")

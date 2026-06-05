@@ -34,10 +34,31 @@ import kotlinx.coroutines.runBlocking
  * TODO: 1.2 阶段实现完整的 CLI 参数解析
  */
 fun main(args: Array<String>) = runBlocking {
+    // 检测 Windows Terminal 环境
+    detectWindowsTerminal()
+
     val config = parseArgs(args)
     val terminal = Terminal()
     val app = TuiApp(terminal, config)
     app.start()
+}
+
+/**
+ * 检测 Windows Terminal 环境
+ *
+ * 在 Windows 上，检测当前是否运行在 Windows Terminal 中。
+ * 如果不是，提示用户 Windows Terminal 可提供更好的 TUI 体验。
+ * 检测方式：检查环境变量 WT_SESSION（Windows Terminal 特有）
+ */
+private fun detectWindowsTerminal() {
+    if (!System.getProperty("os.name").lowercase().contains("windows")) return
+
+    val wtSession = System.getenv("WT_SESSION")
+    if (wtSession.isNullOrBlank()) {
+        // 不在 Windows Terminal 中运行
+        System.err.println("[提示] 检测到 Windows 环境但未使用 Windows Terminal。")
+        System.err.println("       建议使用 Windows Terminal 以获得最佳 TUI 体验。")
+    }
 }
 
 private fun parseArgs(args: Array<String>): TuiConfig {

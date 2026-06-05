@@ -90,6 +90,9 @@ class AppState {
     /** 输入缓冲区 */
     var inputBuffer: String = ""
 
+    /** 输入光标位置（字符索引） */
+    var inputCursorPos: Int = 0
+
     /** 输入历史 */
     val inputHistory: MutableList<String> = mutableListOf()
 
@@ -98,6 +101,9 @@ class AppState {
 
     /** 滚动偏移 */
     var scrollOffset: Int = 0
+
+    /** 输入面板滚动偏移 */
+    var inputScrollOffset: Int = 0
     /** 当前焦点面板 */
     var focusPanel: PanelType = PanelType.CENTER
         private set
@@ -165,6 +171,8 @@ class AppState {
         inputHistoryIndex = inputHistory.size
         // 清空输入
         inputBuffer = ""
+        inputCursorPos = 0
+        inputScrollOffset = 0
         // 更新会话时间
         currentSession.updatedAt
         // 标记流式响应开始
@@ -183,6 +191,70 @@ class AppState {
                 ChatMessage(role = MessageRole.ASSISTANT, content = content, isStreaming = true)
             )
         }
+    }
+
+    /** 添加思考过程内容 */
+    fun appendThoughtContent(content: String) {
+        val lastMsg = currentSession.messages.lastOrNull()
+        if (lastMsg?.role == MessageRole.ASSISTANT && lastMsg.isStreaming) {
+            // 如果当前正在流式输出，先完成它，再加入 thought
+            currentSession.messages[currentSession.messages.lastIndex] = lastMsg.copy(isStreaming = false)
+        }
+        // 检查最后一条是否已经是 thought
+        val prevThought = currentSession.messages.lastOrNull()
+        if (prevThought?.role == MessageRole.SYSTEM && prevThought.isStreaming) {
+            currentSession.messages[currentSession.messages.lastIndex] = prevThought.copy(
+                content = prevThought.content + content
+            )
+        } else {
+            currentSession.messages.add(
+                ChatMessage(role = MessageRole.SYSTEM, content = "💭 $content", isStreaming = true)
+            )
+        }
+    }
+
+    /** 添加工具调用消息 */
+    fun addToolCall(toolName: String, args: String) {
+        // 先关闭流式消息
+        if (isStreaming) finishStreaming()
+        currentSession.messages.add(
+            ChatMessage(
+                role = MessageRole.TOOL_CALL,
+                content = "🔧 $toolName\n参数: $args",
+                isStreaming = true
+            )
+        )
+    }
+
+    /** 追加工具调用更新（增量参数） */
+    fun appendToolCallUpdate(content: String) {
+        val lastMsg = currentSession.messages.lastOrNull()
+        if (lastMsg?.role == MessageRole.TOOL_CALL && lastMsg.isStreaming) {
+            currentSession.messages[currentSession.messages.lastIndex] = lastMsg.copy(
+                content = lastMsg.content + content
+            )
+        }
+    }
+
+    /** 添加工具结果 */
+    fun addToolResult(content: String) {
+        // 关闭之前的流式消息
+        val lastMsg = currentSession.messages.lastOrNull()
+        if (lastMsg?.isStreaming == true) {
+            currentSession.messages[currentSession.messages.lastIndex] = lastMsg.copy(isStreaming = false)
+        }
+        // 截断长结果
+        val truncatedContent = if (content.length > 500) {
+            content.take(500) + "\n\n... (结果过长，已截断)"
+        } else {
+            content
+        }
+        currentSession.messages.add(
+            ChatMessage(
+                role = MessageRole.TOOL_RESULT,
+                content = "📎 $truncatedContent"
+            )
+        )
     }
 
     /** 完成流式响应 */
@@ -257,6 +329,7 @@ class AppState {
         if (inputHistoryIndex > 0) {
             inputHistoryIndex--
             inputBuffer = inputHistory[inputHistoryIndex]
+            inputCursorPos = inputBuffer.length
         }
     }
 
@@ -264,9 +337,11 @@ class AppState {
         if (inputHistoryIndex < inputHistory.size - 1) {
             inputHistoryIndex++
             inputBuffer = inputHistory[inputHistoryIndex]
+            inputCursorPos = inputBuffer.length
         } else {
             inputHistoryIndex = inputHistory.size
             inputBuffer = ""
+            inputCursorPos = 0
         }
     }
 }

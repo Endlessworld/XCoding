@@ -29,6 +29,7 @@ import com.xr21.ai.agent.tui.layout.MainLayout
 import com.xr21.ai.agent.tui.state.AppState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -48,6 +49,7 @@ class TuiApp(
     private val acpProcessor = AcpEventProcessor(appState)
     private lateinit var eventLoop: EventLoop
     private val scope = CoroutineScope(Dispatchers.Default)
+    private var statusBarUpdateJob: kotlinx.coroutines.Job? = null
 
     suspend fun start() {
         // 1. 进入原始模式（返回 AutoCloseable，在 finally 中自动退出）
@@ -59,14 +61,21 @@ class TuiApp(
         // 3. 渲染初始界面
         render()
 
-        // 4. 连接 Agent（非阻塞启动）
+        // 4. 启动状态栏定时刷新（每秒更新系统时间）
+        startStatusBarTimer()
+
+        // 5. 连接 Agent（非阻塞启动）
         connectToAgent()
 
         // 5. 启动事件循环（阻塞，直到退出）
         try {
             eventLoop.run()
+        } catch (e: Exception) {
+            appState.errorMessage = "运行时异常: ${e.message}"
         } finally {
-            rawMode.close()
+            try {
+                rawMode.close()
+            } catch (_: Exception) {}
             cleanup()
         }
     }
@@ -219,11 +228,26 @@ class TuiApp(
         }
     }
 
+    private fun startStatusBarTimer() {
+        statusBarUpdateJob = scope.launch {
+            while (true) {
+                delay(1000)
+                render()
+            }
+        }
+    }
+
     private fun cleanup() {
+        statusBarUpdateJob?.cancel()
+        statusBarUpdateJob = null
         acpClient.disconnect()
         // 恢复终端状态
-        terminal.cursor.show()
-        terminal.cursor.move { setPosition(0, 0) }
-        terminal.println((TextColors.brightGreen + TextStyles.bold)("Goodbye!"))
+        try {
+            terminal.cursor.show()
+            terminal.cursor.move { setPosition(0, 0) }
+            terminal.println((TextColors.brightGreen + TextStyles.bold)("Goodbye!"))
+        } catch (_: Exception) {
+            // 忽略清理时的异常
+        }
     }
 }

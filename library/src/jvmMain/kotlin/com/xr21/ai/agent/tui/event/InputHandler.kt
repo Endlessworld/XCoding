@@ -81,6 +81,7 @@ class InputHandler(private val terminal: Terminal) {
                             else -> KeyEvent.Unknown
                         }
                     }
+                    '\r', '\n' -> KeyEvent.AltEnter
                     else -> KeyEvent.Unknown
                 }
             }

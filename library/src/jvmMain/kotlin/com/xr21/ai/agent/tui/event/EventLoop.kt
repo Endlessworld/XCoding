@@ -61,22 +61,57 @@ class EventLoop(
     }
 
     private fun handleInputChar(keyEvent: KeyEvent): Action? {
-        if (keyEvent is KeyEvent.CharInput) {
-            appState.inputBuffer += keyEvent.char
-            return Action.NOOP
-        }
-        if (keyEvent == KeyEvent.Backspace && appState.inputBuffer.isNotEmpty()) {
-            appState.inputBuffer = appState.inputBuffer.dropLast(1)
-            return Action.NOOP
-        }
-        // Enter 键发送消息（输入缓冲非空时）
-        if (keyEvent == KeyEvent.Enter) {
-            if (appState.inputBuffer.isNotBlank()) {
-                return Action.SEND_MESSAGE
+        return when (keyEvent) {
+            is KeyEvent.CharInput -> {
+                val pos = appState.inputCursorPos.coerceIn(0, appState.inputBuffer.length)
+                appState.inputBuffer = appState.inputBuffer.substring(0, pos) + keyEvent.char + appState.inputBuffer.substring(pos)
+                appState.inputCursorPos = pos + 1
+                Action.NOOP
             }
-            // 输入缓冲为空时忽略 Enter
-            return null
+            KeyEvent.Backspace -> {
+                if (appState.inputBuffer.isNotEmpty() && appState.inputCursorPos > 0) {
+                    val pos = appState.inputCursorPos - 1
+                    appState.inputBuffer = appState.inputBuffer.substring(0, pos) + appState.inputBuffer.substring(pos + 1)
+                    appState.inputCursorPos = pos
+                }
+                Action.NOOP
+            }
+            KeyEvent.Enter -> {
+                // Enter 发送消息（输入缓冲非空时）
+                if (appState.inputBuffer.isNotBlank()) {
+                    Action.SEND_MESSAGE
+                } else {
+                    null
+                }
+            }
+            KeyEvent.AltEnter -> {
+                // Alt+Enter 插入换行
+                val pos = appState.inputCursorPos.coerceIn(0, appState.inputBuffer.length)
+                appState.inputBuffer = appState.inputBuffer.substring(0, pos) + "\n" + appState.inputBuffer.substring(pos)
+                appState.inputCursorPos = pos + 1
+                Action.NOOP
+            }
+            KeyEvent.Left -> {
+                if (appState.inputCursorPos > 0) {
+                    appState.inputCursorPos--
+                }
+                Action.NOOP
+            }
+            KeyEvent.Right -> {
+                if (appState.inputCursorPos < appState.inputBuffer.length) {
+                    appState.inputCursorPos++
+                }
+                Action.NOOP
+            }
+            KeyEvent.Home -> {
+                appState.inputCursorPos = 0
+                Action.NOOP
+            }
+            KeyEvent.End -> {
+                appState.inputCursorPos = appState.inputBuffer.length
+                Action.NOOP
+            }
+            else -> null
         }
-        return null
     }
 }
