@@ -19,6 +19,7 @@ import com.github.ajalt.mordant.table.ColumnWidth
 import com.github.ajalt.mordant.table.table
 import com.github.ajalt.mordant.terminal.Terminal
 import com.xr21.ai.agent.tui.state.AppState
+import com.xr21.ai.agent.tui.theme.TuiTheme
 
 /** 面板类型 */
 enum class PanelType { LEFT, CENTER, RIGHT, INPUT }
@@ -30,44 +31,41 @@ enum class PanelType { LEFT, CENTER, RIGHT, INPUT }
  */
 class AppLayout(
     private val terminal: Terminal,
-    private val appState: AppState
+    private val appState: AppState,
+    private val theme: TuiTheme
 ) {
     fun render(): String {
         val focus = appState.focusPanel
-        // 每次渲染都重新检测终端尺寸（支持窗口 resize）
         val terminalWidth = terminal.size.width.coerceIn(40, 400)
         val sidebarWidth = (terminalWidth * 0.22f).toInt().coerceIn(15, 40)
         val infoWidth = (terminalWidth * 0.20f).toInt().coerceIn(15, 35)
 
-        // 计算可用高度：终端总高度 - 状态栏1行 - 输入面板预留3行 - 边框/标题等开销约4行
         val terminalHeight = terminal.size.height.coerceIn(10, 200)
         val inputAvailableLines = 3
         val chatAvailableLines = (terminalHeight - inputAvailableLines - 5).coerceAtLeast(5)
 
-        // 使用 table 构建四分区布局
         val layout = table {
-            // 三列：左侧 22%，中间 58%，右侧 20%
             column(0) { width = ColumnWidth.Fixed(sidebarWidth) }
             column(1) { width = ColumnWidth.Expand(1f) }
             column(2) { width = ColumnWidth.Fixed(infoWidth) }
 
             header {
                 row {
-                    cell(SidebarPanel(appState).render(focus == PanelType.LEFT))
-                    cell(ChatPanel(appState, terminal).render(focus == PanelType.CENTER, chatAvailableLines))
-                    cell(InfoPanel(appState).render(focus == PanelType.RIGHT))
+                    cell(SidebarPanel(appState, theme).render(focus == PanelType.LEFT))
+                    cell(ChatPanel(appState, theme, terminal).render(focus == PanelType.CENTER, chatAvailableLines))
+                    cell(InfoPanel(appState, theme).render(focus == PanelType.RIGHT))
                 }
             }
             footer {
                 row {
                     cell("")
-                    cell(InputPanel(appState).render(focus == PanelType.INPUT, inputAvailableLines))
+                    cell(InputPanel(appState, theme).render(focus == PanelType.INPUT, inputAvailableLines))
                     cell("")
                 }
             }
         }
 
-        val statusBar = StatusBar(appState).render()
+        val statusBar = StatusBar(appState, theme).render()
         return terminal.render(layout) + "\n" + statusBar
     }
 }

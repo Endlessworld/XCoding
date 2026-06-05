@@ -16,7 +16,6 @@
 package com.xr21.ai.agent.tui
 
 import com.github.ajalt.mordant.input.enterRawMode
-import com.github.ajalt.mordant.rendering.TextColors
 import com.github.ajalt.mordant.rendering.TextStyles
 import com.github.ajalt.mordant.terminal.Terminal
 import com.xr21.ai.agent.tui.acp.AcpClientManager
@@ -44,7 +43,7 @@ class TuiApp(
 ) {
     private val appState = AppState()
     private val inputHandler = InputHandler(terminal)
-    private val mainLayout = MainLayout(appState, terminal)
+    private val mainLayout = MainLayout(appState, terminal, config.theme)
     private val acpClient = AcpClientManager(appState)
     private val acpProcessor = AcpEventProcessor(appState)
     private lateinit var eventLoop: EventLoop
@@ -259,7 +258,7 @@ class TuiApp(
         try {
             terminal.cursor.show()
             terminal.cursor.move { clearScreen(); setPosition(0, 0) }
-            terminal.println((TextColors.brightGreen + TextStyles.bold)("Goodbye!"))
+            terminal.println((config.theme.success + TextStyles.bold)("Goodbye!"))
         } catch (_: Exception) {
             // 忽略清理时的异常
         } finally {

@@ -28,41 +28,45 @@ import com.github.ajalt.mordant.terminal.Terminal
 import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
 import com.xr21.ai.agent.tui.state.MessageRole
+import com.xr21.ai.agent.tui.theme.TuiTheme
 
 class ChatPanel(
     private val appState: AppState,
+    private val theme: TuiTheme,
     private val terminal: Terminal? = null
 ) {
 
     fun render(isFocused: Boolean = false, availableLines: Int = 30): Panel {
         val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
+        val borderStyle = if (isFocused) theme.borderFocused else theme.borderNormal
+        val titleStyle = if (isFocused) theme.panelTitleFocused else theme.panelTitle
         val messages = appState.currentSession.messages
         if (messages.isEmpty()) {
             return Panel(
-                "开始新的对话\n\n输入消息后按 Ctrl+Enter 发送",
-                title = "对话",
-                titleAlign = TextAlign.CENTER
+                theme.textMuted("开始新的对话\n\n输入消息后按 Ctrl+Enter 发送"),
+                title = titleStyle("对话"),
+                titleAlign = TextAlign.CENTER,
+                borderType = borderType,
+                borderStyle = borderStyle
             )
         }
 
-        // 构建完整消息列表（每行一条消息，消息内容按行拆分）
         val timeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
         val allLines = messages.flatMap { msg ->
-            val role = when (msg.role) {
-                MessageRole.USER -> "👤 你"
-                MessageRole.ASSISTANT -> "🤖 AI"
-                MessageRole.SYSTEM -> "⚙ 系统"
-                MessageRole.TOOL_CALL -> "🔧 工具"
-                MessageRole.TOOL_RESULT -> "📎 结果"
-                MessageRole.ERROR -> "❌ 错误"
+            val (roleLabel, roleStyle) = when (msg.role) {
+                MessageRole.USER -> "👤 你" to theme.userMessage
+                MessageRole.ASSISTANT -> "🤖 AI" to theme.assistantMessage
+                MessageRole.SYSTEM -> "⚙ 系统" to theme.systemMessage
+                MessageRole.TOOL_CALL -> "🔧 工具" to theme.toolMessage
+                MessageRole.TOOL_RESULT -> "📎 结果" to theme.toolMessage
+                MessageRole.ERROR -> "❌ 错误" to theme.errorMessage
             }
             val timestamp = msg.timestamp.format(timeFormatter)
-            val suffix = if (msg.isStreaming) " ▌" else ""
-            // 工具消息折叠时只显示摘要
+            val suffix = if (msg.isStreaming) theme.scrollHint(" ▌") else ""
             val effectiveContent = when {
                 (msg.role == MessageRole.TOOL_CALL || msg.role == MessageRole.TOOL_RESULT) && !msg.isExpanded -> {
                     val firstLine = msg.content.lineSequence().firstOrNull() ?: ""
-                    val hint = if (isFocused) " [Space 展开]" else " [折叠]"
+                    val hint = if (isFocused) theme.scrollHint(" [Space 展开]") else theme.textMuted(" [折叠]")
                     "$firstLine…$hint"
                 }
                 msg.role == MessageRole.ASSISTANT && terminal != null -> {
@@ -75,12 +79,11 @@ class ChatPanel(
                 else -> msg.content
             }
             val contentLines = effectiveContent.lines().ifEmpty { listOf("") }
-            // 首行带角色和时间戳
-            listOf("$role  [$timestamp]") + contentLines.map { it + suffix }
+            val header = roleStyle("$roleLabel  ") + theme.textMuted("[$timestamp]")
+            listOf(header) + contentLines.map { theme.textPrimary(it) + suffix }
         }
 
         val maxOffset = (allLines.size - availableLines).coerceAtLeast(0)
-        // 如果 scrollOffset 为 Int.MAX_VALUE 或超出范围，跳到最大偏移
         val offset = if (appState.scrollOffset == Int.MAX_VALUE || appState.scrollOffset > maxOffset) {
             maxOffset
         } else {
@@ -89,11 +92,10 @@ class ChatPanel(
         val visibleMessages = allLines.drop(offset).take(availableLines)
         val content = visibleMessages.joinToString("\n")
 
-        // 显示滚动指示器
         val scrollHint = when {
-            offset > 0 && maxOffset > 0 && offset < maxOffset -> "↑ 上翻中 ($offset/$maxOffset) ↓"
-            offset > 0 -> "↑ 上翻中 ($offset/$maxOffset) 底部"
-            maxOffset > 0 -> "↓ 更多消息 (PageDown)"
+            offset > 0 && maxOffset > 0 && offset < maxOffset -> theme.scrollHint("↑ 上翻中 ($offset/$maxOffset) ↓")
+            offset > 0 -> theme.scrollHint("↑ 上翻中 ($offset/$maxOffset) 底部")
+            maxOffset > 0 -> theme.scrollHint("↓ 更多消息 (PageDown)")
             else -> ""
         }
         val displayContent = if (scrollHint.isNotEmpty()) {
@@ -104,9 +106,10 @@ class ChatPanel(
 
         return Panel(
             displayContent.trimEnd(),
-            title = "对话",
+            title = titleStyle("对话"),
             titleAlign = TextAlign.CENTER,
-            borderType = borderType
+            borderType = borderType,
+            borderStyle = borderStyle
         )
     }
 }

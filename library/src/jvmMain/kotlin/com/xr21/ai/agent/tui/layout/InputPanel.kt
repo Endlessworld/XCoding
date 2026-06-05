@@ -24,18 +24,23 @@ import com.github.ajalt.mordant.rendering.BorderType
 import com.github.ajalt.mordant.rendering.TextAlign
 import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
+import com.xr21.ai.agent.tui.theme.TuiTheme
 
-class InputPanel(private val appState: AppState) {
+class InputPanel(
+    private val appState: AppState,
+    private val theme: TuiTheme
+) {
     fun render(isFocused: Boolean = false, availableLines: Int = 3): Panel {
         val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
+        val borderStyle = if (isFocused) theme.borderFocused else theme.borderNormal
+        val titleStyle = if (isFocused) theme.panelTitleFocused else theme.panelTitle
 
         val allLines = if (appState.inputBuffer.isEmpty()) {
-            listOf("> 输入指令...  [Enter 发送, Alt+Enter 换行]")
+            listOf(theme.inputPrompt("> 输入指令...  [Enter 发送, Alt+Enter 换行]"))
         } else {
-            appState.inputBuffer.lines().map { "> $it" }
+            appState.inputBuffer.lines().map { theme.inputText("> $it") }
         }
 
-        // 计算滚动偏移：始终跟踪到末尾，确保光标可见
         val maxOffset = (allLines.size - availableLines).coerceAtLeast(0)
         val offset = if (appState.inputScrollOffset == Int.MAX_VALUE || appState.inputScrollOffset > maxOffset) {
             maxOffset
@@ -45,22 +50,23 @@ class InputPanel(private val appState: AppState) {
         val visibleLines = allLines.drop(offset).take(availableLines)
 
         val scrollHint = when {
-            offset > 0 && maxOffset > 0 && offset < maxOffset -> "↑ $offset/$maxOffset ↓"
-            offset > 0 -> "↑ $offset/$maxOffset"
-            maxOffset > 0 -> "↓"
+            offset > 0 && maxOffset > 0 && offset < maxOffset -> theme.scrollHint("↑ $offset/$maxOffset ↓")
+            offset > 0 -> theme.scrollHint("↑ $offset/$maxOffset")
+            maxOffset > 0 -> theme.scrollHint("↓")
             else -> null
         }
 
         val content = buildString {
             scrollHint?.let { appendLine(it) }
             visibleLines.forEach { appendLine(it) }
-        }.trimEnd().ifEmpty { "> " }
+        }.trimEnd().ifEmpty { theme.inputText("> ") }
 
         return Panel(
             content,
-            title = "Input",
+            title = titleStyle("Input"),
             titleAlign = TextAlign.LEFT,
-            borderType = borderType
+            borderType = borderType,
+            borderStyle = borderStyle
         )
     }
 }

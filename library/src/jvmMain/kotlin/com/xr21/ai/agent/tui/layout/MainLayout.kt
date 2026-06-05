@@ -17,14 +17,19 @@ package com.xr21.ai.agent.tui.layout
 
 import com.github.ajalt.mordant.terminal.Terminal
 import com.xr21.ai.agent.tui.state.AppState
+import com.xr21.ai.agent.tui.theme.TuiTheme
 
 /**
  * 主布局
  *
  * 封装 AppLayout，提供与 TuiApp 的接口。
  */
-class MainLayout(appState: AppState, terminal: Terminal) {
-    private val appLayout = AppLayout(terminal, appState)
+class MainLayout(
+    appState: AppState,
+    terminal: Terminal,
+    theme: TuiTheme
+) {
+    private val appLayout = AppLayout(terminal, appState, theme)
 
     fun render(): String {
         return appLayout.render()

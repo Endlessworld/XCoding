@@ -15,8 +15,8 @@
  */
 package com.xr21.ai.agent.tui.config
 
-import com.github.ajalt.mordant.rendering.TextColors
-import com.github.ajalt.mordant.rendering.Theme
+import com.xr21.ai.agent.tui.theme.TuiTheme
+import com.xr21.ai.agent.tui.theme.modernDarkTheme
 
 /** TUI 配置 */
 data class TuiConfig(
@@ -39,10 +39,7 @@ data class TuiConfig(
     val inputHistorySize: Int = 100,
 
     /** 主题 */
-    val theme: Theme = Theme.Default,
-
-    /** 颜色配置 */
-    val colors: TuiColors = TuiColors(),
+    val theme: TuiTheme = modernDarkTheme(),
 
     /** Agent 启动命令（Stdio 模式） */
     val agentCommand: List<String> = emptyList(),
@@ -58,23 +55,4 @@ data class TuiConfig(
 
     /** 重连间隔（毫秒） */
     val reconnectIntervalMs: Long = 3000
-)
-
-/** TUI 颜色配置 */
-data class TuiColors(
-    val primary: TextColors = TextColors.blue,
-    val success: TextColors = TextColors.green,
-    val warning: TextColors = TextColors.yellow,
-    val error: TextColors = TextColors.red,
-    val info: TextColors = TextColors.cyan,
-    val muted: TextColors = TextColors.gray,
-    val userMessage: TextColors = TextColors.brightBlue,
-    val assistantMessage: TextColors = TextColors.brightGreen,
-    val systemMessage: TextColors = TextColors.brightYellow,
-    val toolMessage: TextColors = TextColors.brightMagenta,
-    val errorMessage: TextColors = TextColors.brightRed,
-    val border: TextColors = TextColors.gray,
-    val activeBorder: TextColors = TextColors.brightCyan,
-    val statusBar: TextColors = TextColors.gray,
-    val inputPrompt: TextColors = TextColors.green
 )

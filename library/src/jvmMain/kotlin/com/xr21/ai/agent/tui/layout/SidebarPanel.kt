@@ -24,38 +24,50 @@ import com.github.ajalt.mordant.rendering.BorderType
 import com.github.ajalt.mordant.rendering.TextAlign
 import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
+import com.xr21.ai.agent.tui.theme.TuiTheme
 
-class SidebarPanel(private val appState: AppState) {
+class SidebarPanel(
+    private val appState: AppState,
+    private val theme: TuiTheme
+) {
     fun render(isFocused: Boolean = false): Panel {
         val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
+        val borderStyle = if (isFocused) theme.borderFocused else theme.borderNormal
+        val titleStyle = if (isFocused) theme.panelTitleFocused else theme.panelTitle
         val selectedIdx = if (isFocused) appState.sidebarSelectedIndex else appState.currentSessionIndex
+
         val sessionList = appState.sessions.mapIndexed { index, session ->
             val isSelected = index == selectedIdx
             val isCurrent = index == appState.currentSessionIndex
             val prefix = when {
-                isSelected && isCurrent -> "▸ "
-                isSelected -> "▸ "
-                isCurrent -> "● "
-                else -> "  "
+                isSelected && isCurrent -> theme.selectedText("▸ ")
+                isSelected -> theme.selectedText("▸ ")
+                isCurrent -> theme.currentIndicator("● ")
+                else -> theme.textMuted("  ")
             }
-            val name = session.name
+            val name = when {
+                isSelected -> theme.selectedText(session.name)
+                isCurrent -> theme.textSecondary(session.name)
+                else -> theme.textMuted(session.name)
+            }
             "$prefix$name"
         }.joinToString("\n")
 
         val content = buildString {
-            appendLine("会话 (${appState.sessionCount})")
+            appendLine(theme.accent("会话") + theme.textSecondary(" (${appState.sessionCount})"))
             appendLine()
             appendLine(sessionList)
             appendLine()
-            appendLine("[+] 新会话  Ctrl+N")
-            appendLine("[×] 关闭    Ctrl+W")
+            appendLine(theme.keyHint("[+] 新会话  Ctrl+N"))
+            appendLine(theme.keyHint("[×] 关闭    Ctrl+W"))
         }
 
         return Panel(
             content.trimEnd(),
-            title = "会话",
+            title = titleStyle("会话"),
             titleAlign = TextAlign.CENTER,
-            borderType = borderType
+            borderType = borderType,
+            borderStyle = borderStyle
         )
     }
 }

@@ -26,18 +26,24 @@ import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
 import com.xr21.ai.agent.tui.state.TodoPriority
 import com.xr21.ai.agent.tui.state.TodoStatus
+import com.xr21.ai.agent.tui.theme.TuiTheme
 
-class InfoPanel(private val appState: AppState) {
+class InfoPanel(
+    private val appState: AppState,
+    private val theme: TuiTheme
+) {
     fun render(isFocused: Boolean = false): Panel {
         val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
+        val borderStyle = if (isFocused) theme.borderFocused else theme.borderNormal
+        val titleStyle = if (isFocused) theme.panelTitleFocused else theme.panelTitle
         val content = buildString {
             // Token 用量
-            appendLine("📊 Token 用量")
-            appendLine("  Prompt:  ${appState.tokenUsage.promptTokens}")
-            appendLine("  生成:    ${appState.tokenUsage.completionTokens}")
-            appendLine("  总计:    ${appState.tokenUsage.totalTokens}")
+            appendLine(theme.accent("📊 Token 用量"))
+            appendLine(theme.textSecondary("  Prompt: ") + theme.info("${appState.tokenUsage.promptTokens}"))
+            appendLine(theme.textSecondary("  生成:    ") + theme.info("${appState.tokenUsage.completionTokens}"))
+            appendLine(theme.textSecondary("  总计:    ") + theme.accent("${appState.tokenUsage.totalTokens}"))
             if (appState.tokenUsage.costUsd > 0) {
-                appendLine("  费用:    $${String.format("%.4f", appState.tokenUsage.costUsd)}")
+                appendLine(theme.textSecondary("  费用:    ") + theme.warning("$${String.format("%.4f", appState.tokenUsage.costUsd)}"))
             }
             appendLine()
 
@@ -45,36 +51,37 @@ class InfoPanel(private val appState: AppState) {
             if (appState.todos.isNotEmpty()) {
                 val completed = appState.todos.count { it.status == TodoStatus.COMPLETED }
                 val total = appState.todos.size
-                appendLine("📋 Todo ($completed/$total)")
+                appendLine(theme.accent("📋 Todo") + theme.textSecondary(" ($completed/$total)"))
                 appState.todos.forEach { todo ->
                     val statusIcon = when (todo.status) {
-                        TodoStatus.PENDING -> "○"
-                        TodoStatus.IN_PROGRESS -> "◌"
-                        TodoStatus.COMPLETED -> "✓"
-                        TodoStatus.FAILED -> "✗"
-                        TodoStatus.SKIPPED -> "—"
+                        TodoStatus.PENDING -> theme.textMuted("○")
+                        TodoStatus.IN_PROGRESS -> theme.warning("◌")
+                        TodoStatus.COMPLETED -> theme.success("✓")
+                        TodoStatus.FAILED -> theme.error("✗")
+                        TodoStatus.SKIPPED -> theme.textMuted("—")
                     }
-                    val priorityIcon = when (todo.priority) {
-                        TodoPriority.HIGH -> "🔴"
-                        TodoPriority.MEDIUM -> "🟡"
-                        TodoPriority.LOW -> "🔵"
+                    val priorityStyle = when (todo.priority) {
+                        TodoPriority.HIGH -> theme.error
+                        TodoPriority.MEDIUM -> theme.warning
+                        TodoPriority.LOW -> theme.info
                     }
-                    appendLine("  $priorityIcon $statusIcon ${todo.content}")
+                    appendLine("  " + priorityStyle("●") + " $statusIcon " + theme.textPrimary(todo.content))
                 }
                 appendLine()
             }
 
             // 模型信息
-            appendLine("ℹ 信息")
-            appendLine("  模型: ${appState.modelName.ifEmpty { "—" }}")
-            appendLine("  Agent: ${appState.agentName} ${appState.agentVersion}")
+            appendLine(theme.accent("ℹ 信息"))
+            appendLine(theme.textSecondary("  模型: ") + theme.textPrimary(appState.modelName.ifEmpty { "—" }))
+            appendLine(theme.textSecondary("  Agent: ") + theme.textPrimary("${appState.agentName} ${appState.agentVersion}"))
         }
 
         return Panel(
             content.trimEnd(),
-            title = "信息",
+            title = titleStyle("信息"),
             titleAlign = TextAlign.CENTER,
-            borderType = borderType
+            borderType = borderType,
+            borderStyle = borderStyle
         )
     }
 }

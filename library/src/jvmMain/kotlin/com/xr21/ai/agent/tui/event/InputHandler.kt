@@ -105,9 +105,54 @@ class InputHandler(private val terminal: Terminal) {
                         else -> KeyEvent.CharInput(letter)
                     }
                 } else {
-                    KeyEvent.CharInput(c)
+                    // 处理 UTF-8 多字节字符（如中文）
+                    val decoded = readUtf8Char(byte)
+                    if (decoded != null) {
+                        KeyEvent.CharInput(decoded)
+                    } else {
+                        KeyEvent.Unknown
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * 读取并解码 UTF-8 多字节字符
+     */
+    private fun readUtf8Char(firstByte: Int): Char? {
+        val b1 = firstByte and 0xFF
+        return when {
+            // 1字节 ASCII: 0xxxxxxx
+            b1 < 0x80 -> b1.toChar()
+            // 2字节: 110xxxxx 10xxxxxx
+            b1 and 0xE0 == 0xC0 -> {
+                val b2 = readByte() ?: return null
+                val codePoint = ((b1 and 0x1F) shl 6) or (b2 and 0x3F)
+                if (codePoint in 0x80..0x7FF) codePoint.toChar() else null
+            }
+            // 3字节: 1110xxxx 10xxxxxx 10xxxxxx (中文等)
+            b1 and 0xF0 == 0xE0 -> {
+                val b2 = readByte() ?: return null
+                val b3 = readByte() ?: return null
+                val codePoint = ((b1 and 0x0F) shl 12) or ((b2 and 0x3F) shl 6) or (b3 and 0x3F)
+                if (codePoint in 0x800..0xFFFF) codePoint.toChar() else null
+            }
+            // 4字节: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx (emoji 等)
+            b1 and 0xF8 == 0xF0 -> {
+                val b2 = readByte() ?: return null
+                val b3 = readByte() ?: return null
+                val b4 = readByte() ?: return null
+                val codePoint = ((b1 and 0x07) shl 18) or ((b2 and 0x3F) shl 12) or ((b3 and 0x3F) shl 6) or (b4 and 0x3F)
+                // BMP 外字符（如 emoji）单个 Char 无法完整表示，返回替换字符占位
+                if (codePoint in 0x10000..0x10FFFF) '\uFFFD' else null
+            }
+            else -> null
+        }
+    }
+
+    private fun readByte(): Int? {
+        val b = System.`in`.read()
+        return if (b == -1) null else b and 0xFF
     }
 }
