@@ -80,7 +80,11 @@ dependencies {
 
     // Jsoup - HTML parsing (used by WebSearchTool for DuckDuckGo search)
     implementation(libs.jsoup)
-
+    // Mordant TUI
+    implementation(libs.mordant)
+    implementation(libs.mordant.coroutines)
+    implementation(libs.mordant.markdown)
+    implementation(libs.mordant.jvm.jna)
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
@@ -93,6 +97,19 @@ tasks.register<JavaExec>("runAcpAgent") {
     mainClass.set("com.xr21.ai.agent.AcpLocalAgent")
     classpath = sourceSets.main.get().runtimeClasspath
     workingDir = projectDir
+}
+
+
+tasks.register<JavaExec>("runTui") {
+    group = "application"
+    description = "Runs XAgent TUI interface"
+    dependsOn("classes")
+
+    mainClass.set("com.xr21.ai.agent.tui.MainKt")
+    classpath = sourceSets.main.get().runtimeClasspath
+    workingDir = projectDir
+    // 默认以当前目录为工作目录启动 Agent
+    args = listOf(projectDir.absolutePath)
 }
 
 tasks.register<JavaExec>("runAsyncAgentClient") {

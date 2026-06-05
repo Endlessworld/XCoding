@@ -9,6 +9,7 @@ lombok = "1.18.30"
 agentclientprotocol = "0.23.0"
 ktor = "3.1.3"
 jsoup = "1.18.3"
+mordant = "3.0.2"
 
 [libraries]
 spring-core = { group = "org.springframework", name = "spring-core", version.ref = "spring" }
@@ -35,5 +36,11 @@ ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty", version.ref
 # HTML parsing
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 
+
+# Mordant TUI
+mordant = { group = "com.github.ajalt.mordant", name = "mordant", version.ref = "mordant" }
+mordant-coroutines = { group = "com.github.ajalt.mordant", name = "mordant-coroutines", version.ref = "mordant" }
+mordant-markdown = { group = "com.github.ajalt.mordant", name = "mordant-markdown", version.ref = "mordant" }
+mordant-jvm-jna = { group = "com.github.ajalt.mordant", name = "mordant-jvm-jna", version.ref = "mordant" }
 [plugins]
 vanniktech-mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }
