@@ -36,7 +36,7 @@ class AcpEventProcessor(private val appState: AppState) {
         }
     }
 
-    private fun processEvent(event: String) {
+    fun processEvent(event: String) {
         when {
             // 文本增量
             event.startsWith("text:") -> {

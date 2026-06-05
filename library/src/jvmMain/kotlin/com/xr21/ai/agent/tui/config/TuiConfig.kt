@@ -61,14 +61,14 @@ data class TuiColors(
     val warning: TextColors = TextColors.yellow,
     val error: TextColors = TextColors.red,
     val info: TextColors = TextColors.cyan,
-    val muted: TextColors = TextColors.brightBlack,
+    val muted: TextColors = TextColors.gray,
     val userMessage: TextColors = TextColors.brightBlue,
     val assistantMessage: TextColors = TextColors.brightGreen,
     val systemMessage: TextColors = TextColors.brightYellow,
     val toolMessage: TextColors = TextColors.brightMagenta,
     val errorMessage: TextColors = TextColors.brightRed,
-    val border: TextColors = TextColors.brightBlack,
+    val border: TextColors = TextColors.gray,
     val activeBorder: TextColors = TextColors.brightCyan,
-    val statusBar: TextColors = TextColors.brightBlack,
+    val statusBar: TextColors = TextColors.gray,
     val inputPrompt: TextColors = TextColors.green
 )

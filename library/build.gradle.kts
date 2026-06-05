@@ -162,19 +162,22 @@ tasks.named<Jar>("jar") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes["Main-Class"] = "com.xr21.ai.agent.AgentApplication"
+        attributes["Multi-Release"] = "true"
     }
 }
 
-// 2. 创建 fatJar 任务（打包所有依赖）
+// 2. 创建 fatJar 任务（打包所有依赖为可执行 fat JAR）
 tasks.register<Jar>("fatJar") {
     dependsOn("classes")
     group = "build"
     description = "Builds a fat JAR with all dependencies"
 
+    // 排除重复文件（META-INF 中的服务描述文件等）
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     manifest {
         attributes["Main-Class"] = "com.xr21.ai.agent.AgentApplication"
+        attributes["Multi-Release"] = "true"
     }
 
     from(sourceSets.main.get().output)
@@ -185,7 +188,14 @@ tasks.register<Jar>("fatJar") {
         }
     )
 
+    // 排除 META-INF 中的签名文件（避免 jar 签名冲突）
+    exclude("META-INF/*.SF")
+    exclude("META-INF/*.DSA")
+    exclude("META-INF/*.RSA")
+
     archiveBaseName.set("XAgent")
+    // 不设置 classifier，这样 jar 名称就是 XAgent-all.jar（因为启用了 jar 任务的 all 分类器）
+    // 实际上 archiveClassifier 就是后缀，这里设为 "all" 会生成 XAgent-all.jar
     archiveClassifier.set("all")
 }
 

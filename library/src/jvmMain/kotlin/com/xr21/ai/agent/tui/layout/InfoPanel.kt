@@ -15,20 +15,20 @@
  */
 package com.xr21.ai.agent.tui.layout
 
-import com.github.ajalt.mordant.rendering.TextAlign
-import com.github.ajalt.mordant.widgets.Panel
-import com.github.ajalt.mordant.widgets.Text
-
 /**
  * 右侧信息面板
  *
  * TODO: 2.7 阶段实现完整的信息显示
  */
+import com.github.ajalt.mordant.rendering.BorderType
+import com.github.ajalt.mordant.rendering.TextAlign
+import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
 import com.xr21.ai.agent.tui.state.TodoStatus
 
 class InfoPanel(private val appState: AppState) {
-    fun render(): Panel {
+    fun render(isFocused: Boolean = false): Panel {
+        val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
         val content = buildString {
             // Token 用量
             appendLine("📊 Token 用量")
@@ -63,9 +63,10 @@ class InfoPanel(private val appState: AppState) {
         }
 
         return Panel(
-            Text(content.trimEnd()),
+            content.trimEnd(),
             title = "信息",
-            titleAlign = TextAlign.CENTER
+            titleAlign = TextAlign.CENTER,
+            borderType = borderType
         )
     }
 }

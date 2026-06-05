@@ -49,7 +49,7 @@ class StatusBar(private val appState: AppState) {
             append(" │ ${time}")
         }
 
-        return Text(text, style = TextStyles.dim)
+        return Text(TextStyles.dim(text))
     }
 }
 

@@ -15,19 +15,19 @@
  */
 package com.xr21.ai.agent.tui.layout
 
-import com.github.ajalt.mordant.rendering.TextAlign
-import com.github.ajalt.mordant.widgets.Panel
-import com.github.ajalt.mordant.widgets.Text
-
 /**
  * 底部输入面板
  *
  * TODO: 1.9 阶段实现完整的多行输入框
  */
+import com.github.ajalt.mordant.rendering.BorderType
+import com.github.ajalt.mordant.rendering.TextAlign
+import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
 
 class InputPanel(private val appState: AppState) {
-    fun render(): Panel {
+    fun render(isFocused: Boolean = false): Panel {
+        val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
         val inputText = if (appState.inputBuffer.isEmpty()) {
             "> 输入指令...  [Ctrl+Enter 发送]"
         } else {
@@ -35,9 +35,10 @@ class InputPanel(private val appState: AppState) {
         }
 
         return Panel(
-            Text(inputText),
+            inputText,
             title = "Input",
-            titleAlign = TextAlign.LEFT
+            titleAlign = TextAlign.LEFT,
+            borderType = borderType
         )
     }
 }

@@ -15,19 +15,19 @@
  */
 package com.xr21.ai.agent.tui.layout
 
-import com.github.ajalt.mordant.rendering.TextAlign
-import com.github.ajalt.mordant.widgets.Panel
-import com.github.ajalt.mordant.widgets.Text
-
 /**
  * 左侧会话列表面板
  *
  * TODO: 2.4 阶段实现完整的会话列表交互
  */
+import com.github.ajalt.mordant.rendering.BorderType
+import com.github.ajalt.mordant.rendering.TextAlign
+import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
 
 class SidebarPanel(private val appState: AppState) {
-    fun render(): Panel {
+    fun render(isFocused: Boolean = false): Panel {
+        val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
         val sessionList = appState.sessions.mapIndexed { index, session ->
             val prefix = if (index == appState.currentSessionIndex) "▸ " else "  "
             val name = session.name
@@ -44,9 +44,10 @@ class SidebarPanel(private val appState: AppState) {
         }
 
         return Panel(
-            Text(content.trimEnd()),
+            content.trimEnd(),
             title = "会话",
-            titleAlign = TextAlign.CENTER
+            titleAlign = TextAlign.CENTER,
+            borderType = borderType
         )
     }
 }

@@ -22,11 +22,8 @@ import com.xr21.ai.agent.tui.state.AppState
  *
  * 负责：
  * 1. 监听键盘输入
- * 2. 从 ACP 客户端接收异步事件
- * 3. 调度 Action 到对应的 Handler
- * 4. 触发 UI 重绘
- *
- * TODO: 1.8 阶段实现完整的事件循环
+ * 2. 调度 Action 到对应的 Handler
+ * 3. 触发 UI 重绘
  */
 class EventLoop(
     private val appState: AppState,
@@ -38,7 +35,7 @@ class EventLoop(
     suspend fun run() {
         while (running) {
             val keyEvent = inputHandler.readKey()
-            val action = DEFAULT_KEY_BINDINGS[keyEvent] ?: handleInputChar(keyEvent)
+            val action = resolveAction(keyEvent)
             val handler = actionHandlers[action]
             if (handler != null) {
                 handler()
@@ -50,6 +47,19 @@ class EventLoop(
         running = false
     }
 
+    /**
+     * 将 KeyEvent 解析为 Action
+     * 优先匹配快捷键映射，再处理普通字符输入
+     */
+    private fun resolveAction(keyEvent: KeyEvent): Action? {
+        // 先查快捷键映射表
+        val boundAction = DEFAULT_KEY_BINDINGS[keyEvent]
+        if (boundAction != null) return boundAction
+
+        // 处理普通字符输入和退格
+        return handleInputChar(keyEvent)
+    }
+
     private fun handleInputChar(keyEvent: KeyEvent): Action? {
         if (keyEvent is KeyEvent.CharInput) {
             appState.inputBuffer += keyEvent.char
@@ -58,6 +68,14 @@ class EventLoop(
         if (keyEvent == KeyEvent.Backspace && appState.inputBuffer.isNotEmpty()) {
             appState.inputBuffer = appState.inputBuffer.dropLast(1)
             return Action.NOOP
+        }
+        // Enter 键发送消息（输入缓冲非空时）
+        if (keyEvent == KeyEvent.Enter) {
+            if (appState.inputBuffer.isNotBlank()) {
+                return Action.SEND_MESSAGE
+            }
+            // 输入缓冲为空时忽略 Enter
+            return null
         }
         return null
     }

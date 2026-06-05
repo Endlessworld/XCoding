@@ -36,7 +36,7 @@ import kotlinx.coroutines.runBlocking
 fun main(args: Array<String>) = runBlocking {
     val config = parseArgs(args)
     val terminal = Terminal()
-    val app = TuiApp(terminal)
+    val app = TuiApp(terminal, config)
     app.start()
 }
 

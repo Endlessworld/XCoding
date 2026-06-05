@@ -74,7 +74,8 @@ enum class Action {
  * TODO: 3.4 阶段支持自定义快捷键
  */
 val DEFAULT_KEY_BINDINGS: Map<KeyEvent, Action> = mapOf(
-    KeyEvent.CtrlEnter to Action.SEND_MESSAGE,
+    // Ctrl+Enter 在终端中与 Enter 无法区分，都会产生 \n
+    // 实际发送逻辑在 EventLoop.handleInputChar() 中处理
     KeyEvent.CtrlC to Action.CANCEL_OR_INTERRUPT,
     KeyEvent.CtrlN to Action.NEW_SESSION,
     KeyEvent.CtrlW to Action.CLOSE_SESSION,

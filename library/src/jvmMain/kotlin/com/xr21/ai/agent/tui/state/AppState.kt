@@ -16,6 +16,7 @@
 package com.xr21.ai.agent.tui.state
 
 import com.xr21.ai.agent.tui.acp.ConnectionState
+import com.xr21.ai.agent.tui.layout.PanelType
 import java.time.LocalDateTime
 import java.util.*
 
@@ -97,6 +98,30 @@ class AppState {
 
     /** 滚动偏移 */
     var scrollOffset: Int = 0
+    /** 当前焦点面板 */
+    var focusPanel: PanelType = PanelType.CENTER
+        private set
+
+    /** 切换焦点到下一个面板 */
+    fun focusNext() {
+        focusPanel = when (focusPanel) {
+            PanelType.LEFT -> PanelType.CENTER
+            PanelType.CENTER -> PanelType.RIGHT
+            PanelType.RIGHT -> PanelType.INPUT
+            PanelType.INPUT -> PanelType.LEFT
+        }
+    }
+
+    /** 切换焦点到上一个面板 */
+    fun focusPrevious() {
+        focusPanel = when (focusPanel) {
+            PanelType.LEFT -> PanelType.INPUT
+            PanelType.CENTER -> PanelType.LEFT
+            PanelType.RIGHT -> PanelType.CENTER
+            PanelType.INPUT -> PanelType.RIGHT
+        }
+    }
+
 
     /** 连接状态 */
     var connectionState: ConnectionState = ConnectionState.DISCONNECTED

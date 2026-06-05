@@ -15,30 +15,34 @@
  */
 package com.xr21.ai.agent.tui.layout
 
-import com.github.ajalt.mordant.rendering.TextAlign
-import com.github.ajalt.mordant.widgets.Panel
-import com.github.ajalt.mordant.widgets.Text
-
 /**
  * 中间对话面板
  *
  * TODO: 1.11 阶段实现完整的消息流渲染
  */
+import com.github.ajalt.mordant.rendering.BorderType
+import com.github.ajalt.mordant.rendering.TextAlign
+import com.github.ajalt.mordant.widgets.Panel
 import com.xr21.ai.agent.tui.state.AppState
 import com.xr21.ai.agent.tui.state.MessageRole
 
 class ChatPanel(private val appState: AppState) {
-    fun render(): Panel {
+    /** 面板内可见行数（估算值，后续可通过终端尺寸精确计算） */
+    private val visibleLines = 30
+
+    fun render(isFocused: Boolean = false): Panel {
+        val borderType = if (isFocused) BorderType.DOUBLE else BorderType.ROUNDED
         val messages = appState.currentSession.messages
         if (messages.isEmpty()) {
             return Panel(
-                Text("开始新的对话\n\n输入消息后按 Ctrl+Enter 发送"),
+                "开始新的对话\n\n输入消息后按 Ctrl+Enter 发送",
                 title = "对话",
                 titleAlign = TextAlign.CENTER
             )
         }
 
-        val content = messages.joinToString("\n\n") { msg ->
+        // 构建完整消息列表（每行一条消息）
+        val allLines = messages.map { msg ->
             val role = when (msg.role) {
                 MessageRole.USER -> "👤 你"
                 MessageRole.ASSISTANT -> "🤖 AI"
@@ -51,10 +55,29 @@ class ChatPanel(private val appState: AppState) {
             "$role\n${msg.content}$suffix"
         }
 
+        // 根据 scrollOffset 裁剪可见消息
+        val offset = appState.scrollOffset.coerceIn(0, (allLines.size - 1).coerceAtLeast(0))
+        val visibleMessages = allLines.drop(offset).take(visibleLines)
+        val content = visibleMessages.joinToString("\n\n")
+
+        // 显示滚动指示器
+        val scrollHint = when {
+            offset > 0 && visibleMessages.size >= visibleLines -> "↑ 上翻 $offset 条"
+            offset > 0 -> "↑ 上翻 $offset 条 (底部)"
+            allLines.size > visibleLines -> ""
+            else -> ""
+        }
+        val displayContent = if (scrollHint.isNotEmpty()) {
+            "$scrollHint\n\n$content"
+        } else {
+            content
+        }
+
         return Panel(
-            Text(content),
+            displayContent,
             title = "对话",
-            titleAlign = TextAlign.CENTER
+            titleAlign = TextAlign.CENTER,
+            borderType = borderType
         )
     }
 }
