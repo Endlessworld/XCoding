@@ -15,31 +15,8 @@
  */
 package com.xr21.ai.agent.tui.config
 
-import com.xr21.ai.agent.tui.theme.TuiTheme
-import com.xr21.ai.agent.tui.theme.modernDarkTheme
-
 /** TUI 配置 */
-data class TuiConfig(
-    /** 布局比例（三栏：左侧会话列表、中间对话流、右侧信息面板） */
-    val sidebarRatio: Float = 0.22f,
-    val chatRatio: Float = 0.58f,
-    val infoRatio: Float = 0.20f,
-
-    /** 输入框高度（行数） */
-    val inputHeight: Int = 4,
-    /** 状态栏高度 */
-    val statusBarHeight: Int = 1,
-
-    /** 最大消息数量 */
-    val maxMessages: Int = 500,
-    /** 最大会话数量 */
-    val maxSessions: Int = 50,
-
-    /** 输入历史大小 */
-    val inputHistorySize: Int = 100,
-
-    /** 主题 */
-    val theme: TuiTheme = modernDarkTheme(),
+data class ACPConnectConfig(
 
     /** Agent 启动命令（Stdio 模式） */
     val agentCommand: List<String> = emptyList(),

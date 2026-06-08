@@ -9,9 +9,9 @@ import com.agentclientprotocol.model.SessionUpdate
 import com.agentclientprotocol.model.ToolCallContent
 import com.agentclientprotocol.model.ToolCallStatus
 import com.xr21.ai.agent.tui.acp.AcpClientManager
-import com.xr21.ai.agent.tui.config.TuiConfig
+import com.xr21.ai.agent.tui.config.ACPConnectConfig
+import com.xr21.ai.agent.tui.java.AppState
 import com.xr21.ai.agent.tui.java.TambouiTuiApp
-import com.xr21.ai.agent.tui.state.AppState
 import kotlinx.coroutines.*
 import com.xr21.ai.agent.tui.java.AppState as JavaAppState
 
@@ -27,7 +27,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
     private val acpClient = AcpClientManager(ktAppState)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var callback: TambouiTuiApp.ConnectionCallback? = null
-    private var config: TuiConfig = TuiConfig()
+    private var config: ACPConnectConfig = ACPConnectConfig()
 
     override fun connect(args: Array<String>, callback: TambouiTuiApp.ConnectionCallback) {
         this.callback = callback
@@ -37,9 +37,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
             val result = acpClient.connect(config)
             if (result.isSuccess) {
                 callback.onConnected(
-                    ktAppState.agentName,
-                    ktAppState.agentVersion,
-                    ktAppState.modelName
+                    ktAppState.agentName, ktAppState.agentVersion, ktAppState.modelName
                 )
                 acpClient.startEventCollection { event ->
                     handleEvent(event)
@@ -78,8 +76,8 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
         javaEvent?.let { callback?.onEvent(it) }
     }
 
-    private fun parseConfig(args: Array<String>): TuiConfig {
-        var cfg = TuiConfig()
+    private fun parseConfig(args: Array<String>): ACPConnectConfig {
+        var cfg = ACPConnectConfig()
         var i = 0
         while (i < args.size) {
             when (args[i]) {
@@ -95,12 +93,14 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
                     }
                     i = j - 1
                 }
+
                 "--ws-url" -> {
                     if (i + 1 < args.size && !args[i + 1].startsWith("-")) {
                         cfg = cfg.copy(webSocketUrl = args[i + 1])
                         i++
                     }
                 }
+
                 "--ws-server-port" -> {
                     if (i + 1 < args.size) {
                         args[i + 1].toIntOrNull()?.let { port ->
@@ -126,26 +126,31 @@ class AcpEventAdapter(private val update: SessionUpdate) : TambouiTuiApp.AcpEven
                 val text = (update.content as? ContentBlock.Text)?.text ?: ""
                 state.appendStreamingContent(text)
             }
+
             is SessionUpdate.AgentThoughtChunk -> {
                 val text = (update.content as? ContentBlock.Text)?.text ?: ""
                 state.appendThoughtContent(text)
             }
+
             is SessionUpdate.ToolCall -> {
                 val args = extractText(update.content)
                 state.addToolCall(update.title, args)
             }
+
             is SessionUpdate.ToolCallUpdate -> {
                 when (update.status) {
                     ToolCallStatus.COMPLETED -> {
                         val result = extractText(update.content ?: emptyList())
                         state.addToolResult(result)
                     }
+
                     else -> {
                         val content = extractText(update.content ?: emptyList())
                         if (content.isNotEmpty()) state.appendToolCallUpdate(content)
                     }
                 }
             }
+
             is SessionUpdate.PlanUpdate -> {
                 state.clearTodos()
                 update.entries.forEach { entry ->
@@ -154,9 +159,11 @@ class AcpEventAdapter(private val update: SessionUpdate) : TambouiTuiApp.AcpEven
                     state.addTodo(entry.content, statusName, priorityName)
                 }
             }
+
             is SessionUpdate.UsageUpdate -> {
                 state.setTotalTokens(update.used)
             }
+
             else -> {}
         }
     }

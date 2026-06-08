@@ -27,8 +27,8 @@ import com.agentclientprotocol.model.*
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.protocol.ProtocolOptions
 import com.agentclientprotocol.transport.acpProtocolOnClientWebSocket
-import com.xr21.ai.agent.tui.config.TuiConfig
-import com.xr21.ai.agent.tui.state.AppState
+import com.xr21.ai.agent.tui.config.ACPConnectConfig
+import com.xr21.ai.agent.tui.java.AppState
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import kotlinx.coroutines.*
@@ -68,7 +68,7 @@ class AcpClientManager(private val appState: AppState) {
     private var eventHandler: ((Event) -> Unit)? = null
 
     /** 建立 ACP 连接（WebSocket 优先，回退到 Stdio） */
-    suspend fun connect(config: TuiConfig): Result<Unit> {
+    suspend fun connect(config: ACPConnectConfig): Result<Unit> {
         return if (config.agentCommand.isNotEmpty()) {
             connectStdio(config.agentCommand)
         } else {
@@ -77,7 +77,7 @@ class AcpClientManager(private val appState: AppState) {
     }
 
     /** WebSocket 模式连接 */
-    private suspend fun connectWebSocket(config: TuiConfig): Result<Unit> {
+    private suspend fun connectWebSocket(config: ACPConnectConfig): Result<Unit> {
         return try {
             appState.connectionState = ConnectionState.CONNECTING
 
@@ -156,10 +156,14 @@ class AcpClientManager(private val appState: AppState) {
     /** Stdio 模式握手 */
     private suspend fun performHandshake(): Result<Unit> {
         return try {
-            sendRaw(buildJsonRpcRequest("initialize", mapOf(
-                "protocolVersion" to "0.1.0",
-                "clientInfo" to mapOf("name" to "XAgent TUI", "version" to "0.1.0")
-            )))
+            sendRaw(
+                buildJsonRpcRequest(
+                    "initialize", mapOf(
+                        "protocolVersion" to "0.1.0",
+                        "clientInfo" to mapOf("name" to "XAgent TUI", "version" to "0.1.0")
+                    )
+                )
+            )
             readResponse() ?: return Result.failure(Exception("未收到 initialize 响应"))
             sendRaw(buildJsonRpcRequest("session/new", mapOf("cwd" to System.getProperty("user.dir"))))
             val sessionResponse = readResponse() ?: return Result.failure(Exception("未收到 session/new 响应"))
@@ -184,10 +188,12 @@ class AcpClientManager(private val appState: AppState) {
             } else if (isConnected && process != null) {
                 // Stdio 模式
                 val sid = sessionId ?: return Result.failure(Exception("会话未创建"))
-                val promptRequest = buildJsonRpcRequest("session/prompt", mapOf(
-                    "sessionId" to sid,
-                    "content" to listOf(mapOf("type" to "text", "text" to content))
-                ))
+                val promptRequest = buildJsonRpcRequest(
+                    "session/prompt", mapOf(
+                        "sessionId" to sid,
+                        "content" to listOf(mapOf("type" to "text", "text" to content))
+                    )
+                )
                 sendRaw(promptRequest)
                 Result.success(Unit)
             } else {
@@ -225,7 +231,9 @@ class AcpClientManager(private val appState: AppState) {
             try {
                 val line = r.readLine() ?: break
                 if (line.isNotBlank()) emit(line)
-            } catch (e: Exception) { break }
+            } catch (e: Exception) {
+                break
+            }
         }
     }
 
@@ -246,8 +254,14 @@ class AcpClientManager(private val appState: AppState) {
         eventCollectorJob = null
 
         // WebSocket 模式清理
-        try { protocol?.close() } catch (_: Exception) {}
-        try { httpClient?.close() } catch (_: Exception) {}
+        try {
+            protocol?.close()
+        } catch (_: Exception) {
+        }
+        try {
+            httpClient?.close()
+        } catch (_: Exception) {
+        }
         serverThread?.interrupt()
         serverThread = null
         clientSession = null
@@ -256,7 +270,10 @@ class AcpClientManager(private val appState: AppState) {
         httpClient = null
 
         // Stdio 模式清理
-        try { process?.destroy() } catch (_: Exception) {}
+        try {
+            process?.destroy()
+        } catch (_: Exception) {
+        }
         process = null
         reader = null
         sessionId = null
@@ -312,10 +329,12 @@ class AcpClientManager(private val appState: AppState) {
                 }
                 "{$entries}"
             }
+
             is List<*> -> {
                 val items = obj.joinToString(",") { toJson(it) }
                 "[$items]"
             }
+
             is String -> "\"${obj.replace("\"", "\\\"")}\""
             is Number, is Boolean -> obj.toString()
             else -> "\"$obj\""
@@ -349,7 +368,12 @@ private class TuiClientOperations : ClientSessionOperations {
 
     override suspend fun notify(notification: SessionUpdate, _meta: JsonElement?) {}
 
-    override suspend fun fsReadTextFile(path: String, line: UInt?, limit: UInt?, _meta: JsonElement?): ReadTextFileResponse {
+    override suspend fun fsReadTextFile(
+        path: String,
+        line: UInt?,
+        limit: UInt?,
+        _meta: JsonElement?
+    ): ReadTextFileResponse {
         return ReadTextFileResponse(java.io.File(path).readText())
     }
 
