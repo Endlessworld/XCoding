@@ -207,6 +207,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             return true;
         } else if (key.code() == KeyCode.END) {
             appState.scrollOffset = Integer.MAX_VALUE;
+            appState.autoScroll = true;
             return true;
         } else if (key.code() == KeyCode.LEFT) {
             if (appState.inputCursorPos > 0) appState.inputCursorPos--;
@@ -355,6 +356,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             firstMessageAnimationAdded = true;
         }
 
+        appState.autoScroll = true;
         appState.sendMessage(message);
         if (acpBridge != null) {
             acpBridge.sendMessage(message);

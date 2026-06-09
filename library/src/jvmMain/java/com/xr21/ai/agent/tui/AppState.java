@@ -34,7 +34,8 @@ public class AppState {
     public String inputBuffer = "";
     public int inputCursorPos = 0;
     public int inputHistoryIndex = -1;
-    public int scrollOffset = 0;
+    public volatile int scrollOffset = 0;
+    public volatile boolean autoScroll = true;
     public int inputScrollOffset = 0;
     private static final int MAX_SESSION_NAME_LEN = 20;
     public boolean isSessionListPopupVisible = false;
@@ -235,10 +236,12 @@ public class AppState {
             ChatMessage last = msgs.get(msgs.size() - 1);
             if (last.isStreaming && last.role == MessageRole.ASSISTANT) {
                 last.content += content;
+                scrollToBottom();
                 return;
             }
         }
         msgs.add(new ChatMessage(MessageRole.ASSISTANT, content, true));
+        scrollToBottom();
     }
 
     public void appendThoughtContent(String content) {
@@ -253,10 +256,12 @@ public class AppState {
             ChatMessage last = msgs.get(msgs.size() - 1);
             if (last.role == MessageRole.SYSTEM && last.isStreaming) {
                 last.content += content;
+                scrollToBottom();
                 return;
             }
         }
         msgs.add(new ChatMessage(MessageRole.SYSTEM, "\uD83D\uDCAD " + content, true));
+        scrollToBottom();
     }
 
     public void addToolCall(String toolName, String args, String toolCallId) {
@@ -268,6 +273,7 @@ public class AppState {
         msg.toolName = toolName;
         msg.toolInput = args;
         currentSession().messages.add(msg);
+        scrollToBottom();
     }
 
     public void appendToolCallUpdate(String content, String toolCallId) {
@@ -280,6 +286,7 @@ public class AppState {
                 } else {
                     msg.toolInput += content;
                 }
+                scrollToBottom();
                 return;
             }
         }
@@ -288,6 +295,7 @@ public class AppState {
             ChatMessage last = msgs.get(msgs.size() - 1);
             if (last.role == MessageRole.TOOL_CALL && last.isStreaming) {
                 last.toolInput = (last.toolInput == null ? "" : last.toolInput) + content;
+                scrollToBottom();
             }
         }
     }
@@ -302,6 +310,7 @@ public class AppState {
                 if (output != null && !output.isEmpty()) {
                     msg.toolOutput = output;
                 }
+                scrollToBottom();
                 return;
             }
         }
@@ -321,6 +330,7 @@ public class AppState {
                 msg.isStreaming = false;
                 String truncated = content.length() > 500 ? content.substring(0, 500) + "\n\n... (结果过长，已截断)" : content;
                 msg.toolOutput = truncated;
+                scrollToBottom();
                 return;
             }
         }
@@ -330,6 +340,17 @@ public class AppState {
         result.toolCallId = toolCallId;
         result.toolStatus = "COMPLETED";
         currentSession().messages.add(result);
+        scrollToBottom();
+    }
+
+    /**
+     * 自动滚动到底部（流式输出时使用）
+     * 仅在 autoScroll 为 true 时生效，用户手动滚动后会暂停自动滚动。
+     */
+    public void scrollToBottom() {
+        if (autoScroll) {
+            scrollOffset = Integer.MAX_VALUE;
+        }
     }
 
     public void finishStreaming() {
@@ -368,18 +389,22 @@ public class AppState {
     }
 
     public void scrollUp() {
+        autoScroll = false;
         scrollOffset = Math.max(0, scrollOffset - 1);
     }
 
     public void scrollDown() {
+        autoScroll = false;
         scrollOffset++;
     }
 
     public void scrollPageUp() {
+        autoScroll = false;
         scrollOffset = Math.max(0, scrollOffset - 20);
     }
 
     public void scrollPageDown() {
+        autoScroll = false;
         scrollOffset += 20;
     }
 

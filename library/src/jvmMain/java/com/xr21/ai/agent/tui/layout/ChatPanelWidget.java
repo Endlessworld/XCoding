@@ -183,9 +183,13 @@ public class ChatPanelWidget implements Widget {
         // Scroll hint
         if (maxOffset > 0) {
             String hint;
-            if (offset > 0 && offset < maxOffset) hint = "\u2191 " + offset + "/" + maxOffset + " \u2193";
-            else if (offset > 0) hint = "\u2191 " + offset + "/" + maxOffset + " 底部";
-            else hint = "\u2193 更多消息";
+            if (appState.autoScroll || offset >= maxOffset) {
+                hint = "\u2193 底部 (END 跟随)";
+            } else if (offset > 0) {
+                hint = "\u2191 " + offset + "/" + maxOffset + " \u2193";
+            } else {
+                hint = "\u2193 更多消息";
+            }
             Style hintStyle = Style.EMPTY.fg(theme.scrollHint);
             buffer.setLine(inner.left(), inner.bottom() - 1, Line.styled(hint, hintStyle));
         }
