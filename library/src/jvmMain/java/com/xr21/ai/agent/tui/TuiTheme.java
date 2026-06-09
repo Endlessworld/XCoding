@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.xr21.ai.agent.tui.java;
+package com.xr21.ai.agent.tui;
 
 import dev.tamboui.style.Color;
 

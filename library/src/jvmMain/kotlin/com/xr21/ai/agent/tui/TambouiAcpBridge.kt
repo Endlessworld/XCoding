@@ -8,12 +8,11 @@ import com.agentclientprotocol.model.ContentBlock
 import com.agentclientprotocol.model.SessionUpdate
 import com.agentclientprotocol.model.ToolCallContent
 import com.agentclientprotocol.model.ToolCallStatus
+import com.xr21.ai.agent.tui.AppState
 import com.xr21.ai.agent.tui.acp.AcpClientManager
 import com.xr21.ai.agent.tui.config.ACPConnectConfig
-import com.xr21.ai.agent.tui.java.AppState
-import com.xr21.ai.agent.tui.java.TambouiTuiApp
 import kotlinx.coroutines.*
-import com.xr21.ai.agent.tui.java.AppState as JavaAppState
+import com.xr21.ai.agent.tui.AppState as JavaAppState
 
 /**
  * Tamboui TUI 的 ACP 桥接层

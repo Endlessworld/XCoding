@@ -3,8 +3,6 @@
  */
 package com.xr21.ai.agent.tui
 
-import com.xr21.ai.agent.tui.java.TambouiTuiApp
-
 /**
  * Tamboui 版 TUI 应用入口
  *

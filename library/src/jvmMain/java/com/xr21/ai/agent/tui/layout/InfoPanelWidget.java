@@ -1,12 +1,12 @@
 /*
  * Copyright © 2026 XR21 Team. All rights reserved.
  */
-package com.xr21.ai.agent.tui.java.layout;
+package com.xr21.ai.agent.tui.layout;
 
-import com.xr21.ai.agent.tui.java.AppState;
-import com.xr21.ai.agent.tui.java.TodoItem;
-import com.xr21.ai.agent.tui.java.TodoStatus;
-import com.xr21.ai.agent.tui.java.TuiTheme;
+import com.xr21.ai.agent.tui.AppState;
+import com.xr21.ai.agent.tui.TodoItem;
+import com.xr21.ai.agent.tui.TodoStatus;
+import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.buffer.Buffer;
 import dev.tamboui.layout.Rect;
 import dev.tamboui.style.Color;

@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.xr21.ai.agent.tui.java;
+package com.xr21.ai.agent.tui;
 
-import com.xr21.ai.agent.tui.java.layout.*;
+import com.xr21.ai.agent.tui.layout.*;
 import dev.tamboui.backend.jline3.JLineBackend;
 import dev.tamboui.layout.Rect;
 import dev.tamboui.terminal.Frame;

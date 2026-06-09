@@ -7,8 +7,9 @@
 
 ---
 ## 实施说明:
- 实施过程中对于 mordant 和acp 协议不明确的地方 直接查看其源码：
- mordant：  E:\local-github\mordant
+
+实施过程中对于TUI框架 tamboui 和acp 协议不明确的地方 直接查看其源码：
+tamboui： E:\local-github\tamboui
  acp ：  E:\local-github\kotlin-sdk
  实施过程中获取的所有的经验、教训、你不知道的框架的使用方法、等等一切有利于后续任务的信息 及时总结到 doc/spac目录中
 ## 阶段一：核心框架 + ACP 基础通信（MVP）

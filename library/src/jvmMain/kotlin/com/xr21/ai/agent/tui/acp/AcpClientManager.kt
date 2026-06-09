@@ -27,8 +27,8 @@ import com.agentclientprotocol.model.*
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.protocol.ProtocolOptions
 import com.agentclientprotocol.transport.acpProtocolOnClientWebSocket
+import com.xr21.ai.agent.tui.AppState
 import com.xr21.ai.agent.tui.config.ACPConnectConfig
-import com.xr21.ai.agent.tui.java.AppState
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import kotlinx.coroutines.*
