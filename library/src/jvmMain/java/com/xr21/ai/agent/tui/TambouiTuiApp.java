@@ -34,6 +34,7 @@ import dev.tamboui.tui.error.RenderErrorHandlers;
 import dev.tamboui.tui.event.Event;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
+import dev.tamboui.tui.event.ResizeEvent;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -110,7 +111,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                             appState.agentName = agentName;
                             appState.agentVersion = agentVersion;
                             appState.modelName = modelName;
-                            requestRender();
+                            forceRender();
                         });
                     }
 
@@ -118,7 +119,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                     public void onDisconnected() {
                         runner.runOnRenderThread(() -> {
                             appState.connectionState = com.xr21.ai.agent.tui.acp.ConnectionState.DISCONNECTED;
-                            requestRender();
+                            forceRender();
                         });
                     }
 
@@ -126,7 +127,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                     public void onEvent(AcpEvent event) {
                         runner.runOnRenderThread(() -> {
                             event.apply(appState);
-                            requestRender();
+                            forceRender();
                         });
                     }
 
@@ -135,7 +136,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                         runner.runOnRenderThread(() -> {
                             appState.connectionState = com.xr21.ai.agent.tui.acp.ConnectionState.DISCONNECTED_ERROR;
                             appState.errorMessage = message;
-                            requestRender();
+                            forceRender();
                         });
                     }
                 });
@@ -425,6 +426,20 @@ public class TambouiTuiApp implements EventHandler, Renderer {
 
     private void requestRender() {
         needsRender = true;
+    }
+
+    /**
+     * 强制触发界面刷新：通过 dispatch ResizeEvent 让事件循环调用 safeRender()
+     * 因为 handle() 对 UiRunnable 返回 false，不会触发渲染，
+     * 而 ResizeEvent 在事件循环中直接触发 safeRender()（不经过 handle()）。
+     */
+    private void forceRender() {
+        if (runner != null && runner.isRunning()) {
+            runner.dispatch(ResizeEvent.of(
+                runner.terminal().area().width(),
+                runner.terminal().area().height()
+            ));
+        }
     }
 
     private void cleanup() {

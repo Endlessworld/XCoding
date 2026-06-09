@@ -344,9 +344,23 @@ public class AppState {
     }
 
     /**
-     * 自动滚动到底部（流式输出时使用）
-     * 仅在 autoScroll 为 true 时生效，用户手动滚动后会暂停自动滚动。
+     * 检查当前滚动位置是否在底部附近（3行以内）
      */
+    public boolean isNearBottom(int totalHeight, int availableHeight) {
+        int maxOffset = Math.max(0, totalHeight - availableHeight);
+        int currentOffset = scrollOffset == Integer.MAX_VALUE ? maxOffset : scrollOffset;
+        return currentOffset >= maxOffset - 3;
+    }
+
+    /**
+     * 尝试恢复自动滚动：如果当前在底部附近则重新启用 autoScroll
+     */
+    public void tryRestoreAutoScroll(int totalHeight, int availableHeight) {
+        if (!autoScroll && isNearBottom(totalHeight, availableHeight)) {
+            autoScroll = true;
+        }
+    }
+
     public void scrollToBottom() {
         if (autoScroll) {
             scrollOffset = Integer.MAX_VALUE;

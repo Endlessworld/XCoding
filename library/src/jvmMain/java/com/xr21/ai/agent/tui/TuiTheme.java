@@ -92,15 +92,15 @@ public class TuiTheme {
 
     public static TuiTheme modernDark() {
         return new TuiTheme(
-                Color.GRAY, Color.LIGHT_CYAN,
-                Color.BRIGHT_WHITE, Color.LIGHT_CYAN,
+                    Color.GRAY, Color.LIGHT_BLUE,
+                Color.BRIGHT_WHITE, Color.LIGHT_BLUE,
                 Color.BRIGHT_WHITE, Color.WHITE, Color.GRAY,
-                Color.LIGHT_CYAN, Color.LIGHT_GREEN, Color.LIGHT_YELLOW, Color.LIGHT_RED, Color.LIGHT_BLUE,
+                Color.LIGHT_BLUE, Color.LIGHT_GREEN, Color.LIGHT_YELLOW, Color.LIGHT_RED, Color.LIGHT_BLUE,
                 Color.LIGHT_BLUE, Color.LIGHT_GREEN, Color.LIGHT_YELLOW, Color.LIGHT_MAGENTA, Color.LIGHT_RED,
                 Color.GRAY, Color.LIGHT_GREEN, Color.LIGHT_YELLOW, Color.GRAY, Color.LIGHT_RED,
                 Color.GRAY, Color.BRIGHT_WHITE,
-                Color.LIGHT_CYAN, Color.LIGHT_GREEN,
-                Color.LIGHT_CYAN, Color.GRAY
+                Color.LIGHT_BLUE, Color.LIGHT_GREEN,
+                Color.LIGHT_BLUE, Color.GRAY
         );
     }
 }

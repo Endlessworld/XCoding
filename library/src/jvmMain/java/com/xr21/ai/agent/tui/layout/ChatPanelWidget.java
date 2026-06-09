@@ -12,6 +12,7 @@ import dev.tamboui.layout.Rect;
 import dev.tamboui.markdown.MarkdownView;
 import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
+import dev.tamboui.text.CharWidth;
 import dev.tamboui.text.Line;
 import dev.tamboui.text.Span;
 import dev.tamboui.widget.Widget;
@@ -125,6 +126,10 @@ public class ChatPanelWidget implements Widget {
 
         // Scroll handling
         int maxOffset = Math.max(0, totalHeight - availableHeight);
+
+        // 尝试恢复自动滚动：如果用户在底部附近，重新启用 autoScroll
+        appState.tryRestoreAutoScroll(totalHeight, availableHeight);
+
         int offset;
         if (appState.scrollOffset == Integer.MAX_VALUE || appState.scrollOffset > maxOffset) {
             offset = maxOffset;
@@ -216,7 +221,7 @@ public class ChatPanelWidget implements Widget {
             if (y < area.top() || y >= area.bottom()) continue;
 
             String text = logo[i];
-            int contentWidth = text.length();
+            int contentWidth = CharWidth.of(text);
             int x = area.left() + Math.max(0, (area.width() - contentWidth) / 2);
 
             Style style;
