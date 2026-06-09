@@ -1,0 +1,17 @@
+/*
+ * Copyright © 2026 XR21 Team. All rights reserved.
+ */
+package com.xr21.ai.agent.tui;
+
+/**
+ * ACP 模式信息的简化 Java 表示
+ */
+public class ModeInfo {
+    public final String id;
+    public final String name;
+
+    public ModeInfo(String id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+}

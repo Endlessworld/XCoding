@@ -219,6 +219,9 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 case 'p': // Ctrl+P: 会话列表
                     appState.toggleSessionListPopup();
                     return true;
+                case 'h': // Ctrl+H: 帮助
+                    appState.toggleHelpPopup();
+                    return true;
                 case 'k': // Ctrl+K: 清空对话
                     appState.clearConversation();
                     return true;
@@ -235,11 +238,16 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         }
 
         if (key.code() == KeyCode.ESCAPE) {
+            boolean handled = false;
             if (appState.isSessionListPopupVisible) {
                 appState.closeSessionListPopup();
-                return true;
+                handled = true;
             }
-            return false;
+            if (appState.isHelpPopupVisible) {
+                appState.closeHelpPopup();
+                handled = true;
+            }
+            return handled;
         }
 
         if (key.code() == KeyCode.ENTER) {
@@ -251,6 +259,11 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         }
 
         if (key.code() == KeyCode.BACKSPACE) {
+            // Ctrl+H sends ASCII 0x08 (BACKSPACE) in most terminals; treat as help
+            if (key.modifiers().ctrl()) {
+                appState.toggleHelpPopup();
+                return true;
+            }
             if (!appState.inputBuffer.isEmpty() && appState.inputCursorPos > 0) {
                 int pos = appState.inputCursorPos - 1;
                 appState.inputBuffer = appState.inputBuffer.substring(0, pos) + appState.inputBuffer.substring(pos + 1);
@@ -267,20 +280,33 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         }
 
         if (key.code() == KeyCode.CHAR) {
+            String s = key.string();
+            // Enter 发送消息（某些终端将 Enter 发送为 CHAR + \r 而非 ENTER keycode）
+            if (("\n".equals(s) || "\r".equals(s)) && !key.modifiers().alt() && !key.modifiers().ctrl()) {
+                if (appState.focusPanel == PanelType.INPUT && !appState.inputBuffer.isBlank()) {
+                    sendMessage();
+                    return true;
+                }
+                return false;
+            }
+            // Ctrl+H (ASCII 0x08) sent as CHAR by some terminals
+            if (key.modifiers().ctrl() && s.length() == 1 && s.charAt(0) == '\b') {
+                appState.toggleHelpPopup();
+                return true;
+            }
             // Alt+Enter 插入换行
-            if (key.modifiers().alt() && key.string().equals("\n")) {
+            if (key.modifiers().alt() && "\n".equals(s)) {
                 int pos = appState.inputCursorPos;
                 appState.inputBuffer = appState.inputBuffer.substring(0, pos) + "\n" + appState.inputBuffer.substring(pos);
                 appState.inputCursorPos = pos + 1;
                 return true;
             }
             // Space 在 ChatPanel 焦点时展开工具消息
-            if (key.string().equals(" ") && appState.focusPanel == PanelType.CENTER) {
+            if (" ".equals(s) && appState.focusPanel == PanelType.CENTER) {
                 appState.toggleLastToolMessage();
                 return true;
             }
             // 普通字符输入
-            String s = key.string();
             if (!s.isEmpty() && !key.modifiers().ctrl() && !key.modifiers().alt()) {
                 int pos = appState.inputCursorPos;
                 appState.inputBuffer = appState.inputBuffer.substring(0, pos) + s + appState.inputBuffer.substring(pos);
@@ -314,7 +340,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         if (mainHeight < 3 || inputHeight < 2) return;
 
         // 主区域两栏布局
-        int chatWidth = (int) (width * 0.65);
+        int chatWidth = (int) (width * 0.75);
         int infoWidth = width - chatWidth;
 
         Rect chatArea = new Rect(0, 0, chatWidth, mainHeight);
@@ -338,6 +364,13 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             int popupX = (width - popupW) / 2;
             int popupY = (height - popupH) / 2;
             frame.renderWidget(new SessionListPopupWidget(appState, theme), new Rect(popupX, popupY, popupW, popupH));
+        }
+        if (appState.isHelpPopupVisible) {
+            int popupW = Math.min(50, width - 4);
+            int popupH = Math.min(24, height - 4);
+            int popupX = (width - popupW) / 2;
+            int popupY = (height - popupH) / 2;
+            frame.renderWidget(new HelpPopupWidget(appState, theme), new Rect(popupX, popupY, popupW, popupH));
         }
     }
 
@@ -379,6 +412,12 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         void cancel();
 
         void disconnect();
+
+        void setModel(String modelId);
+
+        void setMode(String modeId);
+
+        void setConfigOption(String configId, String value);
     }
 
     public interface ConnectionCallback {

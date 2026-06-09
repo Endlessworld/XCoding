@@ -60,6 +60,31 @@ public class SessionListPopupWidget implements Widget {
             ));
         }
 
+        // Model / Mode info
+        if (!appState.availableModels.isEmpty() || !appState.availableModes.isEmpty()) {
+            if (y < inner.bottom() - 2) {
+                y++;
+                buffer.setLine(inner.left(), y, Line.styled(" ────── 配置 ────── ", Style.EMPTY.fg(theme.borderNormal)));
+                y++;
+            }
+            if (y < inner.bottom()) {
+                String modelText = appState.currentModelId.isEmpty() ? "\u2014" : appState.currentModelId;
+                buffer.setLine(inner.left(), y, Line.from(
+                        Span.styled("  模型: ", Style.EMPTY.fg(theme.textSecondary)),
+                        Span.styled(modelText, Style.EMPTY.fg(theme.textPrimary))
+                ));
+                y++;
+            }
+            if (y < inner.bottom()) {
+                String modeText = appState.currentModeId.isEmpty() ? "\u2014" : appState.currentModeId;
+                buffer.setLine(inner.left(), y, Line.from(
+                        Span.styled("  模式: ", Style.EMPTY.fg(theme.textSecondary)),
+                        Span.styled(modeText, Style.EMPTY.fg(theme.textPrimary))
+                ));
+                y++;
+            }
+        }
+
         // Key hint
         if (y < inner.bottom()) {
             buffer.setLine(inner.left(), y, Line.styled("  \u2191\u2193 选择  Enter 切换  Esc 关闭", Style.EMPTY.fg(theme.keyHint)));

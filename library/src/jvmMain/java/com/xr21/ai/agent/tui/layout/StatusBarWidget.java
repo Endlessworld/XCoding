@@ -67,7 +67,11 @@ public class StatusBarWidget implements Widget {
                 Span.styled("会话: ", sepStyle),
                 Span.styled(appState.sessionCount() + "/" + appState.totalSessions, Style.EMPTY.fg(theme.info)),
                 Span.styled(" | ", sepStyle),
-                Span.styled(time, Style.EMPTY.fg(theme.accent))
+                Span.styled(time, Style.EMPTY.fg(theme.accent)),
+                Span.styled("  ", sepStyle),
+                Span.styled("ctrl+h 帮助", Style.EMPTY.fg(theme.keyHint)),
+                Span.styled("  ", sepStyle),
+                Span.styled("ctrl+q 退出", Style.EMPTY.fg(theme.keyHint))
         );
         buffer.setLine(area.left(), area.top(), line);
     }

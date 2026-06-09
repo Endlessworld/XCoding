@@ -247,6 +247,56 @@ class AcpClientManager(private val appState: AppState) {
         }
     }
 
+    /** 获取可用模型列表（WebSocket模式） */
+    val availableModels: List<ModelInfo>?
+        get() = clientSession?.availableModels
+
+    /** 获取可用模式列表（WebSocket模式） */
+    val availableModes: List<SessionMode>?
+        get() = clientSession?.availableModes
+
+    /** 获取当前配置选项（WebSocket模式） */
+    val configOptions: List<SessionConfigOption>?
+        get() = clientSession?.configOptions?.value
+
+    /** 获取当前模式ID（WebSocket模式） */
+    val currentModeId: SessionModeId?
+        get() = clientSession?.currentMode?.value
+
+    /** 获取当前模型ID（WebSocket模式） */
+    val currentModelId: ModelId?
+        get() = clientSession?.currentModel?.value
+
+    /** 设置当前模型 */
+    suspend fun setModel(modelId: ModelId): Result<Unit> {
+        return try {
+            clientSession?.setModel(modelId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 设置当前模式 */
+    suspend fun setMode(modeId: SessionModeId): Result<Unit> {
+        return try {
+            clientSession?.setMode(modeId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 设置配置选项 */
+    suspend fun setConfigOption(configId: SessionConfigId, value: SessionConfigOptionValue): Result<Unit> {
+        return try {
+            clientSession?.setConfigOption(configId, value)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /** 断开连接 */
     fun disconnect() {
         isConnected = false

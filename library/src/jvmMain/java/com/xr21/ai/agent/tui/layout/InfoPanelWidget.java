@@ -3,10 +3,7 @@
  */
 package com.xr21.ai.agent.tui.layout;
 
-import com.xr21.ai.agent.tui.AppState;
-import com.xr21.ai.agent.tui.TodoItem;
-import com.xr21.ai.agent.tui.TodoStatus;
-import com.xr21.ai.agent.tui.TuiTheme;
+import com.xr21.ai.agent.tui.*;
 import dev.tamboui.buffer.Buffer;
 import dev.tamboui.layout.Rect;
 import dev.tamboui.style.Color;
@@ -18,8 +15,6 @@ import dev.tamboui.widgets.block.Block;
 import dev.tamboui.widgets.block.BorderType;
 import dev.tamboui.widgets.block.Borders;
 
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -90,44 +85,23 @@ public class InfoPanelWidget implements Widget {
             lines.add(Line.empty());
         }
 
-        // Model info
-        lines.add(Line.styled("\u2139 信息", accent));
-        lines.add(Line.from(Span.styled("  模型: ", secondary), Span.styled(appState.modelName.isEmpty() ? "\u2014" : appState.modelName, primary)));
-        lines.add(Line.from(Span.styled("  Agent: ", secondary), Span.styled(appState.agentName + " " + appState.agentVersion, primary)));
-        lines.add(Line.empty());
-
-        // Connection state
-        String connText;
-        Color connColor;
-        switch (appState.connectionState) {
-            case CONNECTED -> {
-                connText = "\u25CF 已连接";
-                connColor = theme.statusConnected;
+        // Config options
+        if (!appState.configOptions.isEmpty()) {
+            lines.add(Line.styled("\u2699 配置", accent));
+            for (ConfigOption opt : appState.configOptions) {
+                String valueText;
+                if ("boolean".equals(opt.type)) {
+                    valueText = Boolean.parseBoolean(opt.currentValue) ? "\u2713 开" : "\u2717 关";
+                } else {
+                    valueText = opt.currentValue;
+                }
+                lines.add(Line.from(
+                        Span.styled("  " + opt.name + ": ", secondary),
+                        Span.styled(valueText, primary)
+                ));
             }
-            case CONNECTING -> {
-                connText = "\u25CC 连接中";
-                connColor = theme.statusConnecting;
-            }
-            case RECONNECTING -> {
-                connText = "\u25CC 重连中";
-                connColor = theme.statusConnecting;
-            }
-            case DISCONNECTED_ERROR -> {
-                connText = "\u2715 错误";
-                connColor = theme.statusError;
-            }
-            default -> {
-                connText = "\u25CB 断开";
-                connColor = theme.statusDisconnected;
-            }
+            lines.add(Line.empty());
         }
-        lines.add(Line.styled("\uD83D\uDD17 连接状态", accent));
-        lines.add(Line.from(Span.styled("  状态: ", secondary), Span.styled(connText, Style.EMPTY.fg(connColor))));
-        lines.add(Line.from(Span.styled("  会话: ", secondary), Span.styled(appState.sessionCount() + "/" + appState.totalSessions, info)));
-
-        // Time
-        String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
-        lines.add(Line.from(Span.styled("  时间: ", secondary), Span.styled(time, accent)));
 
         // Render lines
         int y = inner.top();

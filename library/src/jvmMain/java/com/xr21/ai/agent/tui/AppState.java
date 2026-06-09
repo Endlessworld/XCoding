@@ -36,8 +36,9 @@ public class AppState {
     public int inputHistoryIndex = -1;
     public int scrollOffset = 0;
     public int inputScrollOffset = 0;
-    public PanelType focusPanel = PanelType.CENTER;
+    private static final int MAX_SESSION_NAME_LEN = 20;
     public boolean isSessionListPopupVisible = false;
+    public boolean isHelpPopupVisible = false;
     public int sidebarSelectedIndex = 0;
     public ConnectionState connectionState = ConnectionState.DISCONNECTED;
     public String agentName = "ai-agent";
@@ -47,6 +48,11 @@ public class AppState {
     public TokenUsage tokenUsage = new TokenUsage();
     public boolean isStreaming = false;
     public String errorMessage = null;
+    private static final int MAX_SESSIONS = 50;
+    public final List<ConfigOption> configOptions = new ArrayList<>();
+    public final List<ModelInfo> availableModels = new ArrayList<>();
+    public final List<ModeInfo> availableModes = new ArrayList<>();
+    public PanelType focusPanel = PanelType.INPUT;
 
     public AppState() {
         sessions.add(new Session());
@@ -73,6 +79,33 @@ public class AppState {
      */
     public void setTotalTokens(long totalTokens) {
         this.tokenUsage.totalTokens = totalTokens;
+    }
+    // ACP model/mode/config state
+    public String currentModelId = "";
+    public String currentModeId = "";
+
+    /**
+     * 更新当前模型 ID
+     */
+    public void setCurrentModelId(String modelId) {
+        this.currentModelId = modelId;
+    }
+
+    /**
+     * 更新当前模式 ID
+     */
+    public void setCurrentModeId(String modeId) {
+        this.currentModeId = modeId;
+    }
+
+    /**
+     * 清空并设置配置选项
+     */
+    public void setConfigOptions(List<ConfigOption> options) {
+        this.configOptions.clear();
+        if (options != null) {
+            this.configOptions.addAll(options);
+        }
     }
 
     public Session currentSession() {
@@ -105,6 +138,14 @@ public class AppState {
 
     public void closeSessionListPopup() {
         isSessionListPopupVisible = false;
+    }
+
+    public void toggleHelpPopup() {
+        isHelpPopupVisible = !isHelpPopupVisible;
+    }
+
+    public void closeHelpPopup() {
+        isHelpPopupVisible = false;
     }
 
     public void popupConfirmSelection() {
@@ -141,6 +182,26 @@ public class AppState {
         }
     }
 
+    /**
+     * 清空并设置可用模型列表
+     */
+    public void setAvailableModels(List<ModelInfo> models) {
+        this.availableModels.clear();
+        if (models != null) {
+            this.availableModels.addAll(models);
+        }
+    }
+
+    /**
+     * 清空并设置可用模式列表
+     */
+    public void setAvailableModes(List<ModeInfo> modes) {
+        this.availableModes.clear();
+        if (modes != null) {
+            this.availableModes.addAll(modes);
+        }
+    }
+
     public void sendMessage(String content) {
         if (content == null || content.isBlank()) return;
         currentSession().messages.add(new ChatMessage(MessageRole.USER, content));
@@ -151,6 +212,21 @@ public class AppState {
         inputScrollOffset = 0;
         currentSession().updatedAt = LocalDateTime.now();
         isStreaming = true;
+
+        // Auto-name session on first user message
+        Session session = currentSession();
+        if ("New Session".equals(session.name)) {
+            String trimmed = content.trim();
+            if (trimmed.length() > MAX_SESSION_NAME_LEN) {
+                session.name = trimmed.substring(0, MAX_SESSION_NAME_LEN) + "…";
+            } else {
+                session.name = trimmed;
+            }
+        }
+    }
+
+    public boolean canCreateNewSession() {
+        return sessions.size() < MAX_SESSIONS;
     }
 
     public void appendStreamingContent(String content) {
@@ -183,30 +259,77 @@ public class AppState {
         msgs.add(new ChatMessage(MessageRole.SYSTEM, "\uD83D\uDCAD " + content, true));
     }
 
-    public void addToolCall(String toolName, String args) {
+    public void addToolCall(String toolName, String args, String toolCallId) {
         finishStreaming();
-        currentSession().messages.add(new ChatMessage(MessageRole.TOOL_CALL,
-                "\uD83D\uDD27 " + toolName + "\n参数: " + args, true));
+        ChatMessage msg = new ChatMessage(MessageRole.TOOL_CALL,
+                "\uD83D\uDD27 " + toolName, true);
+        msg.toolCallId = toolCallId;
+        msg.toolStatus = "IN_PROGRESS";
+        msg.toolName = toolName;
+        msg.toolInput = args;
+        currentSession().messages.add(msg);
     }
 
-    public void appendToolCallUpdate(String content) {
+    public void appendToolCallUpdate(String content, String toolCallId) {
         List<ChatMessage> msgs = currentSession().messages;
+        for (int i = msgs.size() - 1; i >= 0; i--) {
+            ChatMessage msg = msgs.get(i);
+            if (msg.role == MessageRole.TOOL_CALL && toolCallId.equals(msg.toolCallId)) {
+                if (msg.toolInput == null || msg.toolInput.isEmpty()) {
+                    msg.toolInput = content;
+                } else {
+                    msg.toolInput += content;
+                }
+                return;
+            }
+        }
+        // Fallback: append to last tool call if no match
         if (!msgs.isEmpty()) {
             ChatMessage last = msgs.get(msgs.size() - 1);
             if (last.role == MessageRole.TOOL_CALL && last.isStreaming) {
-                last.content += content;
+                last.toolInput = (last.toolInput == null ? "" : last.toolInput) + content;
             }
         }
     }
 
-    public void addToolResult(String content) {
+    public void updateToolCall(String toolCallId, String status, String output) {
+        List<ChatMessage> msgs = currentSession().messages;
+        for (int i = msgs.size() - 1; i >= 0; i--) {
+            ChatMessage msg = msgs.get(i);
+            if (toolCallId.equals(msg.toolCallId)) {
+                msg.toolStatus = status;
+                msg.isStreaming = false;
+                if (output != null && !output.isEmpty()) {
+                    msg.toolOutput = output;
+                }
+                return;
+            }
+        }
+    }
+
+    public void addToolResult(String content, String toolCallId) {
         List<ChatMessage> msgs = currentSession().messages;
         if (!msgs.isEmpty()) {
             ChatMessage last = msgs.get(msgs.size() - 1);
             if (last.isStreaming) last.isStreaming = false;
         }
+        // Try to match existing tool call by toolCallId
+        for (int i = msgs.size() - 1; i >= 0; i--) {
+            ChatMessage msg = msgs.get(i);
+            if (toolCallId.equals(msg.toolCallId)) {
+                msg.toolStatus = "COMPLETED";
+                msg.isStreaming = false;
+                String truncated = content.length() > 500 ? content.substring(0, 500) + "\n\n... (结果过长，已截断)" : content;
+                msg.toolOutput = truncated;
+                return;
+            }
+        }
+        // Fallback: add as standalone result
         String truncated = content.length() > 500 ? content.substring(0, 500) + "\n\n... (结果过长，已截断)" : content;
-        currentSession().messages.add(new ChatMessage(MessageRole.TOOL_RESULT, "\uD83D\uDCCE " + truncated));
+        ChatMessage result = new ChatMessage(MessageRole.TOOL_RESULT, "\uD83D\uDCCE " + truncated);
+        result.toolCallId = toolCallId;
+        result.toolStatus = "COMPLETED";
+        currentSession().messages.add(result);
     }
 
     public void finishStreaming() {
@@ -219,6 +342,7 @@ public class AppState {
     }
 
     public void newSession() {
+        if (sessions.size() >= MAX_SESSIONS) return;
         sessions.add(new Session());
         currentSessionIndex = sessions.size() - 1;
         totalSessions++;

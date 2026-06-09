@@ -4,10 +4,7 @@
 package com.xr21.ai.agent.tui
 
 import com.agentclientprotocol.common.Event
-import com.agentclientprotocol.model.ContentBlock
-import com.agentclientprotocol.model.SessionUpdate
-import com.agentclientprotocol.model.ToolCallContent
-import com.agentclientprotocol.model.ToolCallStatus
+import com.agentclientprotocol.model.*
 import com.xr21.ai.agent.tui.AppState
 import com.xr21.ai.agent.tui.acp.AcpClientManager
 import com.xr21.ai.agent.tui.config.ACPConnectConfig
@@ -38,6 +35,10 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
                 callback.onConnected(
                     ktAppState.agentName, ktAppState.agentVersion, ktAppState.modelName
                 )
+
+                // Fetch initial capabilities and notify Java side
+                notifyInitialConfig()
+
                 acpClient.startEventCollection { event ->
                     handleEvent(event)
                 }
@@ -45,6 +46,43 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
                 callback.onError(result.exceptionOrNull()?.message ?: "未知错误")
             }
         }
+    }
+
+    private fun notifyInitialConfig() {
+        val models = acpClient.availableModels?.map { ModelInfo(it.modelId.value, it.name) } ?: emptyList()
+        val modes = acpClient.availableModes?.map { ModeInfo(it.id.value, it.name) } ?: emptyList()
+        val configOpts = acpClient.configOptions?.map { opt ->
+            when (opt) {
+                is SessionConfigOption.BooleanOption -> {
+                    ConfigOption(opt.id.value, opt.name, "boolean", opt.currentValue.toString(), emptyList())
+                }
+
+                is SessionConfigOption.Select -> {
+                    val opts = when (val o = opt.options) {
+                        is SessionConfigSelectOptions.Flat -> o.options.map { it.name }
+                        is SessionConfigSelectOptions.Grouped -> o.groups.flatMap { it.options.map { s -> s.name } }
+                    }
+                    ConfigOption(opt.id.value, opt.name, "select", opt.currentValue.value, opts)
+                }
+            }
+        } ?: emptyList()
+        val currentMode = acpClient.currentModeId?.value ?: ""
+        val currentModel = acpClient.currentModelId?.value ?: ""
+
+        callback?.onEvent(object : TambouiTuiApp.AcpEvent {
+            override fun apply(state: JavaAppState) {
+                state.setAvailableModels(models)
+                state.setAvailableModes(modes)
+                state.setConfigOptions(configOpts)
+                state.setCurrentModeId(currentMode)
+                state.setCurrentModelId(currentModel)
+                // Also update modelName for status bar
+                if (currentModel.isNotEmpty()) {
+                    val modelName = models.find { it.id == currentModel }?.name ?: currentModel
+                    state.modelName = modelName
+                }
+            }
+        })
     }
 
     override fun sendMessage(message: String) {
@@ -65,6 +103,30 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
     override fun disconnect() {
         scope.cancel()
         acpClient.disconnect()
+    }
+
+    override fun setModel(modelId: String) {
+        scope.launch {
+            acpClient.setModel(ModelId(modelId))
+        }
+    }
+
+    override fun setMode(modeId: String) {
+        scope.launch {
+            acpClient.setMode(SessionModeId(modeId))
+        }
+    }
+
+    override fun setConfigOption(configId: String, value: String) {
+        scope.launch {
+            // Try boolean first, then string
+            val configValue = when (value.lowercase()) {
+                "true" -> SessionConfigOptionValue.BoolValue(true)
+                "false" -> SessionConfigOptionValue.BoolValue(false)
+                else -> SessionConfigOptionValue.StringValue(value)
+            }
+            acpClient.setConfigOption(SessionConfigId(configId), configValue)
+        }
     }
 
     private fun handleEvent(event: Event) {
@@ -133,19 +195,21 @@ class AcpEventAdapter(private val update: SessionUpdate) : TambouiTuiApp.AcpEven
 
             is SessionUpdate.ToolCall -> {
                 val args = extractText(update.content)
-                state.addToolCall(update.title, args)
+                state.addToolCall(update.title, args, update.toolCallId.value)
             }
 
             is SessionUpdate.ToolCallUpdate -> {
+                val toolCallId = update.toolCallId.value
                 when (update.status) {
-                    ToolCallStatus.COMPLETED -> {
+                    ToolCallStatus.COMPLETED, ToolCallStatus.FAILED -> {
                         val result = extractText(update.content ?: emptyList())
-                        state.addToolResult(result)
+                        val status = if (update.status == ToolCallStatus.COMPLETED) "COMPLETED" else "FAILED"
+                        state.updateToolCall(toolCallId, status, result)
                     }
 
                     else -> {
                         val content = extractText(update.content ?: emptyList())
-                        if (content.isNotEmpty()) state.appendToolCallUpdate(content)
+                        if (content.isNotEmpty()) state.appendToolCallUpdate(content, toolCallId)
                     }
                 }
             }
@@ -161,6 +225,41 @@ class AcpEventAdapter(private val update: SessionUpdate) : TambouiTuiApp.AcpEven
 
             is SessionUpdate.UsageUpdate -> {
                 state.setTotalTokens(update.used)
+            }
+
+            is SessionUpdate.CurrentModeUpdate -> {
+                state.setCurrentModeId(update.currentModeId.value)
+            }
+
+            is SessionUpdate.ConfigOptionUpdate -> {
+                val options = update.configOptions.map { opt ->
+                    when (opt) {
+                        is SessionConfigOption.BooleanOption -> {
+                            ConfigOption(
+                                opt.id.value,
+                                opt.name,
+                                "boolean",
+                                opt.currentValue.toString(),
+                                emptyList()
+                            )
+                        }
+
+                        is SessionConfigOption.Select -> {
+                            val opts = when (val o = opt.options) {
+                                is SessionConfigSelectOptions.Flat -> o.options.map { it.name }
+                                is SessionConfigSelectOptions.Grouped -> o.groups.flatMap { it.options.map { s -> s.name } }
+                            }
+                            ConfigOption(
+                                opt.id.value,
+                                opt.name,
+                                "select",
+                                opt.currentValue.value,
+                                opts
+                            )
+                        }
+                    }
+                }
+                state.setConfigOptions(options)
             }
 
             else -> {}

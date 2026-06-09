@@ -76,6 +76,9 @@ dependencies {
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.7")
 
     // Jsoup - HTML parsing (used by WebSearchTool for DuckDuckGo search)
     implementation(libs.jsoup)
@@ -85,11 +88,27 @@ dependencies {
     implementation(libs.mordant.markdown)
     implementation(libs.mordant.jvm.jna)
 
-    // Tamboui TUI
+    // Tamboui TUI (all modules)
     implementation("dev.tamboui:tamboui-tui:0.4.0-SNAPSHOT")
     implementation("dev.tamboui:tamboui-widgets:0.4.0-SNAPSHOT")
     implementation("dev.tamboui:tamboui-core:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-markdown:0.4.0-SNAPSHOT")
     implementation("dev.tamboui:tamboui-jline3-backend:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-css:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-image:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-panama-backend:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-aesh-backend:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-picocli:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-toolkit:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-toolkit-markdown:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-annotations:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-processor:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-tfx:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-tfx-tui:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-tfx-toolkit:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-bom:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-demos:0.4.0-SNAPSHOT")
+    implementation("dev.tamboui:tamboui-benchmarks:0.4.0-SNAPSHOT")
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")

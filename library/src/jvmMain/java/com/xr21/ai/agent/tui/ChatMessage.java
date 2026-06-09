@@ -16,6 +16,11 @@ public class ChatMessage {
     public String content;
     public boolean isStreaming;
     public boolean isExpanded;
+    public String toolCallId;
+    public String toolStatus; // IN_PROGRESS, COMPLETED, FAILED
+    public String toolName;
+    public String toolInput;
+    public String toolOutput;
 
     public ChatMessage(MessageRole role, String content) {
         this.id = UUID.randomUUID().toString().substring(0, 8);
