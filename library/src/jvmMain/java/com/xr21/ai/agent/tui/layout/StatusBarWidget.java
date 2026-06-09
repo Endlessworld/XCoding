@@ -52,13 +52,11 @@ public class StatusBarWidget implements Widget {
             }
         }
 
-        String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+        String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         Style sepStyle = Style.EMPTY.fg(theme.statusBarText);
         Style primary = Style.EMPTY.fg(theme.textPrimary);
 
         Line line = Line.from(
-                Span.styled(" " + appState.agentName + " " + appState.agentVersion, Style.EMPTY.fg(theme.textSecondary)),
-                Span.styled(" | ", sepStyle),
                 Span.styled(connSymbol, Style.EMPTY.fg(connColor)),
                 Span.styled(" | ", sepStyle),
                 Span.styled("模型: ", sepStyle),
@@ -69,7 +67,7 @@ public class StatusBarWidget implements Widget {
                 Span.styled(" | ", sepStyle),
                 Span.styled(time, Style.EMPTY.fg(theme.accent)),
                 Span.styled("  ", sepStyle),
-                Span.styled("ctrl+h 帮助", Style.EMPTY.fg(theme.keyHint)),
+                Span.styled("ctrl+l 帮助", Style.EMPTY.fg(theme.keyHint)),
                 Span.styled("  ", sepStyle),
                 Span.styled("ctrl+q 退出", Style.EMPTY.fg(theme.keyHint))
         );

@@ -170,20 +170,29 @@ public class TambouiTuiApp implements EventHandler, Renderer {
     }
 
     private boolean handleKeyEvent(KeyEvent key) {
-        // 会话列表弹框可见时的按键拦截
-        if (appState.isSessionListPopupVisible) {
-            if (key.code() == KeyCode.UP) {
-                appState.selectUp();
+        // 弹框可见时的按键拦截
+        if (appState.isSessionListPopupVisible || appState.isHelpPopupVisible) {
+            if (key.code() == KeyCode.ESCAPE) {
+                if (appState.isSessionListPopupVisible) {
+                    appState.closeSessionListPopup();
+                }
+                if (appState.isHelpPopupVisible) {
+                    appState.closeHelpPopup();
+                }
                 return true;
-            } else if (key.code() == KeyCode.DOWN) {
-                appState.selectDown();
-                return true;
-            } else if (key.code() == KeyCode.ENTER) {
-                appState.popupConfirmSelection();
-                return true;
-            } else if (key.code() == KeyCode.ESCAPE) {
-                appState.closeSessionListPopup();
-                return true;
+            }
+            // 会话列表弹框特有按键
+            if (appState.isSessionListPopupVisible) {
+                if (key.code() == KeyCode.UP) {
+                    appState.selectUp();
+                    return true;
+                } else if (key.code() == KeyCode.DOWN) {
+                    appState.selectDown();
+                    return true;
+                } else if (key.code() == KeyCode.ENTER) {
+                    appState.popupConfirmSelection();
+                    return true;
+                }
             }
             return false;
         }
@@ -244,7 +253,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 case 'p': // Ctrl+P: 会话列表
                     appState.toggleSessionListPopup();
                     return true;
-                case 'h': // Ctrl+H: 帮助
+                case 'l': // Ctrl+/: 帮助
                     appState.toggleHelpPopup();
                     return true;
                 case 'k': // Ctrl+K: 清空对话
@@ -263,21 +272,11 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             return true;
         }
 
-        if (key.code() == KeyCode.ESCAPE) {
-            boolean handled = false;
-            if (appState.isSessionListPopupVisible) {
-                appState.closeSessionListPopup();
-                handled = true;
-            }
-            if (appState.isHelpPopupVisible) {
-                appState.closeHelpPopup();
-                handled = true;
-            }
-            return handled;
-        }
+        // ESC 已在弹框拦截器中处理（见上方弹框按键拦截逻辑）
+        // 此处不再重复处理
 
         if (key.code() == KeyCode.ENTER) {
-            if (appState.focusPanel == PanelType.INPUT && !appState.inputBuffer.isBlank()) {
+            if (appState.focusPanel == PanelType.INPUT && !appState.inputBuffer.isBlank())  {
                 sendMessage();
                 return true;
             }
@@ -285,11 +284,6 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         }
 
         if (key.code() == KeyCode.BACKSPACE) {
-            // Ctrl+H sends ASCII 0x08 (BACKSPACE) in most terminals; treat as help
-            if (key.modifiers().ctrl()) {
-                appState.toggleHelpPopup();
-                return true;
-            }
             if (!appState.inputBuffer.isEmpty() && appState.inputCursorPos > 0) {
                 int pos = appState.inputCursorPos - 1;
                 appState.inputBuffer = appState.inputBuffer.substring(0, pos) + appState.inputBuffer.substring(pos + 1);
