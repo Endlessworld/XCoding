@@ -54,7 +54,6 @@ public class SmartEditTool {
     // @formatter:off
     @Tool(name = "smart_edit", description = """
         高效智能文件编辑工具。支持两种编辑策略，一次调用可执行多个编辑操作。
-
         【两种编辑模式】
         =================
 
@@ -70,7 +69,7 @@ public class SmartEditTool {
             - line: 目标行号（1-based）
             - newContent: 要插入的内容
             - position: "before" 或 "after"（默认 before，即在指定行前插入）
-            - 适合：添加 import、新增方法、在方法内添加语句等
+            - 适合：添加 import、新增方法、在方法内添加语句等，配合write_file 进行新文件编写
 
         【批量编辑】
         ============
@@ -78,7 +77,7 @@ public class SmartEditTool {
         - 编辑按顺序执行，自动处理行号偏移
         - 如果某个编辑失败，后续编辑不会执行，返回已成功的编辑结果
 
-        【最佳实践】
+        【Usage:】
         ============
         - 小范围精确修改使用 search_replace
         - 新增内容使用 insert_at_line
@@ -277,17 +276,13 @@ public class SmartEditTool {
         String searchText = edit.searchText;
         String replaceText = edit.replaceText;
 
-        // Check for uniqueness
-        int firstIndex = original.indexOf(searchText);
+        // Normalize line endings for matching (CRLF -> LF) to support cross-line search
+        String normalizedOriginal = normalizeLineEndings(original);
+        String normalizedSearch = normalizeLineEndings(searchText);
+
+        // Check for uniqueness in normalized content
+        int firstIndex = normalizedOriginal.indexOf(normalizedSearch);
         if (firstIndex == -1) {
-            // Provide helpful context: show if it's a whitespace/line ending issue
-            String normalizedOriginal = normalizeLineEndings(original);
-            String normalizedSearch = normalizeLineEndings(searchText);
-            if (normalizedOriginal.contains(normalizedSearch)) {
-                return new EditResult(-1, false,
-                        "Text not found (possible line ending mismatch). Try normalize_line_endings or ensure exact match.",
-                        null);
-            }
             // Show a preview of what we're looking for
             String preview = searchText.length() > 60 ? searchText.substring(0, 60) + "..." : searchText;
             return new EditResult(-1, false,
@@ -295,15 +290,17 @@ public class SmartEditTool {
                     null);
         }
 
-        // Check if there's more than one match
-        int secondIndex = original.indexOf(searchText, firstIndex + searchText.length());
+        // Check if there's more than one match in normalized content
+        int secondIndex = normalizedOriginal.indexOf(normalizedSearch, firstIndex + normalizedSearch.length());
         if (secondIndex != -1) {
-            // Find all match positions and line numbers
+            // Find all match positions and line numbers (using normalized positions mapped to original)
             List<Integer> matchLines = new ArrayList<>();
             int index = 0;
-            while ((index = original.indexOf(searchText, index)) != -1) {
-                matchLines.add(findLineNumber(original, index));
-                index += searchText.length();
+            while ((index = normalizedOriginal.indexOf(normalizedSearch, index)) != -1) {
+                // Map normalized position back to original content for line number
+                int originalPos = mapNormalizedToOriginalPos(original, index);
+                matchLines.add(findLineNumber(original, originalPos));
+                index += normalizedSearch.length();
             }
             return new EditResult(-1, false,
                     "Search text appears " + matchLines.size() + " times in the file. Must be unique for search_replace. "
@@ -312,8 +309,12 @@ public class SmartEditTool {
                     Map.of("matchCount", matchLines.size(), "matchLines", matchLines));
         }
 
-        // Perform replacement
-        String newContent = original.replace(searchText, replaceText);
+        // Perform replacement on normalized content
+        String normalizedReplace = normalizeLineEndings(replaceText);
+        String normalizedResult = normalizedOriginal.replace(normalizedSearch, normalizedReplace);
+
+        // Restore original line endings
+        String newContent = restoreOriginalLineEndings(normalizedResult, original);
 
         // Check if anything changed
         if (newContent.equals(original)) {
@@ -328,7 +329,7 @@ public class SmartEditTool {
         // Update fileContent
         fileContent.updateFromString(newContent);
 
-        int lineNumber = findLineNumber(original, firstIndex);
+        int lineNumber = findLineNumber(original, mapNormalizedToOriginalPos(original, firstIndex));
         String message = String.format("Replaced unique match at line %d (chars %d..%d)",
                 lineNumber, firstIndex, firstIndex + searchText.length());
         Map<String, Object> detail = new LinkedHashMap<>();
@@ -338,7 +339,7 @@ public class SmartEditTool {
         detail.put("charEnd", firstIndex + searchText.length());
         detail.put("filePath", edit.filePath);
 
-        // Line delta calculation is approximate for search_replace
+        // Line delta calculation
         int oldLines = countLines(searchText);
         int newLines = countLines(replaceText);
         int lineDelta = newLines - oldLines;
@@ -354,6 +355,16 @@ public class SmartEditTool {
             return new EditResult(-1, false,
                     "Line " + line + " exceeds file length " + fileContent.lines.size(),
                     null);
+        }
+
+        // Syntax-aware protection: check if target line is inside a string literal or comment
+        int targetLineIndex = line - 1; // 0-based
+        if (targetLineIndex >= 0 && targetLineIndex < fileContent.lines.size()) {
+            String targetLineContent = fileContent.lines.get(targetLineIndex);
+            String warning = checkSyntaxContext(fileContent.lines, targetLineIndex, targetLineContent);
+            if (warning != null) {
+                return new EditResult(-1, false, warning, null);
+            }
         }
 
         // Convert to insertion index (0-based)
@@ -422,7 +433,8 @@ public class SmartEditTool {
             // Apply line endings if needed
             String contentToWrite = content;
             if (useWindowsLineEnding) {
-                contentToWrite = content.replace("\n", "\r\n").replace("\r\r\n", "\r\n");
+                // Only replace LF that are not already preceded by CR
+                contentToWrite = content.replace("\r\n", "\n").replace("\n", "\r\n");
             }
 
             Files.writeString(path, contentToWrite, StandardCharsets.UTF_8,
@@ -500,9 +512,157 @@ public class SmartEditTool {
         return Math.max(1, count);
     }
 
+
+    /**
+     * Map a position in normalized (LF-only) content back to the original content position.
+     * Each CRLF in original counts as 2 chars but 1 char in normalized, so we need to adjust.
+     */
+    private int mapNormalizedToOriginalPos(String original, int normalizedPos) {
+        int originalPos = 0;
+        int normalizedIdx = 0;
+        while (normalizedIdx < normalizedPos && originalPos < original.length()) {
+            char c = original.charAt(originalPos);
+            if (c == '\r' && originalPos + 1 < original.length() && original.charAt(originalPos + 1) == '\n') {
+                // CRLF: skip \r in original, count as 1 char in normalized
+                originalPos++;
+                normalizedIdx++;
+            } else if (c == '\n') {
+                normalizedIdx++;
+            } else {
+                normalizedIdx++;
+            }
+            originalPos++;
+        }
+        return Math.min(originalPos, original.length());
+    }
+
+    /**
+     * Restore original line endings (CRLF) in a normalized (LF-only) result.
+     * Only converts \n back to \r\n if the original content uses CRLF.
+     */
+    private String restoreOriginalLineEndings(String normalizedResult, String originalContent) {
+        if (originalContent.contains("\r\n")) {
+            return normalizedResult.replace("\n", "\r\n");
+        }
+        return normalizedResult;
+    }
+
     private String normalizeLineEndings(String s) {
         if (s == null) return "";
         return s.replace("\r\n", "\n").replace("\r", "\n");
+    }
+
+    /**
+     * Check if the target line is inside a string literal, single-line comment, or multi-line comment.
+     * Returns a warning message if the insertion point is unsafe, or null if it's safe.
+     */
+    private String checkSyntaxContext(List<String> allLines, int targetLineIndex, String targetLineContent) {
+        // Track whether we're inside a multi-line comment
+        boolean insideBlockComment = false;
+        boolean insideString = false;
+        char stringChar = '"';
+
+        for (int i = 0; i <= targetLineIndex; i++) {
+            String line = allLines.get(i);
+            int j = 0;
+            boolean lineIsReset = false;
+
+            while (j < line.length()) {
+                // Handle block comment state across lines
+                if (insideBlockComment) {
+                    int endComment = line.indexOf("*/", j);
+                    if (endComment != -1) {
+                        insideBlockComment = false;
+                        j = endComment + 2;
+                        continue;
+                    }
+                    break; // rest of line is inside block comment
+                }
+
+                // Handle string literals
+                if (insideString) {
+                    int endString = indexOfStringEnd(line, stringChar, j);
+                    if (endString != -1) {
+                        insideString = false;
+                        j = endString + 1;
+                        continue;
+                    }
+                    break; // rest of line is inside string
+                }
+
+                // Skip char literals
+                if (line.charAt(j) == '\'') {
+                    int endChar = line.indexOf('\'', j + 1);
+                    if (endChar != -1) {
+                        j = endChar + 1;
+                        continue;
+                    }
+                    break;
+                }
+
+                // Check for single-line comment
+                if (j + 1 < line.length() && line.charAt(j) == '/' && line.charAt(j + 1) == '/') {
+                    if (i == targetLineIndex) {
+                        return "Target line " + (targetLineIndex + 1) + " is inside a single-line comment: [" + targetLineContent.trim() + "]. " +
+                                "Choose a different insertion point outside of comments.";
+                    }
+                    break; // rest of line is comment
+                }
+
+                // Check for block comment start
+                if (j + 1 < line.length() && line.charAt(j) == '/' && line.charAt(j + 1) == '*') {
+                    insideBlockComment = true;
+                    if (i == targetLineIndex) {
+                        return "Target line " + (targetLineIndex + 1) + " is inside a block comment: [" + targetLineContent.trim() + "]. " +
+                                "Choose a different insertion point outside of comments.";
+                    }
+                    j += 2;
+                    continue;
+                }
+
+                // Check for string literal start
+                if (line.charAt(j) == '"') {
+                    insideString = true;
+                    stringChar = '"';
+                    if (i == targetLineIndex) {
+                        return "Target line " + (targetLineIndex + 1) + " is inside a string literal: [" + targetLineContent.trim() + "]. " +
+                                "Choose a different insertion point outside of string literals.";
+                    }
+                    j++;
+                    continue;
+                }
+
+                j++;
+            }
+
+            // If we're at the target line and inside a block comment or string from previous lines
+            if (i == targetLineIndex) {
+                if (insideBlockComment) {
+                    return "Target line " + (targetLineIndex + 1) + " is inside a multi-line block comment (started on a previous line). " +
+                            "Choose a different insertion point outside of comments.";
+                }
+                if (insideString) {
+                    return "Target line " + (targetLineIndex + 1) + " is inside a multi-line string literal (started on a previous line). " +
+                            "Choose a different insertion point outside of string literals.";
+                }
+            }
+        }
+
+        return null; // safe to insert
+    }
+
+    /**
+     * Find the end of a string literal, handling escape sequences.
+     */
+    private int indexOfStringEnd(String line, char quoteChar, int start) {
+        for (int i = start; i < line.length(); i++) {
+            if (line.charAt(i) == '\\') {
+                i++; // skip escaped character
+            } else if (line.charAt(i) == quoteChar) {
+                return i;
+            }
+        }
+        return -1; // string continues on next line
     }
 
     private int findLineNumber(String content, int charPosition) {

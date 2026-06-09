@@ -35,23 +35,26 @@ import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
  */
 public class WriteFileTool {
 
-    private static final int MAX_CONTENT_LENGTH = 8000;
+    private static final int MAX_CONTENT_LENGTH = 500;
     private static final String WORKSPACE_ROOT_NORMALIZED = Paths.get(WORKSPACE_ROOT).normalize().toString();
 
+    private static final String DESCRIPTION = """
+            创建一个简短的纯文本类型新文件,写入到当前文件系统。
+            Usage:
+                - file_path参数必须是绝对路径，且必须在workspace范围内
+                - 如果文件包含多级目录将自动创建所有父级目录,所以无需创建父级目录可直接写入文件
+                - 内容参数必须是字符串
+                - 文件内容限制500字符以内，未完成的部分使用smart_edit工具的insert_at_line模式继续添加
+            """;
+
     // @formatter:off
-    @Tool(name = "write_file", description = """
-        创建新文件,写入文件系统中的文件。
-        Usage:
-            - file_path参数必须是绝对路径，且必须在workspace范围内
-            - 如果文件包含多级目录将自动创建所有父级目录,所以无需创建父级目录可直接写入文件
-            - 内容参数必须是字符串，最多1000字符，未完成的部分使用edit工具继续添加
-        """)
+    @Tool(name = "write_file", description = DESCRIPTION)
     public Map<String, Object> writeFile(
             @JsonProperty(value = "filePath", required = true)
             @JsonPropertyDescription("The absolute path of the file to create")
             String filePath,
             @JsonProperty(value = "content", required = true)
-            @JsonPropertyDescription("The content to write to the file, must be a string. Maximum 1000 characters.")
+            @JsonPropertyDescription("The content to write to the file, must be a string. Maximum 500 characters")
             String content
     ) { // @formatter:on
         // Validate request parameters
