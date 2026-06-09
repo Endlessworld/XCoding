@@ -24,10 +24,5 @@ fun main(args: Array<String>) {
 }
 
 private fun detectWindowsTerminal() {
-    if (!System.getProperty("os.name").lowercase().contains("windows")) return
-    val wtSession = System.getenv("WT_SESSION")
-    if (wtSession.isNullOrBlank()) {
-        System.err.println("[提示] 检测到 Windows 环境但未使用 Windows Terminal。")
-        System.err.println("       建议使用 Windows Terminal 以获得最佳 TUI 体验。")
-    }
+    // Windows Terminal detection removed to avoid console noise during ACP connection
 }

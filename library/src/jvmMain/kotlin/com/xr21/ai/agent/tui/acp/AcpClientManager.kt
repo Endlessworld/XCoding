@@ -84,9 +84,10 @@ class AcpClientManager(private val appState: AppState) {
             val wsUrl = if (config.webSocketUrl.isNotEmpty()) {
                 config.webSocketUrl
             } else {
-                startInternalServer(config.webSocketServerPort)
+                val port = findAvailablePort(config.webSocketServerPort)
+                startInternalServer(port)
                 delay(800)
-                "ws://127.0.0.1:${config.webSocketServerPort}/acp"
+                "ws://127.0.0.1:$port/acp"
             }
 
             val client = HttpClient { install(WebSockets) }
@@ -129,6 +130,18 @@ class AcpClientManager(private val appState: AppState) {
         thread.isDaemon = true
         thread.start()
         serverThread = thread
+    }
+
+    /** 查找可用端口（避免 BindException） */
+    private fun findAvailablePort(startPort: Int): Int {
+        for (port in startPort..startPort + 100) {
+            try {
+                java.net.ServerSocket(port).use { return port }
+            } catch (_: java.io.IOException) {
+                // 端口已被占用，尝试下一个
+            }
+        }
+        throw IllegalStateException("在范围 $startPort..${startPort + 100} 内未找到可用端口")
     }
 
     /** Stdio 模式连接（向后兼容） */

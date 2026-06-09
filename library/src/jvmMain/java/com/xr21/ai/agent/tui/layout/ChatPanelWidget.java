@@ -53,11 +53,7 @@ public class ChatPanelWidget implements Widget {
 
         List<ChatMessage> messages = appState.currentSession().messages;
         if (messages.isEmpty()) {
-            Style hintStyle = Style.EMPTY.fg(theme.textMuted);
-            Line line = Line.styled("开始新的对话", hintStyle);
-            buffer.setLine(inner.left(), inner.top(), line);
-            Line line2 = Line.styled("输入消息后按 Enter 发送", hintStyle);
-            buffer.setLine(inner.left(), inner.top() + 2, line2);
+            renderLogo(inner, buffer);
             return;
         }
 
@@ -192,6 +188,43 @@ public class ChatPanelWidget implements Widget {
             else hint = "\u2193 更多消息";
             Style hintStyle = Style.EMPTY.fg(theme.scrollHint);
             buffer.setLine(inner.left(), inner.bottom() - 1, Line.styled(hint, hintStyle));
+        }
+    }
+
+    private void renderLogo(Rect area, Buffer buffer) {
+        String[] logo = {
+                "",
+                "    +-----------------------------------+",
+                "    |                                   |",
+                "    |      E N D L E S S   A G E N T    |",
+                "    |                                   |",
+                "    +-----------------------------------+",
+                "",
+                "          开始新的对话",
+                "          输入消息后按 Enter 发送"
+        };
+
+        int totalHeight = logo.length;
+        int startY = area.top() + Math.max(0, (area.height() - totalHeight) / 2);
+
+        for (int i = 0; i < logo.length; i++) {
+            int y = startY + i;
+            if (y < area.top() || y >= area.bottom()) continue;
+
+            String text = logo[i];
+            int contentWidth = text.length();
+            int x = area.left() + Math.max(0, (area.width() - contentWidth) / 2);
+
+            Style style;
+            if (i == 3) {
+                style = Style.EMPTY.fg(theme.accent).bold();
+            } else if (i >= 1 && i <= 5) {
+                style = Style.EMPTY.fg(theme.borderNormal);
+            } else {
+                style = Style.EMPTY.fg(theme.textMuted);
+            }
+
+            buffer.setLine(x, y, Line.styled(text, style));
         }
     }
 

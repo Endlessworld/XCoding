@@ -18,7 +18,13 @@ package com.xr21.ai.agent.tui;
 import com.xr21.ai.agent.tui.layout.*;
 import dev.tamboui.backend.jline3.JLineBackend;
 import dev.tamboui.layout.Rect;
+import dev.tamboui.style.Color;
 import dev.tamboui.terminal.Frame;
+import dev.tamboui.tfx.CellFilter;
+import dev.tamboui.tfx.Fx;
+import dev.tamboui.tfx.Interpolation;
+import dev.tamboui.tfx.Motion;
+import dev.tamboui.tfx.tui.TfxIntegration;
 import dev.tamboui.tui.EventHandler;
 import dev.tamboui.tui.Renderer;
 import dev.tamboui.tui.TuiConfig;
@@ -48,10 +54,12 @@ public class TambouiTuiApp implements EventHandler, Renderer {
     private final AppState appState = new AppState();
     private final TuiTheme theme = TuiTheme.modernDark();
     private final StatusBarWidget statusBar = new StatusBarWidget(appState, theme);
+    private final TfxIntegration tfx = new TfxIntegration();
     private TuiRunner runner;
     private ScheduledExecutorService scheduler;
     private volatile boolean needsRender = true;
     private AcpBridge acpBridge;
+    private boolean firstMessageAnimationAdded = false;
 
     public static void main(String[] args) throws Exception {
         TambouiTuiApp app = new TambouiTuiApp();
@@ -133,7 +141,20 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 });
             }
 
-            tui.run(this, this);
+            // Add TFX logo animation effect for initial chat load
+            Rect termArea = tui.terminal().area();
+            int chatW = (int) (termArea.width() * 0.75);
+            int statusH = 1;
+            int inputH = Math.min(5, termArea.height() / 5);
+            int mainH = termArea.height() - statusH - inputH;
+            Rect chatArea = new Rect(0, 0, chatW, mainH);
+            tfx.addEffect(
+                    Fx.slideIn(Motion.LEFT_TO_RIGHT, 15, 0, Color.BLACK, 2500, Interpolation.SineInOut)
+                            .withFilter(CellFilter.text()),
+                    chatArea
+            );
+
+            tfx.runWith(tui, this, this);
         } finally {
             cleanup();
         }
@@ -209,9 +230,11 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                     return true;
                 case 'n': // Ctrl+N: 新会话
                     appState.newSession();
+                    firstMessageAnimationAdded = false;
                     return true;
                 case 'w': // Ctrl+W: 关闭会话
                     appState.closeCurrentSession();
+                    firstMessageAnimationAdded = false;
                     return true;
                 case 'q': // Ctrl+Q: 退出
                     runner.quit();
@@ -224,6 +247,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                     return true;
                 case 'k': // Ctrl+K: 清空对话
                     appState.clearConversation();
+                    firstMessageAnimationAdded = false;
                     return true;
             }
         }
@@ -321,6 +345,16 @@ public class TambouiTuiApp implements EventHandler, Renderer {
     private void sendMessage() {
         String message = appState.inputBuffer.trim();
         if (message.isEmpty()) return;
+
+        // Add TFX animation on first message load
+        if (!firstMessageAnimationAdded && appState.currentSession().messages.isEmpty()) {
+            tfx.addEffect(
+                    Fx.slideIn(Motion.LEFT_TO_RIGHT, 10, 0, Color.BLACK, 1500, Interpolation.SineInOut)
+                            .withFilter(CellFilter.text())
+            );
+            firstMessageAnimationAdded = true;
+        }
+
         appState.sendMessage(message);
         if (acpBridge != null) {
             acpBridge.sendMessage(message);
