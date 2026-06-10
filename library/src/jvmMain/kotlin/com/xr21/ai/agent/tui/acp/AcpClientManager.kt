@@ -105,7 +105,6 @@ class AcpClientManager(private val appState: AppState) {
             )
             appState.agentName = agentInfo.implementation?.name ?: "Unknown"
             appState.agentVersion = agentInfo.implementation?.version ?: ""
-
             val session = acpClient.newSession(
                 SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
             ) { _, _ -> TuiClientOperations() }

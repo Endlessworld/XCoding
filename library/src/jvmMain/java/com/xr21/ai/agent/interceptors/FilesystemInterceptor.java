@@ -136,8 +136,8 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         4. 始终在作前验证路径
                 
                     ### 可用工具：
-                        - 'ls'：目录中带有深度控制的文件列表
-                        - 'read_file'：读取文件内容（支持分页）
+                        - 'ls'：目录中带有深度控制的文件列表（支持workspaceOnly参数，设为false可列出工作目录外的文件）
+                        - 'read_file'：读取文件内容（支持分页，支持workspaceOnly参数，设为false可读取工作目录外的文件）
                         - “write_file”：创建文件
                         - 'glob'：查找与模式匹配的文件（例如，'**/*.java'）
                         - “grep”：在文件中搜索文本，查找内容并定位问题（禁止执行**/*类似搜索，使用明确的关键字进行检索）

@@ -75,6 +75,7 @@ public class ReadFileTool {
                 - 结果采用cat -n格式，行号从1开始
             - 如果读取了存在但内容为空的文件，会收到"File is empty"提示
             - 建议在使用该工具前先使用list_files工具验证文件/目录路径
+            - workspaceOnly参数控制是否仅允许读取工作目录内的文件，默认为true
         """)
     public Map<String, Object> readFile(
             @JsonProperty(value = "filePaths", required = true)
@@ -85,7 +86,10 @@ public class ReadFileTool {
             Integer offset,
             @JsonProperty(value = "limit")
             @JsonPropertyDescription("最大读取行数，默认500行，防止一次性读取过大文件")
-            Integer limit
+            Integer limit,
+            @JsonProperty(value = "workspaceOnly")
+            @JsonPropertyDescription("是否仅允许读取工作目录内的文件，默认为true。设为false可读取工作目录之外的文件")
+            Boolean workspaceOnly
     ) { // @formatter:on
         // 参数校验：路径列表不能为空
         if (filePaths == null || filePaths.isEmpty()) {
@@ -101,6 +105,9 @@ public class ReadFileTool {
         // 统计成功读取的文件数量（目录递归的不计入）
         int filesRead = 0;
 
+        // workspaceOnly 默认 true：仅允许读取工作目录内的文件
+        boolean restrictToWorkspace = workspaceOnly == null || workspaceOnly;
+
         // 遍历每个传入的路径，逐个处理
         for (String pathStr : filePaths) {
             try {
@@ -114,6 +121,17 @@ public class ReadFileTool {
                     pathStr = WORKSPACE_ROOT + File.pathSeparator + pathStr.replaceFirst("/", "");
                 }
                 Path path = Paths.get(pathStr).normalize();
+
+                // 当 workspaceOnly=true 时，校验路径必须在工作目录内
+                if (restrictToWorkspace) {
+                    String pathAbs = path.toAbsolutePath().toString().replace("\\", "/");
+                    String workspaceRoot = WORKSPACE_ROOT.replace("\\", "/");
+                    if (!pathAbs.startsWith(workspaceRoot)) {
+                        content.append("Path is outside workspace directory: ").append(pathStr).append("\n\n");
+                        continue;
+                    }
+                }
+
                 if (!Files.exists(path)) {
                     content.append("Path not found - ").append(pathStr).append("\n\n");
                     continue;

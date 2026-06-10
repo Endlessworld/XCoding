@@ -56,13 +56,18 @@ public class ListFilesTool {
             - Files and directories listed in .gitignore will be excluded.
             - This is very useful for exploring the file system and finding the right file to read or edit.
             - You should almost ALWAYS use this tool before using the Read or Edit tools.
+            - workspaceOnly parameter controls whether to only list files within the workspace directory, default is true.
             """)
     public Map<String, Object> listDirectory(@JsonProperty(value = "directory",required = true)
                                          @JsonPropertyDescription("The directory path to list files from default: (current working directory absolute path)")
                                              String directory,
                                          @JsonProperty(value = "maxDepth",required = true)
                                          @JsonPropertyDescription("Maximum depth to traverse (default: 3, max: 5)")
-                                         Integer maxDepth, ToolContext context) { // @formatter:on
+                                             Integer maxDepth,
+                                         @JsonProperty(value = "workspaceOnly")
+                                         @JsonPropertyDescription("Whether to only list files within the workspace directory, default is true. Set to false to list files outside the workspace")
+                                             Boolean workspaceOnly,
+                                         ToolContext context) { // @formatter:on
         log.info("ls files context {}", context.getContext());
         if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
             log.info("config context {}", config.context());
@@ -70,6 +75,9 @@ public class ListFilesTool {
             log.info("config context SyncPromptContext {}", config.context().get("SyncPromptContext"));
 
         }
+
+        // workspaceOnly 默认 true：仅允许列出工作目录内的文件
+        boolean restrictToWorkspace = workspaceOnly == null || workspaceOnly;
 
         log.info("ls directory {}", directory);
         Path dir = Paths.get(WORKSPACE_ROOT);
@@ -81,10 +89,22 @@ public class ListFilesTool {
             if (!directory.contains(WORKSPACE_ROOT)) {
                 if ("/".equals(directory) || ".".equals(directory)) {
                     dir = Paths.get(DEFAULT_WORKSPACE_ROOT);
+                } else if (!restrictToWorkspace) {
+                    // 当 workspaceOnly=false 时，使用用户指定的绝对路径
+                    dir = Paths.get(directory);
                 } else {
                     dir = Paths.get(DEFAULT_WORKSPACE_ROOT, directory.replaceFirst("/", ""));
                 }
 
+            }
+        }
+
+        // 当 workspaceOnly=true 时，校验路径必须在工作目录内
+        if (restrictToWorkspace) {
+            String dirAbs = dir.toAbsolutePath().toString().replace("\\", "/");
+            String workspaceRoot = WORKSPACE_ROOT.replace("\\", "/");
+            if (!dirAbs.startsWith(workspaceRoot)) {
+                return ToolResult.builder().error("Directory is outside workspace: " + dirAbs).build();
             }
         }
         log.info("ls dir {}", dir);

@@ -221,7 +221,7 @@ public class TuiTheme {
                 // 删除线
                 .strikethrough(Style.EMPTY.crossedOut().fg(fgMuted))
                 // 行内代码
-                .inlineCode(Style.EMPTY.fg(warning).bg(Color.hex("#fff0f0")))
+                .inlineCode(Style.EMPTY.fg(warning).bg(Color.RESET))
                 // 代码块
                 .codeBlock(Style.EMPTY.fg(fgMuted).bg(Color.hex("#f5f5f5")))
                 // 链接
@@ -238,7 +238,7 @@ public class TuiTheme {
                 // 任务列表
                 .taskChecked(Style.EMPTY.fg(success))
                 .taskUnchecked(Style.EMPTY.fg(fgMuted))
-                .taskCheckedSymbol("[x]")
+                .taskCheckedSymbol("[✅]")
                 .taskUncheckedSymbol("[ ]")
                 .build();
     }

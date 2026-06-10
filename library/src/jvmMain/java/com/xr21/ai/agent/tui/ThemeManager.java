@@ -56,8 +56,8 @@ public final class ThemeManager {
 
     private void loadThemes() {
         try {
-            styleEngine.loadStylesheet(THEME_DARK, "/themes/tui-dark.tcss");
-            styleEngine.loadStylesheet(THEME_LIGHT, "/themes/tui-light.tcss");
+            styleEngine.loadStylesheet(THEME_DARK, "/themes/tui-dark.css");
+            styleEngine.loadStylesheet(THEME_LIGHT, "/themes/tui-light.css");
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load TCSS theme files", e);
         }
@@ -78,7 +78,7 @@ public final class ThemeManager {
      * <p>TCSS 文件是单一事实源，TuiTheme 的颜色值完全由 TCSS 变量驱动。</p>
      */
     private static TuiTheme buildTuiTheme(String themeName) {
-        String resourcePath = "/themes/tui-" + themeName + ".tcss";
+        String resourcePath = "/themes/tui-" + themeName + ".css";
         try (InputStream is = ThemeManager.class.getResourceAsStream(resourcePath)) {
             if (is == null) {
                 throw new IOException("TCSS resource not found: " + resourcePath);
