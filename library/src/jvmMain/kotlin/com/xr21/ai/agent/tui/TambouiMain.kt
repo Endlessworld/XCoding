@@ -10,23 +10,9 @@ package com.xr21.ai.agent.tui
  */
 fun main(args: Array<String>) {
     detectWindowsTerminal()
-
     val app = TambouiTuiApp()
-
-    // 自动感知 OS 主题模式（夜间/白天）
-    val isDark = OsThemeDetector.isDarkMode()
-    if (isDark != null) {
-        app.setThemeMode(isDark)
-        app.appState.isDarkMode = isDark
-        System.err.println(if (isDark) "[TUI] 检测到暗色模式" else "[TUI] 检测到亮色模式")
-    } else {
-        app.setThemeMode(false)
-        app.appState.isDarkMode = false
-        System.err.println("[TUI] 无法检测 OS 主题，使用默认暗色模式")
-    }
     val bridge = TambouiAcpBridge(app.appState)
-    app.setAcpBridge(bridge)
-
+    app.acpBridge = bridge
     try {
         app.start()
     } catch (e: Exception) {

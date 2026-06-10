@@ -1,0 +1,35 @@
+/* XAgent Dark Theme */
+/* CSS Variables */
+$bg-primary: #1a1a2e;
+$bg-secondary: #16213e;
+$bg-surface: #0f3460;
+$fg-primary: #e0e0e0;
+$fg-secondary: #a0a0a0;
+$fg-muted: #666666;
+$accent: #00bcd4;
+$accent-secondary: #4fc3f7;
+$success: #66bb6a;
+$warning: #ffa726;
+$error: #ef5350;
+$info: #42a5f5;
+$border-normal: #444444;
+$border-focused: #00bcd4;
+$panel-title: #ffffff;
+$panel-title-focused: #00bcd4;
+$user-msg: #4fc3f7;
+$assistant-msg: #a5d6a7;
+$system-msg: #fff176;
+$tool-msg: #ce93d8;
+$error-msg: #ef5350;
+$status-text: #888888;
+$status-connected: #66bb6a;
+$status-connecting: #ffa726;
+$status-disconnected: #888888;
+$status-error: #ef5350;
+$input-prompt: #666666;
+$input-text: #e0e0e0;
+$selected-text: #00bcd4;
+$current-indicator: #66bb6a;
+$scroll-hint: #555555;
+$key-hint: #666666;
+$highlight-bg: #333366;

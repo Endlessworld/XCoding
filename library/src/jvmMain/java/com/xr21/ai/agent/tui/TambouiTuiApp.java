@@ -25,6 +25,7 @@ import dev.tamboui.tfx.Fx;
 import dev.tamboui.tfx.Interpolation;
 import dev.tamboui.tfx.Motion;
 import dev.tamboui.tfx.tui.TfxIntegration;
+import dev.tamboui.toolkit.app.ToolkitRunner;
 import dev.tamboui.tui.EventHandler;
 import dev.tamboui.tui.Renderer;
 import dev.tamboui.tui.TuiConfig;
@@ -32,12 +33,12 @@ import dev.tamboui.tui.TuiRunner;
 import dev.tamboui.tui.bindings.BindingSets;
 import dev.tamboui.tui.error.RenderErrorHandlers;
 import dev.tamboui.tui.event.*;
+import lombok.Getter;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import static dev.tamboui.tui.TuiConfig.*;
 
@@ -49,14 +50,14 @@ import static dev.tamboui.tui.TuiConfig.*;
  */
 public class TambouiTuiApp implements EventHandler, Renderer {
 
-    private final AppState appState = new AppState();
-    private TuiTheme theme = TuiTheme.modernDark();
-    private final StatusBarWidget statusBar = new StatusBarWidget(appState, theme);
+    @Getter
+    public final AppState appState = new AppState();
+    private final ThemeManager themeManager = new ThemeManager();
+    private final StatusBarWidget statusBar = new StatusBarWidget(appState, themeManager.currentTheme());
     private final TfxIntegration tfx = new TfxIntegration();
-    private TuiRunner runner;
+    public AcpBridge acpBridge;
     private ScheduledExecutorService scheduler;
-    private volatile boolean needsRender = true;
-    private AcpBridge acpBridge;
+    private ToolkitRunner runner;
     private boolean firstMessageAnimationAdded = false;
 
     public static void main(String[] args) throws Exception {
@@ -64,24 +65,6 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         // 这里可以通过反射或 ServiceLoader 注入 AcpBridge
         // 实际使用时由 Kotlin 桥接层调用 setAcpBridge
         app.start();
-    }
-
-    public void setAcpBridge(AcpBridge bridge) {
-        this.acpBridge = bridge;
-    }
-
-
-    /**
-     * 设置主题模式。
-     *
-     * @param isDark true = 暗色模式, false = 亮色模式
-     */
-    public void setThemeMode(boolean isDark) {
-        this.theme = isDark ? TuiTheme.modernDark() : TuiTheme.modernLight();
-    }
-
-    public AppState getAppState() {
-        return appState;
     }
 
     public void start() throws Exception {
@@ -103,11 +86,25 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 new JLineBackend(),                          // backend (allows for lazy backend creation)
                 null                         // scheduler
         );
-        try (var tui = TuiRunner.create(tuiConfig)) {
-            this.runner = tui;
-            // 启动状态栏定时刷新（每秒更新系统时间）
-            startStatusBarTimer();
 
+        try (ToolkitRunner toolkitRunner = ToolkitRunner.builder().config(tuiConfig).styleEngine(themeManager.styleEngine()).build()) {
+            this.runner = toolkitRunner;
+            // 启动状态栏定时刷新（每秒更新系统时间）
+            runner.runOnRenderThread(() -> {
+                // 自动感知 OS 主题模式（夜间/白天）
+                Boolean isDark = null;
+                try {
+                    isDark = OsThemeDetector.isDarkMode(tuiConfig.backend(), 500);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                if (isDark != null) {
+                    appState.isDarkMode = isDark;
+                } else {
+                    appState.isDarkMode = false;
+                }
+                themeManager.setDarkMode(appState.isDarkMode);
+            });
             // 连接 ACP Agent
             if (acpBridge != null) {
                 acpBridge.connect(new String[0], new ConnectionCallback() {
@@ -150,7 +147,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             }
 
             // Add TFX logo animation effect for initial chat load
-            Rect termArea = tui.terminal().area();
+            Rect termArea = runner.tuiRunner().terminal().area();
             int chatW = (int) (termArea.width() * 0.75);
             int statusH = 1;
             int inputH = Math.min(5, termArea.height() / 5);
@@ -162,7 +159,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                     chatArea
             );
 
-            tfx.runWith(tui, this, this);
+            tfx.runWith(runner.tuiRunner(), this, this);
         } finally {
             cleanup();
         }
@@ -364,7 +361,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         int my = mouse.y();
 
         // 获取当前布局尺寸
-        Rect area = runner.terminal().area();
+        Rect area = runner.tuiRunner().terminal().area();
         int width = area.width();
         int height = area.height();
         int statusHeight = 1;
@@ -390,7 +387,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             // 主题图标区域：右侧约 10 个字符宽度
             if (mx >= width - 10) {
                 appState.toggleTheme();
-                setThemeMode(appState.isDarkMode);
+                themeManager.toggle();
                 return true;
             }
         }
@@ -442,9 +439,9 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         boolean chatFocused = appState.focusPanel == PanelType.CENTER;
         boolean inputFocused = appState.focusPanel == PanelType.INPUT;
 
-        frame.renderWidget(new ChatPanelWidget(appState, theme, chatFocused), chatArea);
-        frame.renderWidget(new InfoPanelWidget(appState, theme), infoArea);
-        frame.renderWidget(new InputPanelWidget(appState, theme, inputFocused), inputArea);
+        frame.renderWidget(new ChatPanelWidget(appState, themeManager.currentTheme(), chatFocused), chatArea);
+        frame.renderWidget(new InfoPanelWidget(appState, themeManager.currentTheme()), infoArea);
+        frame.renderWidget(new InputPanelWidget(appState, themeManager.currentTheme(), inputFocused), inputArea);
         frame.renderWidget(statusBar, statusArea);
 
         // 弹框覆盖
@@ -453,33 +450,17 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             int popupH = Math.min(appState.sessionCount() + 4, height - 4);
             int popupX = (width - popupW) / 2;
             int popupY = (height - popupH) / 2;
-            frame.renderWidget(new SessionListPopupWidget(appState, theme), new Rect(popupX, popupY, popupW, popupH));
+            frame.renderWidget(new SessionListPopupWidget(appState, themeManager.currentTheme()), new Rect(popupX, popupY, popupW, popupH));
         }
         if (appState.isHelpPopupVisible) {
             int popupW = Math.min(50, width - 4);
             int popupH = Math.min(24, height - 4);
             int popupX = (width - popupW) / 2;
             int popupY = (height - popupH) / 2;
-            frame.renderWidget(new HelpPopupWidget(appState, theme), new Rect(popupX, popupY, popupW, popupH));
+            frame.renderWidget(new HelpPopupWidget(appState, themeManager.currentTheme()), new Rect(popupX, popupY, popupW, popupH));
         }
     }
 
-    private void startStatusBarTimer() {
-        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "tui-statusbar-timer");
-            t.setDaemon(true);
-            return t;
-        });
-        scheduler.scheduleAtFixedRate(() -> {
-            if (runner != null && runner.isRunning()) {
-                runner.runOnRenderThread(this::requestRender);
-            }
-        }, 1, 1, TimeUnit.SECONDS);
-    }
-
-    private void requestRender() {
-        needsRender = true;
-    }
 
     /**
      * 强制触发界面刷新：通过 dispatch ResizeEvent 让事件循环调用 safeRender()
@@ -488,9 +469,9 @@ public class TambouiTuiApp implements EventHandler, Renderer {
      */
     private void forceRender() {
         if (runner != null && runner.isRunning()) {
-            runner.dispatch(ResizeEvent.of(
-                runner.terminal().area().width(),
-                runner.terminal().area().height()
+            runner.eventRouter().route(ResizeEvent.of(
+                    runner.tuiRunner().terminal().area().width(),
+                    runner.tuiRunner().terminal().area().height()
             ));
         }
     }
