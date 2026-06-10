@@ -8,7 +8,7 @@ import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.event.EventResult;
 
-import dev.tamboui.tui.event.*;
+import dev.tamboui.tui.event.MouseEventKind;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
@@ -51,36 +51,35 @@ public class StatusBarElement {
         String modelName = appState.modelName.isEmpty() ? "—" : appState.modelName;
         String themeIcon = appState.isDarkMode ? "🌙 dark" : "☀️ light";
 
-        return text(connSymbol + " | 模型: " + modelName + " ▾ | 会话: "
-                + appState.sessionCount() + "/" + appState.totalSessions
-                + " | " + time
-                + "  ctrl+l 帮助  ctrl+q 退出  " + themeIcon)
-                .id("status-bar")
-                .onMouseEvent(this::handleMouseEvent);
+        // 模型名称区域 — 独立可点击
+        Element modelPart = text(" 模型: " + modelName + " ▾ ")
+                .onMouseEvent(e -> {
+                    if (e.kind() == MouseEventKind.PRESS && onModelClick != null) {
+                        onModelClick.run();
+                        return EventResult.HANDLED;
+                    }
+                    return EventResult.UNHANDLED;
+                });
+
+        // 主题切换区域 — 独立可点击
+        Element themePart = text(themeIcon)
+                .onMouseEvent(e -> {
+                    if (e.kind() == MouseEventKind.PRESS && onThemeToggle != null) {
+                        onThemeToggle.run();
+                        return EventResult.HANDLED;
+                    }
+                    return EventResult.UNHANDLED;
+                });
+
+        return row(
+                text(connSymbol + " |"),
+                modelPart,
+                text("| 会话: " + appState.sessionCount() + "/" + appState.totalSessions
+                        + " | " + time),
+                spacer(),
+                text(" ctrl+l 帮助  ctrl+q 退出  "),
+                themePart
+        ).id("status-bar");
     }
 
-    private EventResult handleMouseEvent(MouseEvent event) {
-        if (event.kind() != MouseEventKind.PRESS) return EventResult.UNHANDLED;
-        // 模型名称区域点击（第 2 段）
-        String connText = switch (appState.connectionState) {
-            case CONNECTED -> "● 已连接";
-            case CONNECTING, RECONNECTING -> "◌ 连接中";
-            case DISCONNECTED_ERROR -> "✕ 错误";
-            default -> "○ 断开";
-        } + " | ";
-        String modelLabel = "模型: ";
-        String modelName = appState.modelName.isEmpty() ? "—" : appState.modelName;
-        int modelStart = connText.length();
-        int modelEnd = modelStart + modelLabel.length() + modelName.length() + 2;
-        if (event.x() >= modelStart && event.x() < modelEnd) {
-            if (onModelClick != null) onModelClick.run();
-            return EventResult.HANDLED;
-        }
-        // 主题图标区域（右侧）
-        if (event.x() >= 60) {
-            if (onThemeToggle != null) onThemeToggle.run();
-            return EventResult.HANDLED;
-        }
-        return EventResult.UNHANDLED;
-    }
 }

@@ -205,7 +205,14 @@ public class TambouiTuiApp {
         if (appState.isModelPopupVisible) {
             mainLayout = stack(
                     mainLayout,
-                    new ModelSelectPopupElement(appState, themeManager.currentTheme()).build()
+                    new ModelSelectPopupElement(appState, themeManager.currentTheme())
+                            .onModelConfirm(() -> {
+                                String modelId = appState.currentModelId;
+                                if (!modelId.isEmpty() && acpBridge != null) {
+                                    acpBridge.setModel(modelId);
+                                }
+                            })
+                            .build()
             );
         }
         if (appState.isHelpPopupVisible) {

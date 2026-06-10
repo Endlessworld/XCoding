@@ -21,10 +21,16 @@ import static dev.tamboui.toolkit.Toolkit.*;
 public class ModelSelectPopupElement {
     private final AppState appState;
     private final TuiTheme theme;
+    private Runnable onModelConfirm;
 
     public ModelSelectPopupElement(AppState appState, TuiTheme theme) {
         this.appState = appState;
         this.theme = theme;
+    }
+
+    public ModelSelectPopupElement onModelConfirm(Runnable callback) {
+        this.onModelConfirm = callback;
+        return this;
     }
 
     public Element build() {
@@ -57,8 +63,8 @@ public class ModelSelectPopupElement {
         }
         if (event.isConfirm()) {
             String modelId = appState.confirmModelSelection();
-            if (modelId != null) {
-                // modelId is set, caller should handle acpBridge.setModel
+            if (modelId != null && onModelConfirm != null) {
+                onModelConfirm.run();
             }
             return EventResult.HANDLED;
         }
