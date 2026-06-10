@@ -9,11 +9,8 @@ package com.xr21.ai.agent.tui
  * 解析命令行参数，初始化 Tamboui TUI，启动 ACP 桥接。
  */
 fun main(args: Array<String>) {
-    detectWindowsTerminal()
-    val app = TambouiTuiApp()
-    val bridge = TambouiAcpBridge(app.appState)
-    app.acpBridge = bridge
     try {
+        val app = TambouiTuiApp()
         app.start()
     } catch (e: Exception) {
         System.err.println("TUI 运行时异常: ${e.message}")
@@ -21,6 +18,3 @@ fun main(args: Array<String>) {
     }
 }
 
-private fun detectWindowsTerminal() {
-    // Windows Terminal detection removed to avoid console noise during ACP connection
-}

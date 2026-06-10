@@ -336,7 +336,7 @@ public class LocalAgent {
         }
         SummarizationHook summarizationHook = SummarizationHook.builder()
                 .model(chatModel)
-                .maxTokensBeforeSummary(64 * 1024)     // ← 窗口的 ~84%
+                .maxTokensBeforeSummary(256 * 1024)     // ← 窗口的 ~84%
                 .messagesToKeep(10)                // ← 保留更多原始消息
                 .keepFirstUserMessage(true)
                 .build();

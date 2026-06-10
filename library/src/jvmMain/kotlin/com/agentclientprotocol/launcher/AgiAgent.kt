@@ -26,6 +26,7 @@ import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.*
+import com.agentclientprotocol.model.PromptResponse
 import com.alibaba.cloud.ai.graph.RunnableConfig
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
@@ -56,6 +57,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 
 private val logger = KotlinLogging.logger {}
@@ -86,6 +88,7 @@ class AgiAgentSession(
 ) : AgentSession {
     private val responseBuilder = StringBuilder()
     private val totalTokens = AtomicInteger(0)
+    private val tokenUsageRef = AtomicReference(Usage(0,0,0,0,0,0))
     private val completionTokens = AtomicInteger(0)
     private val startTime = AtomicLong(0L)
 
@@ -288,8 +291,8 @@ class AgiAgentSession(
             val chunk = "Token usage: total=${tokens}, duration=${duration}s, speed=${speed} tokens/s"
             logger.info { chunk }
             emit(
-                Event.SessionUpdateEvent(
-                    SessionUpdate.AgentThoughtChunk(ContentBlock.Text(chunk))
+                Event.PromptResponseEvent(
+                     PromptResponse(StopReason.END_TURN,null,tokenUsageRef.get())
                 )
             )
             logger.info { "events END_TURN" }
@@ -363,6 +366,7 @@ class AgiAgentSession(
     private suspend fun FlowCollector<Event>.emitAgentOutputEvents(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
         if (output.tokenUsage != null) {
+            tokenUsageRef.set(Usage(output.tokenUsage.promptTokens.toLong(), output.tokenUsage.completionTokens.toLong(), output.tokenUsage.totalTokens.toLong(),0,0,0))
             totalTokens.addAndGet(output.tokenUsage.totalTokens ?: 0)
             completionTokens.addAndGet(output.tokenUsage.completionTokens ?: 0)
         }

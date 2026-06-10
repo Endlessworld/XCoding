@@ -1,4 +1,4 @@
-# ToolkitRunner 事件处理最佳实践
+# ToolkitRunner 最佳实践
 TamboUI 源码本地目录 D:\IdeaProjects\tamboui
 > 基于 TamboUI 源码（D:\IdeaProjects\tamboui）调研，分析 ToolkitRunner 处理鼠标和按键事件的最佳实践。
 > 调研时间：2025年
@@ -499,20 +499,34 @@ Builder 支持：
 | **图表** | `gauge(ratio)` | 仪表盘 |
 | | `lineGauge(ratio)` | 线条仪表 |
 | | `sparkline(data...)` | 迷你趋势图 |
+| | `widget(widget)` | 包装底层 Widget（支持样式和布局） |
+| | `lazy(supplier)` | 延迟求值元素 |
+| **动画** | `spinner()` | 加载动画（DOTS 风格） |
+| | `spinner(style)` | 指定风格的加载动画 |
+| | `spinner(label)` | 带标签的加载动画 |
+| | `spinner(frames...)` | 自定义帧动画（如 Braille 字符） |
+| **工具** | `handleTextInputKey(state, event)` | 文本输入按键处理工具方法 |
 | | `barChart(values...)` | 柱状图 |
 | | `chart()` | 折线图 |
 | | `canvas(bounds...)` | 画布 |
 | **其他** | `calendar(date)` | 日历 |
 | | `scrollbar(state)` | 滚动条 |
-| | `spinner()` | 加载动画 |
-| | `widget(widget)` | 包装底层 Widget |
-| | `lazy(supplier)` | 延迟求值元素 |
 
 所有容器类元素都支持 `Supplier<Element>` 延迟加载重载：
 
 ```java
 panel("Counter", () -> text("Count: " + count))
 row(() -> text("Dynamic content"))
+```
+
+`handleTextInputKey(state, event)` 是 `Toolkit` 提供的文本输入按键处理工具方法，
+处理字符输入、退格、删除、左右箭头、Home/End 等常见按键：
+
+```java
+// 在自定义元素的 handleKeyEvent 中使用
+if (Toolkit.handleTextInputKey(inputState, event)) {
+    return EventResult.HANDLED;
+}
 ```
 
 ### 10.4 Fluent API 链式调用
@@ -543,6 +557,24 @@ text("Underlined").underlined()
 text("Reversed").reversed()
 text("Crossed").crossedOut()
 ```
+#### 直接设置样式
+
+```java
+element.style(Style.EMPTY.bold().fg(Color.CYAN))  // 直接设置 Style 对象
+```
+
+#### 子组件样式解析（CSS 主题化）
+
+```java
+// 在自定义元素的 renderContent() 中，为子组件解析样式
+// 优先级：显式设置 > CSS 子组件样式 > 默认样式
+Style cursorStyle = resolveEffectiveStyle(context, "cursor", explicitCursorStyle, DEFAULT_CURSOR_STYLE);
+Style itemStyle = resolveEffectiveStyle(context, "item", PseudoClassState.ofSelected(), highlightStyle, DEFAULT_HIGHLIGHT_STYLE);
+```
+
+支持 CSS 主题化子组件（如 `cursor`、`placeholder`、`thumb`、`item` 等），
+可通过 CSS 选择器 `TextInputElement-cursor { text-style: reversed; }` 定制。
+
 
 #### 布局约束
 
@@ -573,8 +605,12 @@ element.focusable(false)     // 取消可聚焦
 element.addClass("highlight", "bordered")  // 添加 CSS 类
 element.removeClass("old-class")           // 移除 CSS 类
 element.toggleClass("active", isActive)    // 条件切换
-element.attr("data-type", "info")          // 设置属性选择器
+element.attr("data-type", "info")          // 设置属性选择器（CSS: Panel[data-type="info"]）
+element.cssParent(parentElement)            // 设置 CSS 父元素（用于祖先匹配）
 ```
+
+`cssParent()` 用于在元素树外指定 CSS 继承关系，`attr()` 配合 CSS 属性选择器使用。
+
 
 ### 10.5 事件处理器注册
 
@@ -628,14 +664,20 @@ element.onMouseEvent(event -> {
 element.onAction(handler);  // 同时注册按键和鼠标的 ActionHandler
 ```
 
-#### on(trigger, handler) — 触发器绑定
+`onAction()` 是便捷方法，内部同时调用 `onKeyEvent()` 和 `onMouseEvent()`，
+将事件分发给同一个 `ActionHandler`。适合使用绑定系统的场景。
+
+#### on(trigger, handler) — 触发器直接绑定
 
 ```java
 element.on(MouseTrigger.click(), e -> color("RED"))
        .on(KeyTrigger.ch('r'), e -> color("RED"));
 ```
 
-支持 `KeyTrigger` 和 `MouseTrigger`，多个 `on()` 调用会链式组合。
+`on()` 方法将输入触发器直接绑定到处理器，绕过绑定系统。
+- 支持 `KeyTrigger` 和 `MouseTrigger`
+- 多个 `on()` 调用会链式组合（后注册的优先级更高）
+- 注意：调用 `onKeyEvent()` 或 `onMouseEvent()` 后会替换链式处理器
 
 #### onDrag — 拖拽处理
 
@@ -655,6 +697,21 @@ element.draggable((deltaX, deltaY) -> {
 ```
 
 ### 10.6 全局事件处理器
+#### spinner — 自定义帧动画
+
+```java
+// 使用 Braille 字符创建自定义帧动画
+spinner("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧").cyan()
+
+// 带标签的加载动画
+spinner("Loading...").green()
+
+// 指定动画风格
+spinner(SpinnerStyle.DOTS).bold()
+```
+
+`spinner()` 需要启用 Tick 事件（`TuiConfig.withAnimation()`）才能驱动帧切换。
+
 
 通过 `EventRouter` 注册全局处理器：
 
@@ -778,3 +835,198 @@ public class CounterApp extends ToolkitApp {
 6. **线程安全**：定时任务中修改 UI 需通过 `runOnRenderThread()`
 7. **容错渲染**：Builder 启用后，单个元素渲染失败不会导致整个界面崩溃
 8. **CSS 集成**：通过 `styleEngine()` 和 `addClass()` 支持 CSS 样式
+9. **触发器绑定**：`on(trigger, handler)` 直接绑定输入触发器，绕过绑定系统
+10. **子组件主题化**：`resolveEffectiveStyle()` 支持 CSS 主题化子组件（cursor、placeholder 等）
+11. **自定义动画**：`spinner(frames...)` 支持 Braille 字符等自定义帧动画
+12. **Widget 包装**：`widget(widget)` 将底层 Widget 包装为 DSL 元素，支持样式和布局
+
+### 10.12 自定义 Element 创建
+
+对于复杂 UI 组件（如聊天面板、信息面板），可以继承 `StyledElement<T>` 创建自定义 Element：
+
+```java
+import dev.tamboui.toolkit.element.StyledElement;
+import dev.tamboui.toolkit.render.RenderContext;
+
+public class ChatPanelElement extends StyledElement<ChatPanelElement> {
+    private final AppState appState;
+    private final TuiTheme theme;
+
+    public ChatPanelElement(AppState appState, TuiTheme theme) {
+        super();
+        this.appState = appState;
+        this.theme = theme;
+    }
+
+    @Override
+    protected void renderContent(RenderContext context) {
+        // 使用 context.canvas() 或 context.buffer() 进行渲染
+        // 或组合子 Element
+    }
+}
+```
+
+**关键方法**：
+- `renderContent(RenderContext)` — 自定义渲染逻辑
+- `calculateContentSize(Size)` — 计算内容尺寸
+- `handleKeyEvent(KeyEvent, boolean)` — 按键处理
+- `handleMouseEvent(MouseEvent)` — 鼠标处理
+
+### 10.13 状态管理与渲染刷新
+
+DSL 模式下的状态管理有两种策略：
+
+#### 策略一：Lambda 闭包捕获（简单场景）
+
+```java
+int[] count = {0};
+runner.run(() ->
+    text("Count: " + count[0])
+        .onKeyEvent(event -> {
+            if (event.isUp()) { count[0]++; return EventResult.HANDLED; }
+            return EventResult.UNHANDLED;
+        })
+);
+```
+
+> 注意：修改状态后需要触发重绘。`onKeyEvent` 返回 `HANDLED` 会自动触发重绘。
+
+#### 策略二：外部状态对象（复杂场景）
+
+```java
+AppState state = new AppState();
+
+// 定时刷新
+runner.scheduleRepeating(() -> {
+    runner.runOnRenderThread(() -> {
+        // 修改 state
+        forceRender();
+    });
+}, Duration.ofMillis(100));
+
+// 强制重绘
+private void forceRender() {
+    // ToolkitRunner 自动处理重绘
+}
+```
+
+### 10.14 对话框（dialog）使用
+
+`dialog()` 元素自动居中并带有遮罩层，适合弹框场景：
+
+```java
+dialog("选择模型",
+    column(
+        list(items).id("model-list").focusable(),
+        text("↑↓ 选择  Enter 确认  Esc 关闭").dim()
+    )
+)
+.id("model-dialog")
+.onKeyEvent(event -> {
+    if (event.isCancel()) {
+        state.closeModelPopup();
+        return EventResult.HANDLED;
+    }
+    return EventResult.UNHANDLED;
+});
+```
+
+`dialog()` 特性：
+- 自动居中于终端
+- 自带遮罩层（半透明背景）
+- 支持关闭按钮
+- 可嵌套任意子元素
+
+### 10.15 与现有 Widget 集成
+
+通过 `widget(widget)` 方法可以将现有 Widget 包装为 DSL 元素：
+
+```java
+widget(new ChatPanelWidget(appState, theme, isFocused))
+    .id("chat-panel")
+    .fill()
+    .onKeyEvent(event -> {
+        // 添加 DSL 层的事件处理
+        return EventResult.UNHANDLED;
+    });
+```
+
+`widget()` 支持：
+- 样式链式调用（`.bold()`, `.fg()` 等）
+- 布局约束（`.fill()`, `.percent()` 等）
+- 事件处理器注册
+- 焦点管理
+
+### 10.16 布局组合模式
+
+DSL 元素树通过组合实现复杂布局：
+
+```java
+// 主布局：上下结构
+column(
+    // 上部分：左右两栏
+    row(
+        widget(chatPanel).fill(3),   // 聊天面板占 3/4
+        widget(infoPanel).fill(1)    // 信息面板占 1/4
+    ).fill(),                        // 填充剩余空间
+    // 下部分：输入面板 + 状态栏
+    widget(inputPanel).length(5),    // 固定 5 行
+    widget(statusBar).length(1)      // 固定 1 行
+)
+.fill()                              // 填充整个终端
+```
+
+**布局容器**：
+| 容器 | 方向 | 子元素尺寸 |
+|---|---|---|
+| `row()` | 水平 | fill/percent/length |
+| `column()` | 垂直 | fill/percent/length |
+| `grid()` | 网格 | CSS Grid 规则 |
+| `stack()` | 层叠 | 画家算法重叠 |
+| `dock()` | 停靠 | 上下左右中 |
+
+### 10.17 重构迁移指南
+
+从 Widget 模式迁移到 DSL 模式的步骤：
+
+1. **Widget → Element**：将 `implements Widget` 改为 `extends StyledElement<T>`
+2. **render(Rect, Buffer) → renderContent(RenderContext)**：迁移渲染逻辑
+3. **handleKeyEvent → onKeyEvent lambda**：将按键处理迁移到 lambda 注册
+4. **手动焦点管理 → 框架自动管理**：移除 `focusPanel`、`setFocused` 等手动逻辑
+5. **弹框手动计算 → dialog()**：使用 `dialog()` 替代手动计算位置
+6. **TfxIntegration → 移除**：DSL 模式不依赖 TfxIntegration
+
+```java
+// 迁移前（Widget 模式）
+public class MyWidget implements Widget {
+    @Override
+    public void render(Rect area, Buffer buffer) {
+        // 命令式渲染
+    }
+}
+
+// 迁移后（DSL 模式）
+public class MyElement extends StyledElement<MyElement> {
+    @Override
+    protected void renderContent(RenderContext context) {
+        // 声明式渲染
+    }
+}
+```
+
+### 10.18 常见问题
+
+**Q: DSL 模式下如何强制重绘？**
+A: 事件处理器返回 `EventResult.HANDLED` 会自动触发重绘。外部状态变更可通过 `runner.runOnRenderThread()` 触发。
+
+**Q: 如何获取终端尺寸？**
+A: 在 `renderContent()` 中通过 `context.canvas().area()` 获取。
+
+**Q: 如何实现条件渲染？**
+A: 使用 `Supplier<Element>` 延迟加载，或直接在 lambda 中返回不同元素。
+
+**Q: DSL 元素如何设置焦点？**
+A: 调用 `.id("xxx").focusable()` 即可加入焦点链，框架自动管理 Tab 导航。
+
+**Q: 如何注册全局快捷键？**
+A: 通过 `runner.eventRouter().addGlobalHandler(lambda)` 注册。
