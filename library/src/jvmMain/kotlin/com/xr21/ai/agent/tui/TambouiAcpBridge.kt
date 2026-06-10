@@ -6,7 +6,7 @@ package com.xr21.ai.agent.tui
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.model.*
 import com.xr21.ai.agent.tui.AppState
-import com.xr21.ai.agent.tui.acp.AcpClientManager
+import com.xr21.ai.agent.tui.acp.*
 import com.xr21.ai.agent.tui.config.ACPConnectConfig
 import kotlinx.coroutines.*
 import com.xr21.ai.agent.tui.AppState as JavaAppState
@@ -24,6 +24,13 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var callback: TambouiTuiApp.ConnectionCallback? = null
     private var config: ACPConnectConfig = ACPConnectConfig()
+
+    init {
+        // 监听生命周期事件，转发到 Java 侧
+        acpClient.addLifecycleListener { event ->
+            onLifecycleEvent(event)
+        }
+    }
 
     override fun connect(args: Array<String>, callback: TambouiTuiApp.ConnectionCallback) {
         this.callback = callback
@@ -105,6 +112,136 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
         acpClient.disconnect()
     }
 
+    /** 设置重连策略 */
+    override fun setReconnectStrategy(strategy: Any?) {
+        if (strategy is ReconnectStrategy) {
+            acpClient.setReconnectStrategy(strategy)
+        }
+    }
+
+    /** 启动重连 */
+    override fun startReconnect() {
+        acpClient.startReconnect()
+    }
+
+    /** 停止重连 */
+    override fun stopReconnect() {
+        acpClient.stopReconnect()
+    }
+
+    /** 认证 */
+    override fun authenticate(provider: String, token: String) {
+        scope.launch {
+            val result = acpClient.authenticate(provider, token)
+            if (result.isFailure) {
+                callback?.onError("认证失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 登出 */
+    override fun logout() {
+        scope.launch {
+            acpClient.logout()
+        }
+    }
+
+    /** 关闭当前会话（不关闭连接） */
+    override fun closeSession() {
+        scope.launch {
+            acpClient.closeSession()
+        }
+    }
+
+    /** 加载已存在的会话 */
+    override fun loadSession(sessionId: String) {
+        scope.launch {
+            val result = acpClient.loadSession(sessionId)
+            if (result.isFailure) {
+                callback?.onError("加载会话失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 分支会话 */
+    override fun forkSession(sourceSessionId: String) {
+        scope.launch {
+            val result = acpClient.forkSession(sourceSessionId)
+            if (result.isFailure) {
+                callback?.onError("分支会话失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 恢复会话 */
+    override fun resumeSession(sessionId: String) {
+        scope.launch {
+            val result = acpClient.resumeSession(sessionId)
+            if (result.isFailure) {
+                callback?.onError("恢复会话失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 切换活动会话 */
+    override fun switchSession(sessionId: String) {
+        scope.launch {
+            val result = acpClient.switchSession(sessionId)
+            if (result.isFailure) {
+                callback?.onError("切换会话失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 按 ID 关闭指定会话 */
+    override fun closeSessionById(sessionId: String) {
+        scope.launch {
+            val result = acpClient.closeSessionById(sessionId)
+            if (result.isFailure) {
+                callback?.onError("关闭会话失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 获取活跃会话 ID 列表 */
+    override fun getActiveSessionIds(): Array<String> {
+        return acpClient.activeSessionIds.toTypedArray()
+    }
+
+    /** 获取当前活动会话 ID */
+    override fun getActiveSessionId(): String? {
+        return acpClient.activeSessionId
+    }
+
+    /** 销毁客户端 */
+    override fun destroy() {
+        acpClient.destroy()
+    }
+
+    /** 获取当前生命周期状态 */
+    val lifecycleState: AcpLifecycleState get() = acpClient.lifecycleState.value
+
+    private fun onLifecycleEvent(event: AcpLifecycleEvent) {
+        when (event) {
+            is AcpLifecycleEvent.Disconnected -> {
+                callback?.onDisconnected()
+            }
+            is AcpLifecycleEvent.ErrorOccurred -> {
+                callback?.onError(event.error.message ?: "生命周期错误")
+            }
+            is AcpLifecycleEvent.Reconnecting -> {
+                callback?.onReconnecting(event.attempt, event.delayMs)
+            }
+            is AcpLifecycleEvent.Connected -> {
+                // 如果是重连成功（状态从 DISCONNECTED 变为 SESSION_ACTIVE）
+                if (acpClient.lifecycleState.value == AcpLifecycleState.SESSION_ACTIVE) {
+                    callback?.onReconnected()
+                }
+            }
+            else -> {}
+        }
+    }
+
     override fun setModel(modelId: String) {
         scope.launch {
             acpClient.setModel(ModelId(modelId))
@@ -132,6 +269,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
     private fun handleEvent(event: Event) {
         val javaEvent = when (event) {
             is Event.SessionUpdateEvent -> AcpEventAdapter(event.update)
+            is Event.PromptResponseEvent -> PromptResponseEventAdapter(event.response)
             else -> null
         }
         javaEvent?.let { callback?.onEvent(it) }
@@ -270,5 +408,17 @@ class AcpEventAdapter(private val update: SessionUpdate) : TambouiTuiApp.AcpEven
         return content.firstOrNull()?.let { c ->
             (c as? ToolCallContent.Content)?.let { (it.content as? ContentBlock.Text)?.text }
         } ?: ""
+    }
+}
+
+/**
+ * PromptResponse 事件适配器，将 ACP PromptResponse 转换为 Java 侧的 AppState 更新
+ */
+class PromptResponseEventAdapter(private val response: com.agentclientprotocol.model.PromptResponse) : TambouiTuiApp.AcpEvent {
+    override fun apply(state: JavaAppState) {
+        state.setStopReason(response.stopReason.name)
+        response.usage?.let { usage ->
+            state.setTotalTokens(usage.totalTokens?.toLong() ?: 0L)
+        }
     }
 }

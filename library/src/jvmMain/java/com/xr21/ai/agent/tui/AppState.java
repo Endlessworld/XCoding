@@ -82,7 +82,12 @@ public class AppState {
     public void setTotalTokens(long totalTokens) {
         this.tokenUsage.totalTokens = totalTokens;
     }
+
+    public void setStopReason(String stopReason) {
+        this.stopReason = stopReason;
+    }
     // ACP model/mode/config state
+    public String stopReason = "";
     public String currentModelId = "";
     public String currentModeId = "";
 

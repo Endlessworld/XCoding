@@ -32,10 +32,10 @@ import com.xr21.ai.agent.tui.config.ACPConnectConfig
 import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.JsonElement
 import java.io.BufferedReader
+import kotlin.coroutines.CoroutineContext
 
 /**
  * ACP 客户端管理器
@@ -44,36 +44,112 @@ import java.io.BufferedReader
  * 1. WebSocket 模式（默认）：通过 WebSocket 连接到 ACP Agent 服务
  *    - 如果未配置外部 ws-url，自动在后台启动内部 WebSocket 服务器
  * 2. Stdio 模式（兼容）：通过 --command 参数启动 Agent 子进程
+ *
+ * ## 生命周期
+ *
+ * 状态转换：CREATED → CONNECTING → INITIALIZED → SESSION_ACTIVE → DISCONNECTED → DESTROYED
+ *
+ * 通过 [lifecycleState] StateFlow 和 [lifecycleEvents] SharedFlow 监听生命周期变化。
  */
 class AcpClientManager(private val appState: AppState) {
 
-    // WebSocket 模式状态
+    // ========== 生命周期字段 ==========
+
+    private val _lifecycleState = MutableStateFlow(AcpLifecycleState.CREATED)
+    private val _lifecycleEvents = MutableSharedFlow<AcpLifecycleEvent>(extraBufferCapacity = 16)
+    private val _listeners = mutableListOf<AcpLifecycleListener>()
+    private var reconnectStrategy: ReconnectStrategy = ReconnectStrategy.NoReconnect
+    private var reconnectJob: Job? = null
+    private var configSnapshot: ACPConnectConfig? = null
+
+    /** 当前生命周期状态（StateFlow，可收集） */
+    val lifecycleState: StateFlow<AcpLifecycleState> = _lifecycleState.asStateFlow()
+
+    /** 生命周期事件流（SharedFlow，不重复消费） */
+    val lifecycleEvents: SharedFlow<AcpLifecycleEvent> = _lifecycleEvents.asSharedFlow()
+
+    // ========== WebSocket 模式状态 ==========
     private var httpClient: HttpClient? = null
     private var protocol: Protocol? = null
     private var acpClient: Client? = null
     private var clientSession: ClientSession? = null
     private var serverThread: Thread? = null
 
-    // Stdio 模式状态（向后兼容）
+    // ========== 多会话管理 ==========
+    private val sessions = mutableMapOf<String, ClientSession>()
+    private var _activeSessionId: String? = null
+
+    // ========== Stdio 模式状态（向后兼容） ==========
     private var process: Process? = null
     private var isConnected = false
     private var reader: BufferedReader? = null
     private var eventCollectorJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    /** 当前会话 ID */
+    /** 当前活动会话 ID */
     var sessionId: String? = null
         private set
 
+    /** 当前活动会话 ID（与 sessionId 同步） */
+    val activeSessionId: String?
+        get() = _activeSessionId ?: sessionId
+
+    /** 所有活跃会话的 ID 列表 */
+    val activeSessionIds: List<String>
+        get() = sessions.keys.toList()
+
+    /** 活跃会话数量 */
+    val sessionCount: Int
+        get() = sessions.size
+
     private var eventHandler: ((Event) -> Unit)? = null
+
+    // ========== 生命周期管理 ==========
+
+    /** 设置重连策略 */
+    fun setReconnectStrategy(strategy: ReconnectStrategy) {
+        reconnectStrategy = strategy
+    }
+
+    /** 添加生命周期监听器 */
+    fun addLifecycleListener(listener: AcpLifecycleListener) {
+        _listeners.add(listener)
+    }
+
+    /** 移除生命周期监听器 */
+    fun removeLifecycleListener(listener: AcpLifecycleListener) {
+        _listeners.remove(listener)
+    }
+
+    private fun transitionTo(newState: AcpLifecycleState) {
+        val oldState = _lifecycleState.value
+        if (oldState == newState) return
+        _lifecycleState.value = newState
+        val event = AcpLifecycleEvent.StateChanged(oldState, newState)
+        _lifecycleEvents.tryEmit(event)
+        _listeners.forEach { it.onLifecycleEvent(event) }
+    }
+
+    private fun emitEvent(event: AcpLifecycleEvent) {
+        _lifecycleEvents.tryEmit(event)
+        _listeners.forEach { it.onLifecycleEvent(event) }
+    }
+
+    // ========== 连接管理 ==========
 
     /** 建立 ACP 连接（WebSocket 优先，回退到 Stdio） */
     suspend fun connect(config: ACPConnectConfig): Result<Unit> {
-        return if (config.agentCommand.isNotEmpty()) {
+        configSnapshot = config
+        transitionTo(AcpLifecycleState.CONNECTING)
+        val result = if (config.agentCommand.isNotEmpty()) {
             connectStdio(config.agentCommand)
         } else {
             connectWebSocket(config)
         }
+        if (result.isFailure) {
+            transitionTo(AcpLifecycleState.DISCONNECTED)
+        }
+        return result
     }
 
     /** WebSocket 模式连接 */
@@ -103,6 +179,12 @@ class AcpClientManager(private val appState: AppState) {
             val agentInfo = acpClient.initialize(
                 ClientInfo(implementation = Implementation("XAgent TUI", "0.1.0", "XAgent TUI"))
             )
+            transitionTo(AcpLifecycleState.INITIALIZED)
+            emitEvent(AcpLifecycleEvent.Connected(
+                agentName = agentInfo.implementation?.name ?: "Unknown",
+                agentVersion = agentInfo.implementation?.version ?: ""
+            ))
+
             appState.agentName = agentInfo.implementation?.name ?: "Unknown"
             appState.agentVersion = agentInfo.implementation?.version ?: ""
             val session = acpClient.newSession(
@@ -111,12 +193,17 @@ class AcpClientManager(private val appState: AppState) {
 
             clientSession = session
             sessionId = session.sessionId.toString()
+            sessions[sessionId!!] = session
+            _activeSessionId = sessionId
+            transitionTo(AcpLifecycleState.SESSION_ACTIVE)
+            emitEvent(AcpLifecycleEvent.SessionCreated(sessionId!!))
 
             appState.connectionState = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
             appState.connectionState = ConnectionState.DISCONNECTED_ERROR
             appState.errorMessage = "WebSocket 连接失败: ${e.message}"
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
             Result.failure(e)
         }
     }
@@ -137,7 +224,6 @@ class AcpClientManager(private val appState: AppState) {
             try {
                 java.net.ServerSocket(port).use { return port }
             } catch (_: java.io.IOException) {
-                // 端口已被占用，尝试下一个
             }
         }
         throw IllegalStateException("在范围 $startPort..${startPort + 100} 内未找到可用端口")
@@ -156,11 +242,13 @@ class AcpClientManager(private val appState: AppState) {
                 disconnect()
                 return handshakeResult
             }
+            transitionTo(AcpLifecycleState.SESSION_ACTIVE)
             appState.connectionState = ConnectionState.CONNECTED
             Result.success(Unit)
         } catch (e: Exception) {
             appState.connectionState = ConnectionState.DISCONNECTED_ERROR
             appState.errorMessage = "连接失败: ${e.message}"
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
             Result.failure(e)
         }
     }
@@ -186,19 +274,218 @@ class AcpClientManager(private val appState: AppState) {
         }
     }
 
+    // ========== 认证管理 ==========
+
+    /**
+     * 向 Agent 发送认证信息。
+     * 仅在 WebSocket 模式下支持。
+     */
+    suspend fun authenticate(provider: String, token: String): Result<Unit> {
+        return try {
+            val session = clientSession
+                ?: return Result.failure(Exception("会话未创建，无法认证"))
+            session.setConfigOption(
+                SessionConfigId("auth"),
+                SessionConfigOptionValue.StringValue("$provider:$token")
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 登出当前会话。
+     */
+    suspend fun logout(): Result<Unit> {
+        return try {
+            closeSession()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    // ========== 会话管理 ==========
+
+    /**
+     * 关闭当前会话（不关闭连接）。
+     * 关闭后可通过 [connect] 重新创建会话。
+     */
+    suspend fun closeSession(): Result<Unit> {
+        return try {
+            val sid = _activeSessionId ?: sessionId
+            if (sid != null) {
+                sessions.remove(sid)?.close()
+            }
+            clientSession?.let { session ->
+                if (session.sessionId.toString() != sid) {
+                    session.close()
+                }
+            }
+            clientSession = null
+            sessionId = null
+            _activeSessionId = null
+            emitEvent(AcpLifecycleEvent.SessionClosed)
+            if (_lifecycleState.value == AcpLifecycleState.SESSION_ACTIVE) {
+                transitionTo(AcpLifecycleState.INITIALIZED)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    // ========== 多会话管理 ==========
+
+    /**
+     * 加载已存在的会话。
+     * 仅在 WebSocket 模式下支持。
+     */
+    suspend fun loadSession(sessionId: String): Result<Unit> {
+        return try {
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法加载会话"))
+            val sid = SessionId(sessionId)
+            val session = client.loadSession(
+                sid,
+                SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
+            ) { _, _ -> TuiClientOperations() }
+            val sidStr = session.sessionId.toString()
+            sessions[sidStr] = session
+            _activeSessionId = sidStr
+            this.sessionId = sidStr
+            clientSession = session
+            transitionTo(AcpLifecycleState.SESSION_ACTIVE)
+            emitEvent(AcpLifecycleEvent.SessionCreated(sidStr))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 分支（fork）已有会话，创建基于该会话上下文的新会话。
+     * 仅在 WebSocket 模式下支持。
+     */
+    suspend fun forkSession(sourceSessionId: String): Result<Unit> {
+        return try {
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法分支会话"))
+            val sourceSid = SessionId(sourceSessionId)
+            val session = client.forkSession(
+                sourceSid,
+                SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
+            ) { _, _ -> TuiClientOperations() }
+            val sidStr = session.sessionId.toString()
+            sessions[sidStr] = session
+            _activeSessionId = sidStr
+            this.sessionId = sidStr
+            clientSession = session
+            transitionTo(AcpLifecycleState.SESSION_ACTIVE)
+            emitEvent(AcpLifecycleEvent.SessionCreated(sidStr))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 恢复已存在的会话（不重放消息历史）。
+     * 仅在 WebSocket 模式下支持。
+     */
+    suspend fun resumeSession(sessionId: String): Result<Unit> {
+        return try {
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法恢复会话"))
+            val sid = SessionId(sessionId)
+            val session = client.resumeSession(
+                sid,
+                SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
+            ) { _, _ -> TuiClientOperations() }
+            val sidStr = session.sessionId.toString()
+            sessions[sidStr] = session
+            _activeSessionId = sidStr
+            this.sessionId = sidStr
+            clientSession = session
+            transitionTo(AcpLifecycleState.SESSION_ACTIVE)
+            emitEvent(AcpLifecycleEvent.SessionCreated(sidStr))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 列出所有会话。
+     * 仅在 WebSocket 模式下支持。
+     */
+    val sessionList: List<String>
+        get() = sessions.keys.toList()
+
+    /**
+     * 切换当前活动会话。
+     */
+    suspend fun switchSession(sessionId: String): Result<Unit> {
+        val session = sessions[sessionId]
+            ?: return Result.failure(Exception("会话 $sessionId 不存在"))
+        clientSession = session
+        _activeSessionId = sessionId
+        this.sessionId = sessionId
+        emitEvent(AcpLifecycleEvent.SessionCreated(sessionId))
+        return Result.success(Unit)
+    }
+
+    /**
+     * 按 ID 关闭指定会话。
+     */
+    suspend fun closeSessionById(sessionId: String): Result<Unit> {
+        return try {
+            val session = sessions.remove(sessionId)
+                ?: return Result.failure(Exception("会话 $sessionId 不存在"))
+            session.close()
+            if (_activeSessionId == sessionId) {
+                _activeSessionId = sessions.keys.firstOrNull()
+                this.sessionId = _activeSessionId
+                clientSession = sessions.values.firstOrNull()
+                if (_activeSessionId == null) {
+                    transitionTo(AcpLifecycleState.INITIALIZED)
+                }
+            }
+            emitEvent(AcpLifecycleEvent.SessionClosed)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    // ========== 消息发送 ==========
+
     /** 发送 ACP prompt 消息 */
     suspend fun sendPrompt(content: String): Result<Unit> {
         return try {
             val session = clientSession
             if (session != null) {
-                // WebSocket 模式：收集事件流
                 val handler = eventHandler ?: return Result.failure(Exception("事件处理器未设置"))
                 session.prompt(listOf(ContentBlock.Text(content))).collect { event ->
+                    // 处理 PromptResponseEvent，发出生命周期事件
+                    if (event is Event.PromptResponseEvent) {
+                        emitEvent(AcpLifecycleEvent.PromptCompleted(
+                            stopReason = event.response.stopReason.name,
+                            usage = event.response.usage?.toString() ?: ""
+                        ))
+                    }
                     handler(event)
                 }
                 Result.success(Unit)
             } else if (isConnected && process != null) {
-                // Stdio 模式
                 val sid = sessionId ?: return Result.failure(Exception("会话未创建"))
                 val promptRequest = buildJsonRpcRequest(
                     "session/prompt", mapOf(
@@ -259,6 +546,8 @@ class AcpClientManager(private val appState: AppState) {
         }
     }
 
+    // ========== 模型/模式/配置管理 ==========
+
     /** 获取可用模型列表（WebSocket模式） */
     val availableModels: List<ModelInfo>?
         get() = clientSession?.availableModels
@@ -309,23 +598,36 @@ class AcpClientManager(private val appState: AppState) {
         }
     }
 
+    // ========== 断开连接 ==========
+
     /** 断开连接 */
     fun disconnect() {
+        reconnectJob?.cancel()
+        reconnectJob = null
         isConnected = false
         eventCollectorJob?.cancel()
         eventCollectorJob = null
 
         // WebSocket 模式清理
+        runBlocking {
+            try {
+                clientSession?.close()
+            } catch (_: Exception) {}
+        }
         try {
             protocol?.close()
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
         try {
             httpClient?.close()
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
         serverThread?.interrupt()
         serverThread = null
+        // 清理所有会话
+        sessions.values.forEach { session ->
+            try { runBlocking { session.close() } } catch (_: Exception) {}
+        }
+        sessions.clear()
+        _activeSessionId = null
         clientSession = null
         acpClient = null
         protocol = null
@@ -334,11 +636,13 @@ class AcpClientManager(private val appState: AppState) {
         // Stdio 模式清理
         try {
             process?.destroy()
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
         process = null
         reader = null
         sessionId = null
+
+        transitionTo(AcpLifecycleState.DISCONNECTED)
+        emitEvent(AcpLifecycleEvent.Disconnected("客户端主动断开"))
         appState.connectionState = ConnectionState.DISCONNECTED
     }
 
@@ -356,9 +660,66 @@ class AcpClientManager(private val appState: AppState) {
     /** 检查是否已连接 */
     val isActive: Boolean get() = (clientSession != null) || (isConnected && process?.isAlive == true)
 
+    // ========== 重连机制 ==========
+
+    /**
+     * 启动自动重连。
+     * 仅在当前状态为 DISCONNECTED 且重连策略不是 NoReconnect 时生效。
+     */
+    fun startReconnect() {
+        if (reconnectStrategy is ReconnectStrategy.NoReconnect) return
+        if (_lifecycleState.value != AcpLifecycleState.DISCONNECTED) return
+        val config = configSnapshot ?: return
+
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            var attempt = 0
+            while (isActive) {
+                attempt++
+                val delayMs = when (val strategy = reconnectStrategy) {
+                    is ReconnectStrategy.FixedInterval -> strategy.intervalMs
+                    is ReconnectStrategy.ExponentialBackoff -> {
+                        val delay = (strategy.initialIntervalMs *
+                                Math.pow(strategy.multiplier, (attempt - 1).toDouble()))
+                            .toLong()
+                        minOf(delay, strategy.maxIntervalMs)
+                    }
+                    is ReconnectStrategy.Custom -> strategy.strategy(attempt)
+                    is ReconnectStrategy.NoReconnect -> return@launch
+                }
+                emitEvent(AcpLifecycleEvent.Reconnecting(attempt, delayMs))
+                delay(delayMs)
+                val result = connect(config)
+                if (result.isSuccess) return@launch
+            }
+        }
+    }
+
+    /**
+     * 停止自动重连。
+     */
+    fun stopReconnect() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+    }
+
+    // ========== 销毁 ==========
+
+    /**
+     * 销毁客户端，释放所有资源。
+     * 调用后不可再使用。
+     */
+    fun destroy() {
+        stopReconnect()
+        disconnect()
+        scope.cancel()
+        transitionTo(AcpLifecycleState.DESTROYED)
+        emitEvent(AcpLifecycleEvent.Destroyed)
+    }
+
     // ========== 私有辅助方法 ==========
 
-    private fun sendRaw(json: String) {
+    fun sendRaw(json: String) {
         val writer = process?.outputStream ?: return
         writer.write((json + "\n").toByteArray())
         writer.flush()
@@ -391,12 +752,10 @@ class AcpClientManager(private val appState: AppState) {
                 }
                 "{$entries}"
             }
-
             is List<*> -> {
                 val items = obj.joinToString(",") { toJson(it) }
                 "[$items]"
             }
-
             is String -> "\"${obj.replace("\"", "\\\"")}\""
             is Number, is Boolean -> obj.toString()
             else -> "\"$obj\""

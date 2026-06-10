@@ -33,13 +33,13 @@ import dev.tamboui.tui.TuiRunner;
 import dev.tamboui.tui.bindings.BindingSets;
 import dev.tamboui.tui.error.RenderErrorHandlers;
 import dev.tamboui.tui.event.*;
+import jakarta.annotation.Nullable;
 import lombok.Getter;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.ScheduledExecutorService;
-
 import static dev.tamboui.tui.TuiConfig.*;
 
 /**
@@ -504,6 +504,49 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         void setMode(String modeId);
 
         void setConfigOption(String configId, String value);
+
+        /** 设置重连策略 */
+        default void setReconnectStrategy(Object strategy) {}
+
+        /** 启动重连 */
+        default void startReconnect() {}
+
+        /** 停止重连 */
+        default void stopReconnect() {}
+
+        /** 认证 */
+        default void authenticate(String provider, String token) {}
+
+        /** 登出 */
+        default void logout() {}
+
+        /** 关闭当前会话（不关闭连接） */
+        default void closeSession() {}
+
+        /** 加载已存在的会话 */
+        default void loadSession(String sessionId) {}
+
+        /** 分支（fork）已有会话 */
+        default void forkSession(String sourceSessionId) {}
+
+        /** 恢复已存在的会话 */
+        default void resumeSession(String sessionId) {}
+
+        /** 切换当前活动会话 */
+        default void switchSession(String sessionId) {}
+
+        /** 按 ID 关闭指定会话 */
+        default void closeSessionById(String sessionId) {}
+
+        /** 获取活跃会话 ID 列表 */
+        default String[] getActiveSessionIds() { return new String[0]; }
+
+        /** 获取当前活动会话 ID */
+        @Nullable
+        default String getActiveSessionId() { return null; }
+
+        /** 销毁客户端 */
+        default void destroy() {}
     }
 
     public interface ConnectionCallback {
@@ -514,6 +557,12 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         void onEvent(AcpEvent event);
 
         void onError(String message);
+
+        /** 重连中 */
+        default void onReconnecting(int attempt, long delayMs) {}
+
+        /** 重连成功 */
+        default void onReconnected() {}
     }
 
     // ========== 静态入口 ==========
