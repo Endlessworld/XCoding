@@ -25,6 +25,7 @@ import dev.tamboui.tfx.Fx;
 import dev.tamboui.tfx.Interpolation;
 import dev.tamboui.tfx.Motion;
 import dev.tamboui.tfx.tui.TfxIntegration;
+import dev.tamboui.toolkit.Toolkit;
 import dev.tamboui.toolkit.app.ToolkitRunner;
 import dev.tamboui.tui.EventHandler;
 import dev.tamboui.tui.Renderer;
@@ -40,6 +41,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.concurrent.ScheduledExecutorService;
+
 import static dev.tamboui.tui.TuiConfig.*;
 
 /**
@@ -53,7 +55,8 @@ public class TambouiTuiApp implements EventHandler, Renderer {
     @Getter
     public final AppState appState = new AppState();
     private final ThemeManager themeManager = new ThemeManager();
-    private final StatusBarWidget statusBar = new StatusBarWidget(appState, themeManager.currentTheme());
+    private InputPanelWidget inputPanel;
+    private StatusBarWidget statusBar;
     private final TfxIntegration tfx = new TfxIntegration();
     public AcpBridge acpBridge;
     private ScheduledExecutorService scheduler;
@@ -68,8 +71,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
     }
 
     public void start() throws Exception {
-        TuiConfig tuiConfig = new TuiConfig(
-                true,                        // rawMode
+        TuiConfig tuiConfig = new TuiConfig(true,                        // rawMode
                 true,                        // alternateScreen
                 true,                        // hideCursor
                 true,                        // mouseCapture
@@ -86,6 +88,10 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 new JLineBackend(),                          // backend (allows for lazy backend creation)
                 null                         // scheduler
         );
+
+        // 创建 Widget 实例并注册事件回调
+        this.inputPanel = createInputPanel();
+        this.statusBar = createStatusBar();
 
         try (ToolkitRunner toolkitRunner = ToolkitRunner.builder().config(tuiConfig).styleEngine(themeManager.styleEngine()).build()) {
             this.runner = toolkitRunner;
@@ -154,11 +160,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             int inputH = Math.min(5, termArea.height() / 5);
             int mainH = termArea.height() - statusH - inputH;
             Rect chatArea = new Rect(0, 0, chatW, mainH);
-            tfx.addEffect(
-                    Fx.slideIn(Motion.LEFT_TO_RIGHT, 15, 0, Color.BLACK, 2500, Interpolation.SineInOut)
-                            .withFilter(CellFilter.text()),
-                    chatArea
-            );
+            tfx.addEffect(Fx.slideIn(Motion.LEFT_TO_RIGHT, 15, 0, Color.BLACK, 2500, Interpolation.SineInOut).withFilter(CellFilter.text()), chatArea);
 
             tfx.runWith(runner.tuiRunner(), this, this);
         } finally {
@@ -179,7 +181,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
 
     private boolean handleKeyEvent(KeyEvent key) {
         // 弹框可见时的按键拦截
-        if (appState.isSessionListPopupVisible || appState.isHelpPopupVisible) {
+        if (appState.isSessionListPopupVisible || appState.isHelpPopupVisible || appState.isModelPopupVisible) {
             if (key.code() == KeyCode.ESCAPE) {
                 if (appState.isSessionListPopupVisible) {
                     appState.closeSessionListPopup();
@@ -187,8 +189,28 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 if (appState.isHelpPopupVisible) {
                     appState.closeHelpPopup();
                 }
+                if (appState.isModelPopupVisible) {
+                    appState.closeModelPopup();
+                }
                 return true;
             }
+            // 模型选择弹框特有按键
+            if (appState.isModelPopupVisible) {
+                if (key.code() == KeyCode.UP) {
+                    appState.modelSelectUp();
+                    return true;
+                } else if (key.code() == KeyCode.DOWN) {
+                    appState.modelSelectDown();
+                    return true;
+                } else if (key.code() == KeyCode.ENTER) {
+                    String modelId = appState.confirmModelSelection();
+                    if (modelId != null && acpBridge != null) {
+                        acpBridge.setModel(modelId);
+                    }
+                    return true;
+                }
+            }
+
             // 会话列表弹框特有按键
             if (appState.isSessionListPopupVisible) {
                 if (key.code() == KeyCode.UP) {
@@ -205,14 +227,12 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             return false;
         }
 
-        // 上下文敏感按键
+        // 上下文敏感按键（ChatPanel 滚动）
         if (key.code() == KeyCode.UP) {
             if (appState.focusPanel == PanelType.CENTER) appState.scrollUp();
-            else if (appState.focusPanel == PanelType.INPUT) appState.inputHistoryPrev();
             return true;
         } else if (key.code() == KeyCode.DOWN) {
             if (appState.focusPanel == PanelType.CENTER) appState.scrollDown();
-            else if (appState.focusPanel == PanelType.INPUT) appState.inputHistoryNext();
             return true;
         } else if (key.code() == KeyCode.PAGE_UP) {
             appState.scrollPageUp();
@@ -227,15 +247,14 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             appState.scrollOffset = Integer.MAX_VALUE;
             appState.autoScroll = true;
             return true;
-        } else if (key.code() == KeyCode.LEFT) {
-            if (appState.inputCursorPos > 0) appState.inputCursorPos--;
-            return true;
-        } else if (key.code() == KeyCode.RIGHT) {
-            if (appState.inputCursorPos < appState.inputBuffer.length()) appState.inputCursorPos++;
+        }
+
+        // 委托 InputPanelWidget 处理输入按键
+        if (inputPanel.handleKeyEvent(key)) {
             return true;
         }
 
-        // 快捷键
+        // 快捷键（全局）
         if (key.code() == KeyCode.CHAR && key.modifiers().ctrl()) {
             char c = Character.toLowerCase(key.string().charAt(0));
             switch (c) {
@@ -261,7 +280,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 case 'p': // Ctrl+P: 会话列表
                     appState.toggleSessionListPopup();
                     return true;
-                case 'l': // Ctrl+/: 帮助
+                case 'l': // Ctrl+L: 帮助
                     appState.toggleHelpPopup();
                     return true;
                 case 'k': // Ctrl+K: 清空对话
@@ -280,67 +299,16 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             return true;
         }
 
-        // ESC 已在弹框拦截器中处理（见上方弹框按键拦截逻辑）
-        // 此处不再重复处理
-
-        if (key.code() == KeyCode.ENTER) {
-            if (appState.focusPanel == PanelType.INPUT && !appState.inputBuffer.isBlank())  {
-                sendMessage();
-                return true;
-            }
-            return false;
-        }
-
-        if (key.code() == KeyCode.BACKSPACE) {
-            if (!appState.inputBuffer.isEmpty() && appState.inputCursorPos > 0) {
-                int pos = appState.inputCursorPos - 1;
-                appState.inputBuffer = appState.inputBuffer.substring(0, pos) + appState.inputBuffer.substring(pos + 1);
-                appState.inputCursorPos = pos;
-            }
+        // Space 在 ChatPanel 焦点时展开工具消息
+        if (key.code() == KeyCode.CHAR && " ".equals(key.string()) && appState.focusPanel == PanelType.CENTER) {
+            appState.toggleLastToolMessage();
             return true;
         }
 
-        if (key.code() == KeyCode.DELETE) {
-            if (appState.inputCursorPos < appState.inputBuffer.length()) {
-                appState.inputBuffer = appState.inputBuffer.substring(0, appState.inputCursorPos) + appState.inputBuffer.substring(appState.inputCursorPos + 1);
-            }
+        // Ctrl+H (ASCII 0x08) sent as CHAR by some terminals
+        if (key.code() == KeyCode.CHAR && key.modifiers().ctrl() && key.string().length() == 1 && key.string().charAt(0) == '\b') {
+            appState.toggleHelpPopup();
             return true;
-        }
-
-        if (key.code() == KeyCode.CHAR) {
-            String s = key.string();
-            // Enter 发送消息（某些终端将 Enter 发送为 CHAR + \r 而非 ENTER keycode）
-            if (("\n".equals(s) || "\r".equals(s)) && !key.modifiers().alt() && !key.modifiers().ctrl()) {
-                if (appState.focusPanel == PanelType.INPUT && !appState.inputBuffer.isBlank()) {
-                    sendMessage();
-                    return true;
-                }
-                return false;
-            }
-            // Ctrl+H (ASCII 0x08) sent as CHAR by some terminals
-            if (key.modifiers().ctrl() && s.length() == 1 && s.charAt(0) == '\b') {
-                appState.toggleHelpPopup();
-                return true;
-            }
-            // Alt+Enter 插入换行
-            if (key.modifiers().alt() && "\n".equals(s)) {
-                int pos = appState.inputCursorPos;
-                appState.inputBuffer = appState.inputBuffer.substring(0, pos) + "\n" + appState.inputBuffer.substring(pos);
-                appState.inputCursorPos = pos + 1;
-                return true;
-            }
-            // Space 在 ChatPanel 焦点时展开工具消息
-            if (" ".equals(s) && appState.focusPanel == PanelType.CENTER) {
-                appState.toggleLastToolMessage();
-                return true;
-            }
-            // 普通字符输入
-            if (!s.isEmpty() && !key.modifiers().ctrl() && !key.modifiers().alt()) {
-                int pos = appState.inputCursorPos;
-                appState.inputBuffer = appState.inputBuffer.substring(0, pos) + s + appState.inputBuffer.substring(pos);
-                appState.inputCursorPos = pos + s.length();
-                return true;
-            }
         }
 
         return false;
@@ -352,7 +320,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
      * <ul>
      *   <li>点击 ChatPanel 区域 → 聚焦 CENTER</li>
      *   <li>点击 InputPanel 区域 → 聚焦 INPUT</li>
-     *   <li>点击状态栏主题图标 → 切换 dark/light 主题</li>
+     *   <li>点击状态栏交互区域 → 委托 StatusBarWidget 处理</li>
      * </ul>
      */
     private boolean handleMouseEvent(MouseEvent mouse) {
@@ -379,32 +347,25 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         // 点击 InputPanel 区域 (0, mainHeight) ~ (width, mainHeight + inputHeight)
         if (mx >= 0 && mx < width && my >= mainHeight && my < mainHeight + inputHeight) {
             appState.focusPanel = PanelType.INPUT;
+            inputPanel.setFocused(true);
             return true;
         }
 
-        // 点击状态栏区域 - 右下角主题切换
+        // 点击状态栏区域 → 委托 StatusBarWidget 处理
         if (my == mainHeight + inputHeight) {
-            // 主题图标在右下角，点击切换
-            // 主题图标区域：右侧约 10 个字符宽度
-            if (mx >= width - 10) {
-                appState.toggleTheme();
-                themeManager.toggle();
-                return true;
-            }
+            return statusBar.handleMouseClick(mx, my);
         }
 
         return false;
     }
+
     private void sendMessage() {
-        String message = appState.inputBuffer.trim();
+        String message = appState.inputState.text().trim();
         if (message.isEmpty()) return;
 
         // Add TFX animation on first message load
         if (!firstMessageAnimationAdded && appState.currentSession().messages.isEmpty()) {
-            tfx.addEffect(
-                    Fx.slideIn(Motion.LEFT_TO_RIGHT, 10, 0, Color.BLACK, 1500, Interpolation.SineInOut)
-                            .withFilter(CellFilter.text())
-            );
+            tfx.addEffect(Fx.slideIn(Motion.LEFT_TO_RIGHT, 10, 0, Color.BLACK, 1500, Interpolation.SineInOut).withFilter(CellFilter.text()));
             firstMessageAnimationAdded = true;
         }
 
@@ -440,9 +401,11 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         boolean chatFocused = appState.focusPanel == PanelType.CENTER;
         boolean inputFocused = appState.focusPanel == PanelType.INPUT;
 
+        inputPanel.setFocused(inputFocused);
+
         frame.renderWidget(new ChatPanelWidget(appState, themeManager.currentTheme(), chatFocused), chatArea);
         frame.renderWidget(new InfoPanelWidget(appState, themeManager.currentTheme()), infoArea);
-        frame.renderWidget(new InputPanelWidget(appState, themeManager.currentTheme(), inputFocused), inputArea);
+        frame.renderWidget(inputPanel, inputArea);
         frame.renderWidget(statusBar, statusArea);
 
         // 弹框覆盖
@@ -452,6 +415,13 @@ public class TambouiTuiApp implements EventHandler, Renderer {
             int popupX = (width - popupW) / 2;
             int popupY = (height - popupH) / 2;
             frame.renderWidget(new SessionListPopupWidget(appState, themeManager.currentTheme()), new Rect(popupX, popupY, popupW, popupH));
+        }
+        if (appState.isModelPopupVisible) {
+            int popupW = Math.min(40, width - 4);
+            int popupH = Math.min(appState.availableModels.size() + 4, height - 4);
+            int popupX = (width - popupW) / 2;
+            int popupY = (height - popupH) / 2;
+            frame.renderWidget(new ModelSelectPopupWidget(appState, themeManager.currentTheme()), new Rect(popupX, popupY, popupW, popupH));
         }
         if (appState.isHelpPopupVisible) {
             int popupW = Math.min(50, width - 4);
@@ -470,11 +440,66 @@ public class TambouiTuiApp implements EventHandler, Renderer {
      */
     private void forceRender() {
         if (runner != null && runner.isRunning()) {
-            runner.tuiRunner().dispatch(ResizeEvent.of(
-                    runner.tuiRunner().terminal().area().width(),
-                    runner.tuiRunner().terminal().area().height()
-            ));
+            runner.tuiRunner().dispatch(ResizeEvent.of(runner.tuiRunner().terminal().area().width(), runner.tuiRunner().terminal().area().height()));
         }
+    }
+
+    // ========== Widget 工厂方法 ==========
+
+    /**
+     * 创建 InputPanelWidget 并注册事件回调。
+     * 基于 ToolkitRunner 调研最佳实践：
+     * - 应用层业务逻辑（发送消息、取消）→ 回调注册
+     * - 元素固定逻辑（字符输入、光标移动）→ 内置 handleKeyEvent
+     */
+    private InputPanelWidget createInputPanel() {
+        return new InputPanelWidget(appState, themeManager.currentTheme()).onSubmit(this::sendMessage).onCancel(() -> {
+            if (appState.isStreaming) {
+                appState.finishStreaming();
+                if (acpBridge != null) acpBridge.cancel();
+            }
+        });
+    }
+
+    /**
+     * 创建 StatusBarWidget 并注册事件回调。
+     * 基于 ToolkitRunner 调研最佳实践：
+     * - 鼠标点击区域（模型名称、主题切换）→ 回调注册
+     * - 全局快捷键 → 回调注册
+     */
+    private StatusBarWidget createStatusBar() {
+        return new StatusBarWidget(appState, themeManager.currentTheme()).onModelClick(() -> {
+            appState.toggleModelPopup();
+        }).onThemeToggle(() -> {
+            appState.toggleTheme();
+            themeManager.toggle();
+        }).onGlobalShortcut(action -> {
+            switch (action) {
+                case "help" -> appState.toggleHelpPopup();
+                case "quit" -> runner.quit();
+                case "session-list" -> appState.toggleSessionListPopup();
+                case "new-session" -> {
+                    appState.newSession();
+                    firstMessageAnimationAdded = false;
+                }
+                case "close-session" -> {
+                    appState.closeCurrentSession();
+                    firstMessageAnimationAdded = false;
+                }
+                case "clear-conversation" -> {
+                    appState.clearConversation();
+                    firstMessageAnimationAdded = false;
+                }
+                case "cancel-or-quit" -> {
+                    if (appState.isStreaming) {
+                        appState.finishStreaming();
+                        if (acpBridge != null) acpBridge.cancel();
+                    } else {
+                        runner.quit();
+                    }
+                }
+            }
+        });
     }
 
     private void cleanup() {
@@ -505,48 +530,92 @@ public class TambouiTuiApp implements EventHandler, Renderer {
 
         void setConfigOption(String configId, String value);
 
-        /** 设置重连策略 */
-        default void setReconnectStrategy(Object strategy) {}
+        /**
+         * 设置重连策略
+         */
+        default void setReconnectStrategy(Object strategy) {
+        }
 
-        /** 启动重连 */
-        default void startReconnect() {}
+        /**
+         * 启动重连
+         */
+        default void startReconnect() {
+        }
 
-        /** 停止重连 */
-        default void stopReconnect() {}
+        /**
+         * 停止重连
+         */
+        default void stopReconnect() {
+        }
 
-        /** 认证 */
-        default void authenticate(String provider, String token) {}
+        /**
+         * 认证
+         */
+        default void authenticate(String provider, String token) {
+        }
 
-        /** 登出 */
-        default void logout() {}
+        /**
+         * 登出
+         */
+        default void logout() {
+        }
 
-        /** 关闭当前会话（不关闭连接） */
-        default void closeSession() {}
+        /**
+         * 关闭当前会话（不关闭连接）
+         */
+        default void closeSession() {
+        }
 
-        /** 加载已存在的会话 */
-        default void loadSession(String sessionId) {}
+        /**
+         * 加载已存在的会话
+         */
+        default void loadSession(String sessionId) {
+        }
 
-        /** 分支（fork）已有会话 */
-        default void forkSession(String sourceSessionId) {}
+        /**
+         * 分支（fork）已有会话
+         */
+        default void forkSession(String sourceSessionId) {
+        }
 
-        /** 恢复已存在的会话 */
-        default void resumeSession(String sessionId) {}
+        /**
+         * 恢复已存在的会话
+         */
+        default void resumeSession(String sessionId) {
+        }
 
-        /** 切换当前活动会话 */
-        default void switchSession(String sessionId) {}
+        /**
+         * 切换当前活动会话
+         */
+        default void switchSession(String sessionId) {
+        }
 
-        /** 按 ID 关闭指定会话 */
-        default void closeSessionById(String sessionId) {}
+        /**
+         * 按 ID 关闭指定会话
+         */
+        default void closeSessionById(String sessionId) {
+        }
 
-        /** 获取活跃会话 ID 列表 */
-        default String[] getActiveSessionIds() { return new String[0]; }
+        /**
+         * 获取活跃会话 ID 列表
+         */
+        default String[] getActiveSessionIds() {
+            return new String[0];
+        }
 
-        /** 获取当前活动会话 ID */
+        /**
+         * 获取当前活动会话 ID
+         */
         @Nullable
-        default String getActiveSessionId() { return null; }
+        default String getActiveSessionId() {
+            return null;
+        }
 
-        /** 销毁客户端 */
-        default void destroy() {}
+        /**
+         * 销毁客户端
+         */
+        default void destroy() {
+        }
     }
 
     public interface ConnectionCallback {
@@ -558,11 +627,17 @@ public class TambouiTuiApp implements EventHandler, Renderer {
 
         void onError(String message);
 
-        /** 重连中 */
-        default void onReconnecting(int attempt, long delayMs) {}
+        /**
+         * 重连中
+         */
+        default void onReconnecting(int attempt, long delayMs) {
+        }
 
-        /** 重连成功 */
-        default void onReconnected() {}
+        /**
+         * 重连成功
+         */
+        default void onReconnected() {
+        }
     }
 
     // ========== 静态入口 ==========

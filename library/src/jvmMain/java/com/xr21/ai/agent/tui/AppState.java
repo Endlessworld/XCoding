@@ -16,6 +16,7 @@
 package com.xr21.ai.agent.tui;
 
 import com.xr21.ai.agent.tui.acp.ConnectionState;
+import dev.tamboui.widgets.input.TextAreaState;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -31,16 +32,16 @@ public class AppState {
     public final List<String> inputHistory = new ArrayList<>();
     public final List<TodoItem> todos = new ArrayList<>();
     public int currentSessionIndex = 0;
-    public String inputBuffer = "";
-    public int inputCursorPos = 0;
+    public final TextAreaState inputState = new TextAreaState();
     public int inputHistoryIndex = -1;
     public volatile int scrollOffset = 0;
     public volatile boolean autoScroll = true;
-    public int inputScrollOffset = 0;
     private static final int MAX_SESSION_NAME_LEN = 20;
     public boolean isSessionListPopupVisible = false;
     public boolean isHelpPopupVisible = false;
     public int sidebarSelectedIndex = 0;
+    public boolean isModelPopupVisible = false;
+    public int modelSelectIndex = 0;
     public ConnectionState connectionState = ConnectionState.DISCONNECTED;
     public String agentName = "ai-agent";
     public String agentVersion = "";
@@ -147,6 +148,44 @@ public class AppState {
         isSessionListPopupVisible = false;
     }
 
+    public void toggleModelPopup() {
+        isModelPopupVisible = !isModelPopupVisible;
+        if (isModelPopupVisible) {
+            modelSelectIndex = 0;
+            // 找到当前模型在列表中的位置
+            for (int i = 0; i < availableModels.size(); i++) {
+                if (availableModels.get(i).id.equals(currentModelId)) {
+                    modelSelectIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    public void closeModelPopup() {
+        isModelPopupVisible = false;
+    }
+
+    public void modelSelectUp() {
+        if (modelSelectIndex > 0) modelSelectIndex--;
+    }
+
+    public void modelSelectDown() {
+        if (modelSelectIndex < availableModels.size() - 1) modelSelectIndex++;
+    }
+
+    public String confirmModelSelection() {
+        if (modelSelectIndex >= 0 && modelSelectIndex < availableModels.size()) {
+            ModelInfo selected = availableModels.get(modelSelectIndex);
+            currentModelId = selected.id;
+            modelName = selected.name.isEmpty() ? selected.id : selected.name;
+            isModelPopupVisible = false;
+            return selected.id;
+        }
+        isModelPopupVisible = false;
+        return null;
+    }
+
     public void toggleHelpPopup() {
         isHelpPopupVisible = !isHelpPopupVisible;
     }
@@ -221,9 +260,7 @@ public class AppState {
         currentSession().messages.add(new ChatMessage(MessageRole.USER, content));
         inputHistory.add(content);
         inputHistoryIndex = inputHistory.size();
-        inputBuffer = "";
-        inputCursorPos = 0;
-        inputScrollOffset = 0;
+        inputState.clear();
         currentSession().updatedAt = LocalDateTime.now();
         isStreaming = true;
 
@@ -439,20 +476,17 @@ public class AppState {
         if (inputHistory.isEmpty()) return;
         if (inputHistoryIndex > 0) {
             inputHistoryIndex--;
-            inputBuffer = inputHistory.get(inputHistoryIndex);
-            inputCursorPos = inputBuffer.length();
+            inputState.setText(inputHistory.get(inputHistoryIndex));
         }
     }
 
     public void inputHistoryNext() {
         if (inputHistoryIndex < inputHistory.size() - 1) {
             inputHistoryIndex++;
-            inputBuffer = inputHistory.get(inputHistoryIndex);
-            inputCursorPos = inputBuffer.length();
+            inputState.setText(inputHistory.get(inputHistoryIndex));
         } else {
             inputHistoryIndex = inputHistory.size();
-            inputBuffer = "";
-            inputCursorPos = 0;
+            inputState.clear();
         }
     }
 }
