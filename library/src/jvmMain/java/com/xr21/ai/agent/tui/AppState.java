@@ -26,7 +26,7 @@ import java.util.List;
  * 应用状态
  */
 public class AppState {
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
     public final List<Session> sessions = new ArrayList<>();
     public final List<String> inputHistory = new ArrayList<>();
     public final List<TodoItem> todos = new ArrayList<>();

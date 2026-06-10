@@ -19,8 +19,17 @@ import dev.tamboui.markdown.MarkdownStyles;
 import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
- * TUI 主题系统 - Tamboui 版本
+ * TUI 主题系统 - 从 TCSS 变量文件构建的不可变主题快照。
+ *
+ * <p>TCSS 文件是单一事实源（Single Source of Truth），
+ * {@link #fromTcss(String)} 工厂方法从中解析所有颜色变量，
+ * 生成供 Widget 命令式渲染使用的 {@link TuiTheme} 对象。</p>
  */
 public class TuiTheme {
     public final Color borderNormal;
@@ -94,141 +103,143 @@ public class TuiTheme {
         this.markdownStyles = markdownStyles;
     }
 
-    public static TuiTheme modernDark() {
+    // ==================== TCSS 变量解析 ====================
+
+    private static final Pattern VARIABLE_PATTERN = Pattern.compile(
+            "^\\$([\\w-]+):\\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|[a-zA-Z-]+)\\s*;\\s*$"
+    );
+
+    /**
+     * 从 TCSS 文件内容构建 {@link TuiTheme} 实例。
+     *
+     * @param tcssContent TCSS 文件文本内容
+     * @return 解析后的 TuiTheme
+     */
+    public static TuiTheme fromTcss(String tcssContent) {
+        Map<String, String> vars = parseVariables(tcssContent);
         return new TuiTheme(
-                Color.GRAY, Color.LIGHT_BLUE,
-                Color.BRIGHT_WHITE, Color.LIGHT_BLUE,
-                Color.BRIGHT_WHITE, Color.WHITE, Color.GRAY,
-                Color.LIGHT_BLUE, Color.LIGHT_GREEN, Color.LIGHT_YELLOW, Color.LIGHT_RED, Color.LIGHT_BLUE,
-                Color.LIGHT_BLUE, Color.LIGHT_GREEN, Color.LIGHT_YELLOW, Color.LIGHT_MAGENTA, Color.LIGHT_RED,
-                Color.GRAY, Color.LIGHT_GREEN, Color.LIGHT_YELLOW, Color.GRAY, Color.LIGHT_RED,
-                Color.GRAY, Color.BRIGHT_WHITE,
-                Color.LIGHT_BLUE, Color.LIGHT_GREEN,
-                Color.LIGHT_BLUE, Color.GRAY, darkMarkdownStyles()
+                color(vars, "border-normal"), color(vars, "border-focused"),
+                color(vars, "panel-title"), color(vars, "panel-title-focused"),
+                color(vars, "fg-primary"), color(vars, "fg-secondary"), color(vars, "fg-muted"),
+                color(vars, "accent"), color(vars, "success"), color(vars, "warning"),
+                color(vars, "error"), color(vars, "info"),
+                color(vars, "user-msg"), color(vars, "assistant-msg"),
+                color(vars, "system-msg"), color(vars, "tool-msg"), color(vars, "error-msg"),
+                color(vars, "status-text"), color(vars, "status-connected"),
+                color(vars, "status-connecting"), color(vars, "status-disconnected"), color(vars, "status-error"),
+                color(vars, "input-prompt"), color(vars, "input-text"),
+                color(vars, "selected-text"), color(vars, "current-indicator"),
+                color(vars, "scroll-hint"), color(vars, "key-hint"),
+                buildMarkdownStyles(vars)
         );
     }
 
     /**
-     * Markdown 样式配置。
-     * <p>
-     * - H1: 大号橙色标题
-     * - H2: 橙色标题
-     * - H3: 深橙色标题
-     * - H4-H6: 灰色标题
-     * - 行内代码: 橙红底色 + 深色文字
-     * - 代码块: 灰底 + 等宽风格
-     * - 引用块: 绿色左侧竖线 + 绿色调文字
-     * - 链接: 蓝色 + 下划线
-     * - 列表标记: 绿色
-     * - 加粗: 亮白粗体
-     * - 删除线: 灰色
+     * 解析 TCSS 变量定义，返回变量名→值的映射。
+     * 只解析 {@code $name: value;} 格式的行。
      */
-    private static MarkdownStyles darkMarkdownStyles() {
-        return MarkdownStyles.builder()
-                // 标题：CSDN 橙色调
-                .heading(1, Style.EMPTY.bold().fg(Color.rgb(196, 86, 0)))
-                .heading(2, Style.EMPTY.bold().fg(Color.rgb(210, 100, 0)))
-                .heading(3, Style.EMPTY.bold().fg(Color.rgb(180, 90, 20)))
-                .heading(4, Style.EMPTY.bold().fg(Color.GRAY))
-                .heading(5, Style.EMPTY.bold().fg(Color.GRAY))
-                .heading(6, Style.EMPTY.bold().fg(Color.GRAY))
-                // 加粗：亮白色
-                .strong(Style.EMPTY.bold().fg(Color.BRIGHT_WHITE))
-                // 斜体：保持默认 italic
-                .emphasis(Style.EMPTY.italic().fg(Color.WHITE))
-                // 删除线：灰色
-                .strikethrough(Style.EMPTY.crossedOut().fg(Color.GRAY))
-                // 行内代码：CSDN 橙红底色风格
-                .inlineCode(Style.EMPTY.fg(Color.LIGHT_YELLOW).bg(Color.rgb(255, 240, 240)))
-                // 代码块：灰底
-                .codeBlock(Style.EMPTY.fg(Color.rgb(80, 80, 80)).bg(Color.rgb(245, 245, 245)))
-                // 链接：蓝色 + 下划线
-                .link(Style.EMPTY.fg(Color.LIGHT_BLUE).underlined())
-                // 引用块：CSDN 绿色调
-                .blockquote(Style.EMPTY.fg(Color.rgb(70, 150, 70)).dim())
-                .blockquotePrefix("\u2502")
-                // 列表标记：绿色
-                .listMarker(Style.EMPTY.fg(Color.rgb(70, 150, 70)))
-                // HTML：灰色 dim
-                .html(Style.EMPTY.dim().fg(Color.GRAY))
-                // 水平分割线：灰色
-                .horizontalRule(Style.EMPTY.fg(Color.DARK_GRAY))
-                // 任务列表
-                .taskChecked(Style.EMPTY.fg(Color.LIGHT_GREEN))
-                .taskUnchecked(Style.EMPTY.fg(Color.GRAY))
-                .taskCheckedSymbol("[x]")
-                .taskUncheckedSymbol("[ ]")
-                .build();
+    private static Map<String, String> parseVariables(String tcss) {
+        Map<String, String> vars = new HashMap<>();
+        for (String line : tcss.split("\\r?\\n")) {
+            Matcher m = VARIABLE_PATTERN.matcher(line.trim());
+            if (m.matches()) {
+                vars.put(m.group(1), m.group(2));
+            }
+        }
+        return vars;
     }
 
     /**
-     * Markdown 样式配置。
-     * <p>
-     * - H1: 大号橙色标题
-     * - H2: 橙色标题
-     * - H3: 深橙色标题
-     * - H4-H6: 灰色标题
-     * - 行内代码: 橙红底色 + 深色文字
-     * - 代码块: 灰底 + 等宽风格
-     * - 引用块: 绿色左侧竖线 + 绿色调文字
-     * - 链接: 蓝色 + 下划线
-     * - 列表标记: 绿色
-     * - 加粗: 亮白粗体
-     * - 删除线: 灰色
+     * 从变量映射中获取颜色值，支持 hex (#xxx) 和命名颜色。
      */
-    private static MarkdownStyles lightMarkdownStyles() {
-        return MarkdownStyles.builder()
-                // 标题：CSDN 橙色调
-                .heading(1, Style.EMPTY.bold().fg(Color.rgb(196, 86, 0)))
-                .heading(2, Style.EMPTY.bold().fg(Color.rgb(210, 100, 0)))
-                .heading(3, Style.EMPTY.bold().fg(Color.rgb(180, 90, 20)))
-                .heading(4, Style.EMPTY.bold().fg(Color.GRAY))
-                .heading(5, Style.EMPTY.bold().fg(Color.GRAY))
-                .heading(6, Style.EMPTY.bold().fg(Color.GRAY))
-                // 加粗：亮白色
-                .strong(Style.EMPTY.bold().fg(Color.BRIGHT_WHITE))
-                // 斜体：保持默认 italic
-                .emphasis(Style.EMPTY.italic().fg(Color.WHITE))
-                // 删除线：灰色
-                .strikethrough(Style.EMPTY.crossedOut().fg(Color.GRAY))
-                // 行内代码：CSDN 橙红底色风格
-                .inlineCode(Style.EMPTY.fg(Color.rgb(196, 58, 58)).bg(Color.rgb(255, 240, 240)))
-                // 代码块：灰底
-                .codeBlock(Style.EMPTY.fg(Color.rgb(80, 80, 80)).bg(Color.rgb(245, 245, 245)))
-                // 链接：蓝色 + 下划线
-                .link(Style.EMPTY.fg(Color.LIGHT_BLUE).underlined())
-                // 引用块：CSDN 绿色调
-                .blockquote(Style.EMPTY.fg(Color.rgb(70, 150, 70)).dim())
-                .blockquotePrefix("\u2502")
-                // 列表标记：绿色
-                .listMarker(Style.EMPTY.fg(Color.rgb(70, 150, 70)))
-                // HTML：灰色 dim
-                .html(Style.EMPTY.dim().fg(Color.GRAY))
-                // 水平分割线：灰色
-                .horizontalRule(Style.EMPTY.fg(Color.DARK_GRAY))
-                // 任务列表
-                .taskChecked(Style.EMPTY.fg(Color.LIGHT_GREEN))
-                .taskUnchecked(Style.EMPTY.fg(Color.GRAY))
-                .taskCheckedSymbol("[x]")
-                .taskUncheckedSymbol("[ ]")
-                .build();
+    private static Color color(Map<String, String> vars, String key) {
+        String val = vars.get(key);
+        if (val == null || val.isEmpty()) {
+            return Color.GRAY; // fallback
+        }
+        val = val.trim();
+        if (val.startsWith("#")) {
+            return Color.hex(val);
+        }
+        // 命名颜色映射
+        return namedColor(val);
     }
 
     /**
-     * 现代亮色（白天）主题
-     * <p>浅色背景、深色文字，适合在亮色模式下使用。</p>
+     * 将 TCSS 命名颜色映射到 Tamboui Color 常量。
      */
-    public static TuiTheme modernLight() {
-        return new TuiTheme(
-                Color.DARK_GRAY, Color.BLUE,
-                Color.BLACK, Color.BLUE,
-                Color.BLACK, Color.DARK_GRAY, Color.GRAY,
-                Color.BLUE, Color.GREEN, Color.YELLOW, Color.RED, Color.BLUE,
-                Color.BLUE, Color.GREEN, Color.YELLOW, Color.MAGENTA, Color.RED,
-                Color.DARK_GRAY, Color.GREEN, Color.YELLOW, Color.GRAY, Color.RED,
-                Color.GRAY, Color.BLACK,
-                Color.BLUE, Color.GREEN,
-                Color.BLUE, Color.DARK_GRAY, lightMarkdownStyles()
-        );
+    private static Color namedColor(String name) {
+        return switch (name.toLowerCase()) {
+            case "black" -> Color.BLACK;
+            case "red" -> Color.RED;
+            case "green" -> Color.GREEN;
+            case "yellow" -> Color.YELLOW;
+            case "blue" -> Color.BLUE;
+            case "magenta" -> Color.MAGENTA;
+            case "cyan" -> Color.CYAN;
+            case "white" -> Color.WHITE;
+            case "gray", "grey" -> Color.GRAY;
+            case "dark-gray", "dark-grey" -> Color.DARK_GRAY;
+            case "light-red" -> Color.LIGHT_RED;
+            case "light-green" -> Color.LIGHT_GREEN;
+            case "light-yellow" -> Color.LIGHT_YELLOW;
+            case "light-blue" -> Color.LIGHT_BLUE;
+            case "light-magenta" -> Color.LIGHT_MAGENTA;
+            case "light-cyan" -> Color.LIGHT_CYAN;
+            case "bright-white" -> Color.BRIGHT_WHITE;
+            default -> Color.GRAY;
+        };
+    }
+
+    // ==================== Markdown 样式构建 ====================
+
+    /**
+     * 从 TCSS 变量构建 MarkdownStyles。
+     * Markdown 样式使用 TCSS 中定义的 accent、fg-primary 等变量，
+     * 同时保留硬编码的排版风格（加粗、斜体等）。
+     */
+    private static MarkdownStyles buildMarkdownStyles(Map<String, String> vars) {
+        Color accent = color(vars, "accent");
+        Color fgPrimary = color(vars, "fg-primary");
+        Color fgMuted = color(vars, "fg-muted");
+        Color success = color(vars, "success");
+        Color warning = color(vars, "warning");
+        Color error = color(vars, "error");
+
+        return MarkdownStyles.builder()
+                // 标题：使用 accent 色系
+                .heading(1, Style.EMPTY.bold().fg(accent))
+                .heading(2, Style.EMPTY.bold().fg(accent))
+                .heading(3, Style.EMPTY.bold().fg(accent))
+                .heading(4, Style.EMPTY.bold().fg(fgMuted))
+                .heading(5, Style.EMPTY.bold().fg(fgMuted))
+                .heading(6, Style.EMPTY.bold().fg(fgMuted))
+                // 加粗
+                .strong(Style.EMPTY.bold().fg(fgPrimary))
+                // 斜体
+                .emphasis(Style.EMPTY.italic().fg(fgPrimary))
+                // 删除线
+                .strikethrough(Style.EMPTY.crossedOut().fg(fgMuted))
+                // 行内代码
+                .inlineCode(Style.EMPTY.fg(warning).bg(Color.hex("#fff0f0")))
+                // 代码块
+                .codeBlock(Style.EMPTY.fg(fgMuted).bg(Color.hex("#f5f5f5")))
+                // 链接
+                .link(Style.EMPTY.fg(accent).underlined())
+                // 引用块
+                .blockquote(Style.EMPTY.fg(success).dim())
+                .blockquotePrefix("\u2502")
+                // 列表标记
+                .listMarker(Style.EMPTY.fg(success))
+                // HTML
+                .html(Style.EMPTY.dim().fg(fgMuted))
+                // 水平分割线
+                .horizontalRule(Style.EMPTY.fg(fgMuted))
+                // 任务列表
+                .taskChecked(Style.EMPTY.fg(success))
+                .taskUnchecked(Style.EMPTY.fg(fgMuted))
+                .taskCheckedSymbol("[x]")
+                .taskUncheckedSymbol("[ ]")
+                .build();
     }
 }

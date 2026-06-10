@@ -17,9 +17,10 @@ package com.xr21.ai.agent.tui;
 
 import dev.tamboui.css.engine.StyleEngine;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * 主题管理器 - 基于 TamboUI StyleEngine 的命名样式表机制。
@@ -72,10 +73,29 @@ public final class ThemeManager {
         activateTheme(isDark);
     }
 
+    /**
+     * 从 classpath 读取 TCSS 文件内容，通过 {@link TuiTheme#fromTcss(String)} 构建主题快照。
+     * <p>TCSS 文件是单一事实源，TuiTheme 的颜色值完全由 TCSS 变量驱动。</p>
+     */
+    private static TuiTheme buildTuiTheme(String themeName) {
+        String resourcePath = "/themes/tui-" + themeName + ".tcss";
+        try (InputStream is = ThemeManager.class.getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                throw new IOException("TCSS resource not found: " + resourcePath);
+            }
+            String content = new BufferedReader(
+                    new InputStreamReader(is, StandardCharsets.UTF_8)
+            ).lines().collect(Collectors.joining("\n"));
+            return TuiTheme.fromTcss(content);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read TCSS: " + resourcePath, e);
+        }
+    }
+
     private void activateTheme(boolean isDark) {
         String themeName = isDark ? THEME_DARK : THEME_LIGHT;
         styleEngine.setActiveStylesheet(themeName);
-        this.currentTheme = isDark ? TuiTheme.modernDark() : TuiTheme.modernLight();
+        this.currentTheme = buildTuiTheme(themeName);
         if (changeListener != null) {
             changeListener.accept(isDark);
         }

@@ -90,6 +90,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         try (ToolkitRunner toolkitRunner = ToolkitRunner.builder().config(tuiConfig).styleEngine(themeManager.styleEngine()).build()) {
             this.runner = toolkitRunner;
             // 启动状态栏定时刷新（每秒更新系统时间）
+            runner.scheduleRepeating(this::forceRender, Duration.ofMillis(100));
             runner.runOnRenderThread(() -> {
                 // 自动感知 OS 主题模式（夜间/白天）
                 Boolean isDark = null;
@@ -469,7 +470,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
      */
     private void forceRender() {
         if (runner != null && runner.isRunning()) {
-            runner.eventRouter().route(ResizeEvent.of(
+            runner.tuiRunner().dispatch(ResizeEvent.of(
                     runner.tuiRunner().terminal().area().width(),
                     runner.tuiRunner().terminal().area().height()
             ));
