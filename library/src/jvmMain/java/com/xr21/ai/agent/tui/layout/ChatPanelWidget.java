@@ -39,8 +39,6 @@ public class ChatPanelWidget implements Widget {
     public void render(Rect area, Buffer buffer) {
         BorderType borderType = isFocused ? BorderType.DOUBLE : BorderType.ROUNDED;
         Style borderStyle = Style.EMPTY.fg(isFocused ? theme.borderFocused : theme.borderNormal);
-        Style titleStyle = Style.EMPTY.fg(isFocused ? theme.panelTitleFocused : theme.panelTitle).bold();
-
         Block block = Block.builder()
                 .title(" 对话 ")
                 .borders(Borders.ALL)
@@ -58,7 +56,7 @@ public class ChatPanelWidget implements Widget {
             return;
         }
 
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm");
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm:ss");
         int availableWidth = inner.width();
         int availableHeight = inner.height();
 
@@ -104,6 +102,7 @@ public class ChatPanelWidget implements Widget {
             } else if (msg.role == MessageRole.ASSISTANT || msg.role == MessageRole.SYSTEM) {
                 MarkdownView mdView = MarkdownView.builder()
                         .source(content)
+                        .styles(theme.markdownStyles)
                         .build();
                 int mdHeight = mdView.computeHeight(availableWidth);
                 items.add(new MessageRenderItem(null, null, mdHeight, mdView));
@@ -154,7 +153,6 @@ public class ChatPanelWidget implements Widget {
                 skippedLines += item.height;
                 continue;
             }
-
             if (item.headerLine != null) {
                 buffer.setLine(inner.left(), currentY, item.headerLine);
                 currentY++;

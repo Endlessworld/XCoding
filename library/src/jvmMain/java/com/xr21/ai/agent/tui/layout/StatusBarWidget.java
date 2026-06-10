@@ -69,7 +69,9 @@ public class StatusBarWidget implements Widget {
                 Span.styled("  ", sepStyle),
                 Span.styled("ctrl+l 帮助", Style.EMPTY.fg(theme.keyHint)),
                 Span.styled("  ", sepStyle),
-                Span.styled("ctrl+q 退出", Style.EMPTY.fg(theme.keyHint))
+                Span.styled("ctrl+q 退出", Style.EMPTY.fg(theme.keyHint)),
+                Span.styled("  ", sepStyle),
+                Span.styled(appState.isDarkMode ? "\uD83C\uDF19 dark" : "\u2600\uFE0F light", Style.EMPTY.fg(theme.accent))
         );
         buffer.setLine(area.left(), area.top(), line);
     }

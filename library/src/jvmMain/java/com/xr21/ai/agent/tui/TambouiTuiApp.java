@@ -31,10 +31,7 @@ import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.TuiRunner;
 import dev.tamboui.tui.bindings.BindingSets;
 import dev.tamboui.tui.error.RenderErrorHandlers;
-import dev.tamboui.tui.event.Event;
-import dev.tamboui.tui.event.KeyCode;
-import dev.tamboui.tui.event.KeyEvent;
-import dev.tamboui.tui.event.ResizeEvent;
+import dev.tamboui.tui.event.*;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -53,7 +50,7 @@ import static dev.tamboui.tui.TuiConfig.*;
 public class TambouiTuiApp implements EventHandler, Renderer {
 
     private final AppState appState = new AppState();
-    private final TuiTheme theme = TuiTheme.modernDark();
+    private TuiTheme theme = TuiTheme.modernDark();
     private final StatusBarWidget statusBar = new StatusBarWidget(appState, theme);
     private final TfxIntegration tfx = new TfxIntegration();
     private TuiRunner runner;
@@ -73,6 +70,16 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         this.acpBridge = bridge;
     }
 
+
+    /**
+     * 设置主题模式。
+     *
+     * @param isDark true = 暗色模式, false = 亮色模式
+     */
+    public void setThemeMode(boolean isDark) {
+        this.theme = isDark ? TuiTheme.modernDark() : TuiTheme.modernLight();
+    }
+
     public AppState getAppState() {
         return appState;
     }
@@ -82,7 +89,7 @@ public class TambouiTuiApp implements EventHandler, Renderer {
                 true,                        // rawMode
                 true,                        // alternateScreen
                 true,                        // hideCursor
-                false,                       // mouseCapture
+                true,                        // mouseCapture
                 false,                       // bracketedPaste
                 Duration.ofMillis(DEFAULT_POLL_TIMEOUT),      // pollTimeout
                 Duration.ofMillis(DEFAULT_TICK_TIMEOUT),      // tickRate
@@ -165,6 +172,9 @@ public class TambouiTuiApp implements EventHandler, Renderer {
     public boolean handle(Event event, TuiRunner runner) {
         if (event instanceof KeyEvent key) {
             return handleKeyEvent(key);
+        }
+        if (event instanceof MouseEvent mouse) {
+            return handleMouseEvent(mouse);
         }
         return false;
     }
@@ -338,6 +348,55 @@ public class TambouiTuiApp implements EventHandler, Renderer {
         return false;
     }
 
+
+    /**
+     * 处理鼠标事件。
+     * <ul>
+     *   <li>点击 ChatPanel 区域 → 聚焦 CENTER</li>
+     *   <li>点击 InputPanel 区域 → 聚焦 INPUT</li>
+     *   <li>点击状态栏主题图标 → 切换 dark/light 主题</li>
+     * </ul>
+     */
+    private boolean handleMouseEvent(MouseEvent mouse) {
+        if (mouse.kind() != MouseEventKind.RELEASE) return false;
+
+        int mx = mouse.x();
+        int my = mouse.y();
+
+        // 获取当前布局尺寸
+        Rect area = runner.terminal().area();
+        int width = area.width();
+        int height = area.height();
+        int statusHeight = 1;
+        int inputHeight = Math.min(5, height / 5);
+        int mainHeight = height - statusHeight - inputHeight;
+        int chatWidth = (int) (width * 0.75);
+
+        // 点击 ChatPanel 区域 (0,0) ~ (chatWidth, mainHeight)
+        if (mx >= 0 && mx < chatWidth && my >= 0 && my < mainHeight) {
+            appState.focusPanel = PanelType.CENTER;
+            return true;
+        }
+
+        // 点击 InputPanel 区域 (0, mainHeight) ~ (width, mainHeight + inputHeight)
+        if (mx >= 0 && mx < width && my >= mainHeight && my < mainHeight + inputHeight) {
+            appState.focusPanel = PanelType.INPUT;
+            return true;
+        }
+
+        // 点击状态栏区域 - 右下角主题切换
+        if (my == mainHeight + inputHeight) {
+            // 主题图标在右下角，点击切换
+            // 主题图标区域：右侧约 10 个字符宽度
+            if (mx >= width - 10) {
+                appState.toggleTheme();
+                setThemeMode(appState.isDarkMode);
+                return true;
+            }
+        }
+
+        return false;
+    }
     private void sendMessage() {
         String message = appState.inputBuffer.trim();
         if (message.isEmpty()) return;

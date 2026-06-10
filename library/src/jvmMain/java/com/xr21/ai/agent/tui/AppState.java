@@ -55,6 +55,7 @@ public class AppState {
     public final List<ModeInfo> availableModes = new ArrayList<>();
     public PanelType focusPanel = PanelType.INPUT;
 
+    public boolean isDarkMode = true;
     public AppState() {
         sessions.add(new Session());
     }
@@ -149,6 +150,13 @@ public class AppState {
         isHelpPopupVisible = false;
     }
 
+
+    /**
+     * 切换 dark/light 主题模式
+     */
+    public void toggleTheme() {
+        isDarkMode = !isDarkMode;
+    }
     public void popupConfirmSelection() {
         if (sidebarSelectedIndex >= 0 && sidebarSelectedIndex < sessions.size()) {
             currentSessionIndex = sidebarSelectedIndex;
