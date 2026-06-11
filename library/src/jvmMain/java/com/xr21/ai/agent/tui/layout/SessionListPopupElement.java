@@ -8,6 +8,7 @@ import com.xr21.ai.agent.tui.Session;
 import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.event.EventResult;
+import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 
 import java.util.ArrayList;
@@ -37,22 +38,17 @@ public class SessionListPopupElement {
             items.add(text(prefix + session.name));
         }
 
-        // 配置信息
-        if (!appState.availableModels.isEmpty() || !appState.availableModes.isEmpty()) {
-            items.add(text(" ────── 配置 ────── "));
-            String modelText = appState.currentModelId.isEmpty() ? "—" : appState.currentModelId;
-            items.add(text("  模型: " + modelText));
-            String modeText = appState.currentModeId.isEmpty() ? "—" : appState.currentModeId;
-            items.add(text("  模式: " + modeText));
-        }
 
         items.add(text("  ↑↓ 选择  Enter 切换  Esc 关闭"));
 
         return dialog("会话列表 (" + appState.sessionCount() + ")",
                 column(items.toArray(new Element[0]))
+                        .id("session-list-content")
+                        .focusable()
+                        .onKeyEvent(this::handleKeyEvent)
         )
                 .id("session-list-popup")
-                .onKeyEvent(this::handleKeyEvent);
+                .focusable();
     }
 
     private EventResult handleKeyEvent(KeyEvent event) {
@@ -64,7 +60,8 @@ public class SessionListPopupElement {
             appState.selectDown();
             return EventResult.HANDLED;
         }
-        if (event.isConfirm()) {
+        boolean isEnter = event.isConfirm() || event.code() == KeyCode.ENTER;
+        if (isEnter) {
             appState.popupConfirmSelection();
             return EventResult.HANDLED;
         }

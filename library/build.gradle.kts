@@ -108,6 +108,7 @@ dependencies {
     implementation("dev.tamboui:tamboui-tfx-toolkit:0.4.0-SNAPSHOT")
 //    implementation("dev.tamboui:tamboui-demos:0.4.0-SNAPSHOT")
     implementation("dev.tamboui:tamboui-benchmarks:0.4.0-SNAPSHOT")
+    implementation("net.java.dev.jna:jna:5.14.0")
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")

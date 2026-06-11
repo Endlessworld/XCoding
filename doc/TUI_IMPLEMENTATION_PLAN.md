@@ -16,7 +16,7 @@ XAgent TUI 是一个基于 **tamboui** 框架构建的终端用户界面，作�
 
 ```
 com.xr21.ai.agent.tui/
-├── TambouiTuiApp.java          # 主应用：EventHandler + Renderer，生命周期管理
+├── TuiApp.java          # 主应用：EventHandler + Renderer，生命周期管理
 ├── AppState.java                # 全局可变状态（会话/消息/输入/Todo/Token/焦点/滚动）
 ├── TuiTheme.java                # 主题定义（28色 modernDark 方案）
 ├── ChatMessage.java             # 消息模型
@@ -231,9 +231,9 @@ com.xr21.ai.agent.tui/
 
 ---
 
-## 5. 事件处理层 (`TambouiTuiApp.java`)
+## 5. 事件处理层 (`TuiApp.java`)
 
-`TambouiTuiApp` 同时实现 `EventHandler`（键盘输入处理）和 `Renderer`（帧渲染）。
+`TuiApp` 同时实现 `EventHandler`（键盘输入处理）和 `Renderer`（帧渲染）。
 
 ### 5.1 键盘事件处理流程
 
@@ -305,7 +305,7 @@ KeyEvent → handle() → handleKeyEvent() → 分类处理
 
 ```
 TambouiMain.kt
-    ├── TambouiTuiApp (Java)
+    ├── TuiApp (Java)
     │   └── AcpBridge 接口
     │       └── TambouiAcpBridge (Kotlin)
     │           ├── AcpClientManager
@@ -317,12 +317,12 @@ TambouiMain.kt
 
 ### 6.2 `TambouiAcpBridge.kt` — 桥接层
 
-| 职责                           | 说明                                                                  |
-|------------------------------|---------------------------------------------------------------------|
-| 实现 `TambouiTuiApp.AcpBridge` | 为 Java 侧提供同步风格的回调接口                                                 |
-| 协程封装                         | 所有 ACP SDK 调用包裹在 `CoroutineScope(Dispatchers.IO)` 中                 |
-| 事件转换                         | `handleEvent()` 将 `Event.SessionUpdateEvent` 转为 `AcpEventAdapter`   |
-| 参数解析                         | `parseConfig()` 解析 `--command`、`--ws-url`、`--ws-server-port` CLI 参数 |
+| 职责                    | 说明                                                                  |
+|-----------------------|---------------------------------------------------------------------|
+| 实现 `TuiApp.AcpBridge` | 为 Java 侧提供同步风格的回调接口                                                 |
+| 协程封装                  | 所有 ACP SDK 调用包裹在 `CoroutineScope(Dispatchers.IO)` 中                 |
+| 事件转换                  | `handleEvent()` 将 `Event.SessionUpdateEvent` 转为 `AcpEventAdapter`   |
+| 参数解析                  | `parseConfig()` 解析 `--command`、`--ws-url`、`--ws-server-port` CLI 参数 |
 
 ### 6.3 `AcpClientManager.kt` — 客户端管理器
 
@@ -391,7 +391,7 @@ WebSocket 模式下，`ClientSession` 提供以下配置操作方法（均需通
 
 ### 6.4 `AcpEventAdapter.kt` — 事件适配器
 
-将 Kotlin `SessionUpdate` 转为 Java `TambouiTuiApp.AcpEvent.apply(AppState)`：
+将 Kotlin `SessionUpdate` 转为 Java `TuiApp.AcpEvent.apply(AppState)`：
 
 | ACP 事件                | AppState 操作                                                                                |
 |-----------------------|--------------------------------------------------------------------------------------------|
@@ -446,9 +446,9 @@ WebSocket 模式下，`ClientSession` 提供以下配置操作方法（均需通
 | ACP 客户端   | WebSocket 模式 + Stdio 回退                   | `AcpClientManager.kt`   | 完成 |
 | ACP 握手    | `initialize` + `newSession`               | `AcpClientManager.kt`   | 完成 |
 | 状态管理      | `AppState` 完整实现                           | `AppState.java`         | 完成 |
-| TUI 初始化   | `TuiRunner` + `EventHandler` + `Renderer` | `TambouiTuiApp.java`    | 完成 |
+| TUI 初始化   | `TuiRunner` + `EventHandler` + `Renderer` | `TuiApp.java`           | 完成 |
 | 三面板布局     | `ChatPanel` + `InfoPanel` + `InputPanel`  | `layout/*.java`         | 完成 |
-| 事件处理      | `KeyEvent` → `AppState` 更新                | `TambouiTuiApp.java`    | 完成 |
+| 事件处理      | `KeyEvent` → `AppState` 更新                | `TuiApp.java`           | 完成 |
 | 输入面板      | 键盘输入 + 基础编辑 + 多行 + 历史                     | `InputPanelWidget.java` | 完成 |
 | ACP 事件处理  | 6 种事件解析 → `AppState` 更新                   | `AcpEventAdapter.kt`    | 完成 |
 | ChatPanel | 消息流渲染 + 角色区分 + 滚动                         | `ChatPanelWidget.java`  | 完成 |
@@ -465,7 +465,7 @@ WebSocket 模式下，`ClientSession` 提供以下配置操作方法（均需通
 | 输入历史 UI             | `↑/↓` 导航历史输入                         | `AppState.java`                                 | 完成                                        |
 | Todo 实时更新           | `InfoPanel` Todo 对接 ACP `PlanUpdate` | `AcpEventAdapter.kt` + `InfoPanelWidget.java`   | 完成                                        |
 | Token 统计            | `InfoPanel` Token 用量动态更新             | `AcpEventAdapter.kt`                            | 完成（仅 totalTokens，prompt/completion 分离待完善） |
-| 焦点切换                | `Tab/Shift+Tab` 面板切换 + 边框高亮          | `TambouiTuiApp.java` + `*Widget.java`           | 完成                                        |
+| 焦点切换                | `Tab/Shift+Tab` 面板切换 + 边框高亮          | `TuiApp.java` + `*Widget.java`                  | 完成                                        |
 | 消息时间戳               | 每条消息带 `HH:mm` 时间戳                    | `ChatPanelWidget.java`                          | 完成                                        |
 | 会话计数                | 状态栏显示 `当前/总计`                        | `StatusBarWidget.java`                          | 完成                                        |
 | Windows Terminal 检测 | 启动时检测并提示                             | `TambouiMain.kt`                                | 完成                                        |
@@ -521,7 +521,7 @@ WebSocket 模式下，`ClientSession` 提供以下配置操作方法（均需通
 
 **决策**: UI 层使用 Java 17，ACP 通信层使用 Kotlin。
 
-**理由**: tamboui 的 Java API 更成熟；ACP SDK 为 Kotlin 优先，协程和 Flow 表达更自然；通过 `TambouiTuiApp.AcpBridge` 接口解耦。
+**理由**: tamboui 的 Java API 更成熟；ACP SDK 为 Kotlin 优先，协程和 Flow 表达更自然；通过 `TuiApp.AcpBridge` 接口解耦。
 
 ### ADR-2: 单一全局可变状态（AppState）
 
@@ -555,7 +555,7 @@ WebSocket 模式下，`ClientSession` 提供以下配置操作方法（均需通
 // TambouiMain.kt
 fun main(args: Array<String>) {
     detectWindowsTerminal()
-    val app = TambouiTuiApp()
+  val app = TuiApp()
     val bridge = TambouiAcpBridge(app.appState)
     app.setAcpBridge(bridge)
     app.start()

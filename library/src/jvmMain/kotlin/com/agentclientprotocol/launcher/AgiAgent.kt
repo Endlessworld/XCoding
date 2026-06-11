@@ -26,7 +26,6 @@ import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.*
-import com.agentclientprotocol.model.PromptResponse
 import com.alibaba.cloud.ai.graph.RunnableConfig
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
@@ -291,12 +290,12 @@ class AgiAgentSession(
             val chunk = "Token usage: total=${tokens}, duration=${duration}s, speed=${speed} tokens/s"
             logger.info { chunk }
             emit(
-                Event.PromptResponseEvent(
-                     PromptResponse(StopReason.END_TURN,null,tokenUsageRef.get())
+                Event.SessionUpdateEvent(
+                    SessionUpdate.AgentThoughtChunk(ContentBlock.Text(chunk))
                 )
             )
             logger.info { "events END_TURN" }
-            emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN)))
+            emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN, null, tokenUsageRef.get())))
         } catch (e: Exception) {
             logger.error(e) { "Error processing prompt" }
             emit(
@@ -304,7 +303,7 @@ class AgiAgentSession(
                     SessionUpdate.AgentMessageChunk(ContentBlock.Text("\nError: ${e.message}"))
                 )
             )
-            emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN)))
+            emit(Event.PromptResponseEvent(PromptResponse(StopReason.REFUSAL)))
         }
     }
 

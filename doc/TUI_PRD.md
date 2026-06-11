@@ -229,7 +229,7 @@ XAgent TUI 是一个基于 **tamboui** 框架构建的终端用户界面，作�
 │   XAgent TUI (Client)             │ ◄─────────────────────────────► │  Agent 子进程    │
 │                                   │  JSON-RPC over NDJSON          │  (ACP Server)    │
 │  ┌────────────────────────────┐  │                                  │                  │
-│  │ Java: TambouiTuiApp        │  │                                  │  ProcessBuilder  │
+│  │ Java: TuiApp        │  │                                  │  ProcessBuilder  │
 │  │  (EventHandler + Renderer) │  │                                  │  or WebSocket    │
 │  │  └── AcpBridge (接口) ─────┼──┤                                  └──────────────────┘
 │  │ Kotlin: TambouiAcpBridge   │  │
@@ -350,7 +350,7 @@ TUI Client                              Agent
 
 ```
 com.xr21.ai.agent.tui/
-├── TambouiTuiApp.java          # 主应用：EventHandler + Renderer，生命周期管理
+├── TuiApp.java          # 主应用：EventHandler + Renderer，生命周期管理
 ├── AppState.java                # 全局可变状态（会话/消息/输入/Todo/Token/焦点/滚动）
 ├── TuiTheme.java                # 主题定义（28色 modernDark 方案）
 ├── ChatMessage.java             # 消息模型
@@ -379,14 +379,14 @@ com.xr21.ai.agent.tui/
 
 ### 7.2 技术栈
 
-| 层       | 技术                  | 说明                                       |
-|---------|---------------------|------------------------------------------|
-| UI 框架   | tamboui             | Widget/Buffer/Block 渲染系统                 |
-| UI 语言   | Java 17+            | TambouiTuiApp 实现 EventHandler + Renderer |
-| ACP 桥接  | Kotlin              | TambouiAcpBridge 适配 ACP SDK 事件           |
-| ACP SDK | kotlin-sdk          | Client/Protocol/Session 完整实现             |
-| 通信      | WebSocket / Stdio   | 默认 WebSocket，回退 Stdio                    |
-| 构建      | Gradle + Kotlin DSL | JVM 多平台项目                                |
+| 层       | 技术                  | 说明                                |
+|---------|---------------------|-----------------------------------|
+| UI 框架   | tamboui             | Widget/Buffer/Block 渲染系统          |
+| UI 语言   | Java 17+            | TuiApp 实现 EventHandler + Renderer |
+| ACP 桥接  | Kotlin              | TambouiAcpBridge 适配 ACP SDK 事件    |
+| ACP SDK | kotlin-sdk          | Client/Protocol/Session 完整实现      |
+| 通信      | WebSocket / Stdio   | 默认 WebSocket，回退 Stdio             |
+| 构建      | Gradle + Kotlin DSL | JVM 多平台项目                         |
 
 ### 7.3 数据流
 

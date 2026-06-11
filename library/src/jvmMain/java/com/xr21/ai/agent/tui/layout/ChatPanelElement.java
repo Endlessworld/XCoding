@@ -78,6 +78,11 @@ public class ChatPanelElement {
             appState.scrollDown();
             return EventResult.HANDLED;
         }
+        // 鼠标左键点击 → 聚焦聊天面板
+        if (event.kind() == MouseEventKind.PRESS && event.isLeftButton()) {
+            appState.focusPanel = com.xr21.ai.agent.tui.PanelType.CENTER;
+            return EventResult.HANDLED;
+        }
         return EventResult.UNHANDLED;
     }
 }

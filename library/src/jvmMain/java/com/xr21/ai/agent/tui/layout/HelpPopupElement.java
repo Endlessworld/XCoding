@@ -8,6 +8,7 @@ import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.event.KeyEvent;
+
 import static dev.tamboui.toolkit.Toolkit.*;
 
 /**
@@ -50,9 +51,12 @@ public class HelpPopupElement {
                         text(""),
                         text(" Esc 关闭弹框 ")
                 )
+                        .id("help-content")
+                        .focusable()
+                        .onKeyEvent(this::handleKeyEvent)
         )
                 .id("help-popup")
-                .onKeyEvent(this::handleKeyEvent);
+                .focusable();
     }
 
     private EventResult handleKeyEvent(KeyEvent event) {

@@ -145,9 +145,6 @@ public class ShellTools {
 		3. You can call multiple tools in a single response when all commands are likely to succeed, run the following bash commands in parallel:
 		- Add relevant untracked files to the staging area.
 		- Create the commit with a message ending with:
-		🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-		Co-Authored-By: Claude <noreply@anthropic.com>
 		- Run git status after the commit completes to verify success.
 		Note: git status depends on the commit completing, so run it sequentially after the commit.
 		4. If the commit fails due to pre-commit hook changes, retry ONCE. If it succeeds but files were modified by the hook, verify it's safe to amend:
@@ -184,8 +181,6 @@ public class ShellTools {
 
 		## Test plan
 		[Bulleted markdown checklist of TODOs for testing the pull request...]
-
-		🤖 Generated with [Claude Code](https://claude.com/claude-code)
 		EOF
 		)"
 		</example>

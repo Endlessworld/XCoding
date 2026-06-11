@@ -25,10 +25,12 @@ import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.bindings.BindingSets;
 import dev.tamboui.tui.error.RenderErrorHandlers;
 import dev.tamboui.tui.event.KeyEvent;
+import dev.tamboui.tui.event.MouseEvent;
+import dev.tamboui.tui.event.MouseEventKind;
 import dev.tamboui.tui.event.ResizeEvent;
 import jakarta.annotation.Nullable;
+import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 
@@ -41,7 +43,8 @@ import static dev.tamboui.tui.TuiConfig.*;
  * 使用 ToolkitRunner.create() + Lambda DSL 方式启动。
  * 管理应用生命周期：初始化、运行、清理。
  */
-public class TambouiTuiApp {
+@Slf4j
+public class TuiApp {
 
     public final AppState appState = new AppState();
     private final AcpBridge acpBridge = new TambouiAcpBridge(appState);
@@ -51,7 +54,7 @@ public class TambouiTuiApp {
     private boolean firstMessageAnimationAdded = false;
 
     public static void main(String[] args) throws Exception {
-        TambouiTuiApp app = new TambouiTuiApp();
+        TuiApp app = new TuiApp();
         app.start();
     }
 
@@ -70,15 +73,24 @@ public class TambouiTuiApp {
                 System.err,                  // errorOutput
                 false,                       // fpsOverlayEnabled
                 Collections.emptyList(),     // postRenderProcesssssors
-                new JLineBackend(),                          // backend (allows for lazy backend creation)
+                new FixedJLineBackend(),                          // backend (allows for lazy backend creation)
                 null                         // scheduler
         );
 
 
         try (ToolkitRunner toolkitRunner = ToolkitRunner.builder().config(tuiConfig).styleEngine(themeManager.styleEngine()).build()) {
             this.runner = toolkitRunner;
+            // 设置状态变更回调，触发界面刷新
+            appState.onStateChanged = this::forceRender;
             // 启动状态栏定时刷新（每秒更新系统时间）
             runner.scheduleRepeating(this::forceRender, Duration.ofMillis(100));
+            runner.tuiRunner().terminal().backend().enableMouseCapture();
+            runner.tuiRunner().terminal().backend().enableBracketedPaste();
+            runner.tuiRunner().terminal().backend().enableRawMode();
+            if (runner.tuiRunner().terminal().backend() instanceof JLineBackend jLineBackend) {
+                log.info("jlineTerminal attributes: {}", jLineBackend.jlineTerminal().getAttributes());
+            }
+
 //            runner.runOnRenderThread(() -> {
 //                // 自动感知 OS 主题模式（夜间/白天）
 //                Boolean isDark = null;
@@ -93,11 +105,13 @@ public class TambouiTuiApp {
 //                    appState.isDarkMode = false;
 //                }
 //                themeManager.setDarkMode(appState.isDarkMode);
-//            });
-            // 注册全局快捷键
+            // 注册全局事件处理器（键盘 + 鼠标）
             runner.eventRouter().addGlobalHandler(event -> {
                 if (event instanceof KeyEvent key) {
                     return handleGlobalKeyEvent(key);
+                }
+                if (event instanceof MouseEvent mouse) {
+                    return handleGlobalMouseEvent(mouse);
                 }
                 return EventResult.UNHANDLED;
             });
@@ -143,7 +157,7 @@ public class TambouiTuiApp {
             }
 
             // 运行 DSL 应用（阻塞，直到 TUI 退出）
-            runner.run(() -> buildElementTree());
+            runner.run(this::buildElementTree);
 
             // Add TFX logo animation effect for initial chat load
 //            Rect termArea = runner.tuiRunner().terminal().area();
@@ -168,14 +182,18 @@ public class TambouiTuiApp {
                 .onCancel(() -> {
                     if (appState.isStreaming) {
                         appState.finishStreaming();
-                        if (acpBridge != null) acpBridge.cancel();
+                        acpBridge.cancel();
                     }
                 })
                 .build();
 
         // 构建状态栏
         Element statusElement = new StatusBarElement(appState, themeManager.currentTheme())
-                .onModelClick(() -> appState.toggleModelPopup())
+                .onModelClick(() -> {
+                    log.debug("statusElement onModelClick");
+                    appState.toggleModelPopup();
+                    runner.focusManager().setFocus("model-select-popup");
+                })
                 .onThemeToggle(() -> {
                     appState.toggleTheme();
                     themeManager.toggle();
@@ -205,7 +223,7 @@ public class TambouiTuiApp {
         if (appState.isModelPopupVisible) {
             mainLayout = stack(
                     mainLayout,
-                    new ModelSelectPopupElement(appState, themeManager.currentTheme())
+                    new ModelSelectPopupElement(appState)
                             .onModelConfirm(() -> {
                                 String modelId = appState.currentModelId;
                                 if (!modelId.isEmpty() && acpBridge != null) {
@@ -222,21 +240,22 @@ public class TambouiTuiApp {
             );
         }
 
+        // 弹框可见时自动聚焦到弹框（buildElementTree 在渲染线程中执行，可直接调用 setFocus）
+        if (runner != null) {
+            if (appState.isModelPopupVisible) {
+                runner.focusManager().setFocus("model-select-popup");
+            } else if (appState.isSessionListPopupVisible) {
+                runner.focusManager().setFocus("session-list-popup");
+            } else if (appState.focusPanel == PanelType.INPUT) {
+                runner.focusManager().setFocus("input-panel");
+            }
+        }
+
         return mainLayout;
     }
 
     private EventResult handleGlobalKeyEvent(KeyEvent key) {
-        // 弹框可见时的按键拦截
-        if (appState.isSessionListPopupVisible || appState.isHelpPopupVisible || appState.isModelPopupVisible) {
-            if (key.isCancel()) {
-                if (appState.isSessionListPopupVisible) appState.closeSessionListPopup();
-                if (appState.isHelpPopupVisible) appState.closeHelpPopup();
-                if (appState.isModelPopupVisible) appState.closeModelPopup();
-                return EventResult.HANDLED;
-            }
-            return EventResult.UNHANDLED;
-        }
-
+        log.info("handleGlobalKeyEvent {}", key);
         // 快捷键（全局）
         if (key.isChar('c') && key.modifiers().ctrl()) {
             if (appState.isStreaming) {
@@ -291,6 +310,41 @@ public class TambouiTuiApp {
             return EventResult.HANDLED;
         }
 
+        return EventResult.UNHANDLED;
+    }
+
+    /**
+     * 处理全局鼠标事件
+     * <p>
+     * 注意：此处理器在 EventRouter.route() 中先于 routeMouseEvent() 调用。
+     * 对于已由元素级处理器（如 ChatPanelElement）消费的事件，此处返回 UNHANDLED
+     * 以避免干扰元素级处理。
+     */
+    private EventResult handleGlobalMouseEvent(MouseEvent event) {
+        // 弹框可见时，在全局处理器中处理鼠标点击
+        if (event.kind() == MouseEventKind.PRESS && event.isLeftButton()) {
+            if (appState.isModelPopupVisible) {
+                // 鼠标点击 → 确认选择当前选中的模型
+                if (appState.modelSelectIndex >= 0 && appState.modelSelectIndex < appState.availableModels.size()) {
+                    ModelInfo selected = appState.availableModels.get(appState.modelSelectIndex);
+                    appState.currentModelId = selected.id;
+                    appState.modelName = selected.name.isEmpty() ? selected.id : selected.name;
+                }
+                appState.closeModelPopup();
+                if (!appState.currentModelId.isEmpty() && acpBridge != null) {
+                    acpBridge.setModel(appState.currentModelId);
+                }
+                return EventResult.HANDLED;
+            }
+            if (appState.isSessionListPopupVisible) {
+                appState.closeSessionListPopup();
+                return EventResult.HANDLED;
+            }
+            if (appState.isHelpPopupVisible) {
+                appState.closeHelpPopup();
+                return EventResult.HANDLED;
+            }
+        }
         return EventResult.UNHANDLED;
     }
 

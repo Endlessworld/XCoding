@@ -5,7 +5,8 @@
 替代低层 EventHandler/Renderer 接口和 Widget 渲染方式。
 
 ## 当前架构问题
-1. `TambouiTuiApp` 实现低层 `EventHandler` + `Renderer` 接口
+
+1. `TuiApp` 实现低层 `EventHandler` + `Renderer` 接口
 2. Widget 使用命令式 `render(Rect, Buffer)` 模式
 3. 事件处理在 `handleKeyEvent`/`handleMouseEvent` 中手动路由
 4. 焦点管理手动维护（`focusPanel`、`setFocused`）
@@ -13,7 +14,8 @@
 6. 依赖 `TfxIntegration` 动画效果（可移除）
 
 ## 目标架构
-1. `TambouiTuiApp` 使用 `ToolkitRunner.create()` + Lambda 启动
+
+1. `TuiApp` 使用 `ToolkitRunner.create()` + Lambda 启动
 2. 界面使用 DSL Element 树声明式构建
 3. 事件处理通过 Element 的 `onKeyEvent`/`onMouseEvent` lambda 注册
 4. 焦点管理由框架自动处理
@@ -31,7 +33,7 @@
 - [ ] `HelpPopupElement` — 替代 `HelpPopupWidget`
 - [ ] `ModelSelectPopupElement` — 替代 `ModelSelectPopupWidget`
 
-### 步骤 2：重构 TambouiTuiApp
+### 步骤 2：重构 TuiApp
 - [ ] 移除 `EventHandler`/`Renderer` 接口实现
 - [ ] 移除 `TfxIntegration` 依赖
 - [ ] 使用 `ToolkitRunner.create()` + Lambda 启动

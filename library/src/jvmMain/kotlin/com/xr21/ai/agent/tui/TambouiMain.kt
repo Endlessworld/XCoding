@@ -10,7 +10,7 @@ package com.xr21.ai.agent.tui
  */
 fun main(args: Array<String>) {
     try {
-        val app = TambouiTuiApp()
+        val app = TuiApp()
         app.start()
     } catch (e: Exception) {
         System.err.println("TUI 运行时异常: ${e.message}")

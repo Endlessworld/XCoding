@@ -41,7 +41,7 @@
 - [x] 添加重连 UI 反馈（onReconnecting/onReconnected 回调）
 - [x] 桥接 authenticate/logout/closeSession/destroy
 
-### 1.4 TambouiTuiApp.java 接口扩展
+### 1.4 TuiApp.java 接口扩展
 - [x] AcpBridge 接口添加 default 方法
 - [x] ConnectionCallback 添加 onReconnecting/onReconnected
 
@@ -68,7 +68,7 @@
 - [x] PromptResponseEventAdapter 类
 - [x] 调用 setStopReason 和 setTotalTokens
 
-### 2.4 TambouiTuiApp.java 接口扩展
+### 2.4 TuiApp.java 接口扩展
 - [x] AcpBridge 接口添加 loadSession/forkSession/resumeSession/switchSession/closeSessionById default 方法
 
 ### 2.5 编译修复

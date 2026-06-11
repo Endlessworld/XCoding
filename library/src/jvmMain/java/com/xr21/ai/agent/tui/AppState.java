@@ -57,8 +57,20 @@ public class AppState {
     public PanelType focusPanel = PanelType.INPUT;
 
     public boolean isDarkMode = true;
+
+    /**
+     * 状态变更回调（由 TuiApp 设置，用于触发界面刷新）
+     */
+    public transient Runnable onStateChanged;
+
     public AppState() {
         sessions.add(new Session());
+    }
+
+    private void notifyStateChanged() {
+        if (onStateChanged != null) {
+            onStateChanged.run();
+        }
     }
 
     /**
@@ -152,7 +164,6 @@ public class AppState {
         isModelPopupVisible = !isModelPopupVisible;
         if (isModelPopupVisible) {
             modelSelectIndex = 0;
-            // 找到当前模型在列表中的位置
             for (int i = 0; i < availableModels.size(); i++) {
                 if (availableModels.get(i).id.equals(currentModelId)) {
                     modelSelectIndex = i;
@@ -164,26 +175,7 @@ public class AppState {
 
     public void closeModelPopup() {
         isModelPopupVisible = false;
-    }
-
-    public void modelSelectUp() {
-        if (modelSelectIndex > 0) modelSelectIndex--;
-    }
-
-    public void modelSelectDown() {
-        if (modelSelectIndex < availableModels.size() - 1) modelSelectIndex++;
-    }
-
-    public String confirmModelSelection() {
-        if (modelSelectIndex >= 0 && modelSelectIndex < availableModels.size()) {
-            ModelInfo selected = availableModels.get(modelSelectIndex);
-            currentModelId = selected.id;
-            modelName = selected.name.isEmpty() ? selected.id : selected.name;
-            isModelPopupVisible = false;
-            return selected.id;
-        }
-        isModelPopupVisible = false;
-        return null;
+        notifyStateChanged();
     }
 
     public void toggleHelpPopup() {

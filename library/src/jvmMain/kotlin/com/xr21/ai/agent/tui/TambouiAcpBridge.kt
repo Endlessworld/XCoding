@@ -6,7 +6,10 @@ package com.xr21.ai.agent.tui
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.model.*
 import com.xr21.ai.agent.tui.AppState
-import com.xr21.ai.agent.tui.acp.*
+import com.xr21.ai.agent.tui.acp.AcpClientManager
+import com.xr21.ai.agent.tui.acp.AcpLifecycleEvent
+import com.xr21.ai.agent.tui.acp.AcpLifecycleState
+import com.xr21.ai.agent.tui.acp.ReconnectStrategy
 import com.xr21.ai.agent.tui.config.ACPConnectConfig
 import kotlinx.coroutines.*
 import com.xr21.ai.agent.tui.AppState as JavaAppState
@@ -15,14 +18,14 @@ import com.xr21.ai.agent.tui.AppState as JavaAppState
  * Tamboui TUI 的 ACP 桥接层
  *
  * 将 Kotlin 协程的 ACP SDK 封装为 Java 友好的回调接口，
- * 供 [TambouiTuiApp] 使用。
+ * 供 [TuiApp] 使用。
  */
-class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.AcpBridge {
+class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridge {
 
     private val ktAppState = AppState()
     private val acpClient = AcpClientManager(ktAppState)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var callback: TambouiTuiApp.ConnectionCallback? = null
+    private var callback: TuiApp.ConnectionCallback? = null
     private var config: ACPConnectConfig = ACPConnectConfig()
 
     init {
@@ -32,7 +35,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
         }
     }
 
-    override fun connect(args: Array<String>, callback: TambouiTuiApp.ConnectionCallback) {
+    override fun connect(args: Array<String>, callback: TuiApp.ConnectionCallback) {
         this.callback = callback
         this.config = parseConfig(args)
 
@@ -76,7 +79,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
         val currentMode = acpClient.currentModeId?.value ?: ""
         val currentModel = acpClient.currentModelId?.value ?: ""
 
-        callback?.onEvent(object : TambouiTuiApp.AcpEvent {
+        callback?.onEvent(object : TuiApp.AcpEvent {
             override fun apply(state: JavaAppState) {
                 state.setAvailableModels(models)
                 state.setAvailableModes(modes)
@@ -318,7 +321,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TambouiTuiApp.A
 /**
  * ACP 事件适配器，将 Kotlin ACP 事件转换为 Java 侧的 AppState 更新
  */
-class AcpEventAdapter(private val update: SessionUpdate) : TambouiTuiApp.AcpEvent {
+class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
     override fun apply(state: JavaAppState) {
         when (update) {
             is SessionUpdate.AgentMessageChunk -> {
@@ -414,7 +417,7 @@ class AcpEventAdapter(private val update: SessionUpdate) : TambouiTuiApp.AcpEven
 /**
  * PromptResponse 事件适配器，将 ACP PromptResponse 转换为 Java 侧的 AppState 更新
  */
-class PromptResponseEventAdapter(private val response: com.agentclientprotocol.model.PromptResponse) : TambouiTuiApp.AcpEvent {
+class PromptResponseEventAdapter(private val response: com.agentclientprotocol.model.PromptResponse) : TuiApp.AcpEvent {
     override fun apply(state: JavaAppState) {
         state.setStopReason(response.stopReason.name)
         response.usage?.let { usage ->
