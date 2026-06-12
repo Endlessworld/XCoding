@@ -23,8 +23,7 @@ public class InfoPanelElement {
     private Element buildContent() {
         return column(
                 buildTokenSection(),
-                buildTodoSection(),
-                buildConfigSection()
+                buildTodoSection()
         );
     }
 

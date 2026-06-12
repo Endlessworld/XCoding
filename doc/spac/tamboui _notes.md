@@ -65,4 +65,16 @@ focusable();
 2. **事件处理器注册在子元素**：避免 Dialog 消费所有事件
 3. **遵循 Tamboui 的事件路由机制**：让元素自己处理事件，而不是在全局处理器中特殊处理
 4. **聚焦管理**：确保 Dialog 和子元素都设置了 `.focusable()`
- 
+
+
+DialogElement 的 handleKeyEvent() 会无条件消费所有事件（最后一步返回 HANDLED）。虽然它会先转发给 children，但：
+1.
+当焦点在 Dialog 上时，EventRouter 调用 dialog.handleKeyEvent(event, true)
+2.
+Dialog 的 handleKeyEvent() 转发给 children（column）
+3.
+Column 的 handler 处理 ↑/↓ → 返回 HANDLED
+4.
+Dialog 返回 HANDLED
+这个流程理论上应该能工作，但实际中 DialogElement 的实现可能没有正确转发 ↑/↓ 给 children（文档明确指出 Dialog 只处理 ESCAPE 和 ENTER，其他键可能被直接消费）。
+修复方案：将焦点从 Dialog 元素转移到其内部的 column（内容元素）上，这样 EventRouter 会直接调用 column 的 handleKeyEvent()，完全绕过 Dialog 的事件消费逻辑

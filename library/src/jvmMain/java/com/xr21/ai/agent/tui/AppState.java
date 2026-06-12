@@ -252,6 +252,51 @@ public class AppState {
         notifyStateChanged();
     }
 
+    public boolean isConfigPopupVisible = false;
+    public ConfigOption currentConfigOption = null;
+    public int configSelectIndex = 0;
+
+    public void toggleConfigPopup(ConfigOption option) {
+        if (isConfigPopupVisible && currentConfigOption == option) {
+            isConfigPopupVisible = false;
+            currentConfigOption = null;
+        } else {
+            isConfigPopupVisible = true;
+            currentConfigOption = option;
+            // 初始化选中索引
+            if ("boolean".equals(option.type)) {
+                configSelectIndex = Boolean.parseBoolean(option.currentValue) ? 0 : 1;
+            } else if (option.options != null && !option.options.isEmpty()) {
+                int idx = option.options.indexOf(option.currentValue);
+                configSelectIndex = idx >= 0 ? idx : 0;
+            } else {
+                configSelectIndex = 0;
+            }
+        }
+    }
+
+    public void closeConfigPopup() {
+        isConfigPopupVisible = false;
+        currentConfigOption = null;
+        configSelectIndex = 0;
+        notifyStateChanged();
+    }
+
+    public void setConfigOptionValue(String configId, String value) {
+        int index = -1;
+        ConfigOption old = null;
+        for (int i = 0; i < configOptions.size(); i++) {
+            if (configOptions.get(i).id.equals(configId)) {
+                index = i;
+                old = configOptions.get(i);
+                break;
+            }
+        }
+        if (old != null) {
+            configOptions.set(index, new ConfigOption(old.id, old.name, old.type, value, old.options));
+        }
+    }
+
     public void toggleHelpPopup() {
         isHelpPopupVisible = !isHelpPopupVisible;
     }

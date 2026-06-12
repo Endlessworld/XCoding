@@ -198,6 +198,18 @@ public class TuiApp {
                     appState.toggleTheme();
                     themeManager.toggle();
                 })
+                .onConfigChange((configId, value) -> {
+                    if (acpBridge != null) {
+                        acpBridge.setConfigOption(configId, value);
+                    }
+                })
+                .onConfigClick(option -> {
+                    log.debug("statusElement onConfigClick: {}", option.name);
+                    appState.toggleConfigPopup(option);
+                    if (appState.isConfigPopupVisible) {
+                        runner.focusManager().setFocus("config-select-popup");
+                    }
+                })
                 .build();
 
         // 主布局：上下结构
@@ -233,6 +245,25 @@ public class TuiApp {
                             .build()
             );
         }
+        if (appState.isConfigPopupVisible && appState.currentConfigOption != null) {
+            mainLayout = stack(
+                    mainLayout,
+                    new ConfigSelectPopupElement(appState, appState.currentConfigOption)
+                            .onConfigConfirm(() -> {
+                                ConfigOption opt = appState.currentConfigOption;
+                                if (opt == null) {
+                                    log.warn("onConfigConfirm: currentConfigOption is null, skipping");
+                                    return;
+                                }
+                                String configId = opt.id;
+                                String newValue = opt.currentValue;
+                                if (acpBridge != null) {
+                                    acpBridge.setConfigOption(configId, newValue);
+                                }
+                            })
+                            .build()
+            );
+        }
         if (appState.isHelpPopupVisible) {
             mainLayout = stack(
                     mainLayout,
@@ -243,9 +274,11 @@ public class TuiApp {
         // 弹框可见时自动聚焦到弹框（buildElementTree 在渲染线程中执行，可直接调用 setFocus）
         if (runner != null) {
             if (appState.isModelPopupVisible) {
-                runner.focusManager().setFocus("model-select-popup");
+                runner.focusManager().setFocus("model-select-content");
+            } else if (appState.isConfigPopupVisible) {
+                runner.focusManager().setFocus("config-select-content");
             } else if (appState.isSessionListPopupVisible) {
-                runner.focusManager().setFocus("session-list-popup");
+                runner.focusManager().setFocus("session-list-content");
             } else if (appState.focusPanel == PanelType.INPUT) {
                 runner.focusManager().setFocus("input-panel");
             }
@@ -334,6 +367,10 @@ public class TuiApp {
                 if (!appState.currentModelId.isEmpty() && acpBridge != null) {
                     acpBridge.setModel(appState.currentModelId);
                 }
+                return EventResult.HANDLED;
+            }
+            if (appState.isConfigPopupVisible) {
+                appState.closeConfigPopup();
                 return EventResult.HANDLED;
             }
             if (appState.isSessionListPopupVisible) {

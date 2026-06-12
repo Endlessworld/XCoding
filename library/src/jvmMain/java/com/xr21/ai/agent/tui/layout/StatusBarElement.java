@@ -4,6 +4,7 @@
 package com.xr21.ai.agent.tui.layout;
 
 import com.xr21.ai.agent.tui.AppState;
+import com.xr21.ai.agent.tui.ConfigOption;
 import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.event.EventResult;
@@ -22,6 +23,8 @@ public class StatusBarElement {
     private final TuiTheme theme;
     private Runnable onModelClick;
     private Runnable onThemeToggle;
+    private java.util.function.BiConsumer<String, String> onConfigChange;
+    private java.util.function.Consumer<ConfigOption> onConfigClick;
 
     public StatusBarElement(AppState appState, TuiTheme theme) {
         this.appState = appState;
@@ -38,6 +41,16 @@ public class StatusBarElement {
         return this;
     }
 
+    public StatusBarElement onConfigChange(java.util.function.BiConsumer<String, String> callback) {
+        this.onConfigChange = callback;
+        return this;
+    }
+
+    public StatusBarElement onConfigClick(java.util.function.Consumer<ConfigOption> callback) {
+        this.onConfigClick = callback;
+        return this;
+    }
+
     public Element build() {
         String connSymbol;
         switch (appState.connectionState) {
@@ -51,7 +64,32 @@ public class StatusBarElement {
         String modelName = appState.modelName.isEmpty() ? "—" : appState.modelName;
         String themeIcon = appState.isDarkMode ? "🌙 dark" : "☀️ light";
 
-        // 模型名称区域 — 独立可点击
+        // 配置选项区域 — 独立可点击弹出选项列表
+        java.util.List<Element> configPartList = new java.util.ArrayList<>();
+        for (ConfigOption opt : appState.configOptions) {
+            if ("model".equals(opt.name)) continue;
+            String valueText;
+            if ("boolean".equals(opt.type)) {
+                valueText = Boolean.parseBoolean(opt.currentValue) ? "开" : "关";
+            } else {
+                valueText = opt.currentValue;
+            }
+            String label = opt.name + ":" + valueText;
+            ConfigOption capturedOpt = opt;
+            configPartList.add(text(" " + label + " ▾")
+                    .onMouseEvent(e -> {
+                        if (e.kind() == MouseEventKind.PRESS) {
+                            if (onConfigClick != null) {
+                                onConfigClick.accept(capturedOpt);
+                            }
+                            return EventResult.HANDLED;
+                        }
+                        return EventResult.UNHANDLED;
+                    }));
+            configPartList.add(text(" |"));
+        }
+
+        // 模型名称区域 — 独立可点击弹出模型选择
         Element modelPart = text(" 模型: " + modelName + " ▾ ")
                 .onMouseEvent(e -> {
                     if (e.kind() == MouseEventKind.PRESS && onModelClick != null) {
@@ -73,6 +111,7 @@ public class StatusBarElement {
 
         return row(
                 text(connSymbol + " |"),
+                row(configPartList.toArray(new Element[0])),
                 modelPart,
                 text("| 会话: " + appState.sessionCount() + "/" + appState.totalSessions
                         + " | " + time),
