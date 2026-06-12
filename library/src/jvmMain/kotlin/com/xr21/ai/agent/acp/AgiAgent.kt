@@ -22,6 +22,7 @@ import com.agentclientprotocol.agent.AgentSession
 import com.agentclientprotocol.agent.AgentSupport
 import com.agentclientprotocol.agent.client
 import com.agentclientprotocol.annotations.UnstableApi
+import com.agentclientprotocol.agent.NesAgentSession
 import com.agentclientprotocol.client.ClientInfo
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
@@ -36,6 +37,9 @@ import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
 import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.utils.SinksUtil
+import com.xr21.ai.agent.config.ModelConfigLoader
+import com.xr21.ai.agent.model.Config
+import com.xr21.ai.agent.utils.Json
 import com.xr21.ai.agent.utils.ToolsUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
@@ -45,6 +49,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.serialization.json.JsonElement
 import org.apache.commons.lang3.StringUtils
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Paths
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
@@ -550,7 +557,7 @@ class AgiAgent : AgentSupport {
             return existing
         }
 
-        val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
+        val cwd = sessionParameters.cwd
         val sessionIdStr = sessionId.toString()
         val runnableConfig = sessionsRunnableConfig[sessionIdStr] ?: RunnableConfig.builder().threadId(sessionIdStr)
             .addStateUpdate(emptyMap<String, Any>()).build()
@@ -558,6 +565,163 @@ class AgiAgent : AgentSupport {
         val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig)
         sessions[sessionIdStr] = session
         return session
+    }
+
+    override suspend fun authenticate(methodId: AuthMethodId, _meta: JsonElement?): AuthenticateResponse {
+        logger.info { "Authenticate requested with method: $methodId" }
+        return AuthenticateResponse()
+    }
+
+    override suspend fun logout(_meta: JsonElement?): LogoutResponse {
+        logger.info { "Logout requested" }
+        return LogoutResponse()
+    }
+
+    /**
+     * Load all provider configurations from models.json.
+     * Returns a map of providerId -> baseUrl.
+     */
+    private fun loadAllProviderConfigs(): Map<String, String> {
+        val configPath = Paths.get(ModelConfigLoader.getConfigFilePath())
+        if (!Files.exists(configPath)) {
+            logger.warn { "Config file not found at: $configPath" }
+            return emptyMap()
+        }
+        return try {
+            val content = Files.readString(configPath, StandardCharsets.UTF_8)
+            val config = Json.to(content, Config::class.java)
+            config.providers
+                .filterNotNull()
+                .filter { it.providerId != null && it.baseUrl != null }
+                .associate { it.providerId!! to it.baseUrl!! }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to load provider configs" }
+            emptyMap()
+        }
+    }
+    override suspend fun listProviders(_meta: JsonElement?): ListProvidersResponse {
+        logger.info { "List providers requested" }
+        val providerConfigs = loadAllProviderConfigs()
+        val providers = providerConfigs.map { (id, baseUrl) ->
+            ProviderInfo(
+                id = id,
+                supported = listOf(LlmProtocol(LlmProtocol.OPENAI.value)),
+                required = false,
+                current = ProviderCurrentConfig(
+                    apiType = LlmProtocol(LlmProtocol.OPENAI.value),
+                    baseUrl = baseUrl
+                )
+            )
+        }
+        logger.info { "Returning ${providers.size} providers" }
+        return ListProvidersResponse(providers = providers)
+    }
+
+    override suspend fun setProvider(
+        id: String,
+        apiType: LlmProtocol,
+        baseUrl: String,
+        headers: Map<String, String>?,
+        _meta: JsonElement?
+    ): SetProvidersResponse {
+        logger.info { "Set provider: $id, type: $apiType, baseUrl: $baseUrl" }
+        try {
+            val configPath = Paths.get(ModelConfigLoader.getConfigFilePath())
+            if (!Files.exists(configPath)) {
+                logger.warn { "Config file not found at: $configPath" }
+                return SetProvidersResponse()
+            }
+            val content = Files.readString(configPath, StandardCharsets.UTF_8)
+            val config = Json.to(content, Config::class.java)
+
+            // Find or create provider config
+            var provider = config.providers.find { it?.providerId == id }
+            if (provider == null) {
+                provider = Config.ProviderConfig()
+                provider.providerId = id
+                config.providers.add(provider)
+            }
+            provider!!.baseUrl = baseUrl
+            // Preserve existing apiKey if headers don't contain authorization
+            if (headers != null && headers.containsKey("Authorization")) {
+                provider.apiKey = headers["Authorization"]!!.removePrefix("Bearer ")
+            }
+
+            val updatedJson = Json.toPrettyJson(config)
+            Files.writeString(configPath, updatedJson, StandardCharsets.UTF_8)
+            logger.info { "Provider $id updated successfully" }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to set provider: $id" }
+        }
+        return SetProvidersResponse()
+    }
+
+    override suspend fun disableProvider(id: String, _meta: JsonElement?): DisableProvidersResponse {
+        logger.info { "Disable provider: $id" }
+        try {
+            val configPath = Paths.get(ModelConfigLoader.getConfigFilePath())
+            if (!Files.exists(configPath)) {
+                logger.warn { "Config file not found at: $configPath" }
+                return DisableProvidersResponse()
+            }
+            val content = Files.readString(configPath, StandardCharsets.UTF_8)
+            val config = Json.to(content, Config::class.java)
+
+            // Remove the provider from the list
+            config.providers.removeAll { it?.providerId == id }
+            // Also disable all models that reference this provider
+            config.models.forEach { model ->
+                if (model?.providerId == id) {
+                    model.disabled = true
+                }
+            }
+
+            val updatedJson = Json.toPrettyJson(config)
+            Files.writeString(configPath, updatedJson, StandardCharsets.UTF_8)
+            logger.info { "Provider $id disabled successfully" }
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to disable provider: $id" }
+        }
+        return DisableProvidersResponse()
+    }
+
+    override suspend fun forkSession(
+        sessionId: SessionId,
+        sessionParameters: SessionCreationParameters,
+    ): AgentSession {
+        logger.info { "Fork session: $sessionId" }
+        val cwd = sessionParameters.cwd
+        val sessionIdStr = "session-${System.currentTimeMillis()}"
+        val newSessionId = SessionId(sessionIdStr)
+        val runnableConfig = RunnableConfig.builder().threadId(sessionIdStr)
+            .addStateUpdate(emptyMap<String, Any>()).build()
+        sessionsRunnableConfig[sessionIdStr] = runnableConfig
+        val session = AgiAgentSession(newSessionId, cwd, sessionParameters.mcpServers, runnableConfig)
+        sessions[sessionIdStr] = session
+        return session
+    }
+
+    override suspend fun resumeSession(
+        sessionId: SessionId,
+        sessionParameters: SessionCreationParameters,
+    ): AgentSession {
+        logger.info { "Resume session: $sessionId" }
+        val existing = sessions[sessionId.toString()]
+        if (existing != null) {
+            return existing
+        }
+        val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
+        val sessionIdStr = sessionId.toString()
+        val runnableConfig = sessionsRunnableConfig[sessionIdStr] ?: RunnableConfig.builder().threadId(sessionIdStr)
+            .addStateUpdate(emptyMap<String, Any>()).build()
+        val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig)
+        sessions[sessionIdStr] = session
+        return session
+    }
+
+    override suspend fun createNesSession(request: StartNesRequest): NesAgentSession {
+        logger.info { "Create NES session requested: $request" }
+        throw NotImplementedError("createNesSession is not implemented. The capability is declared in AgentCapabilities.nes")
     }
 }
 
