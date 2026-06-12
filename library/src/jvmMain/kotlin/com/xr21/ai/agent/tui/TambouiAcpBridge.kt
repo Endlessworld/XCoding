@@ -3,6 +3,7 @@
  */
 package com.xr21.ai.agent.tui
 
+import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.model.*
 import com.xr21.ai.agent.tui.AppState
@@ -58,6 +59,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
         }
     }
 
+    @OptIn(UnstableApi::class)
     private fun notifyInitialConfig() {
         val models = acpClient.availableModels?.map { ModelInfo(it.modelId.value, it.name) } ?: emptyList()
         val modes = acpClient.availableModes?.map { ModeInfo(it.id.value, it.name) } ?: emptyList()
@@ -257,6 +259,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
         }
     }
 
+    @OptIn(UnstableApi::class)
     override fun setConfigOption(configId: String, value: String) {
         scope.launch {
             // Try boolean first, then string
@@ -320,10 +323,25 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
 
 /**
  * ACP 事件适配器，将 Kotlin ACP 事件转换为 Java 侧的 AppState 更新
+ *
+ * 覆盖 ACP SDK 全部 SessionUpdate 子类型（12 种 + 1 兜底），其中 messageId 字段为 Unstable，
+ * 仅记录到 AppState.lastMessageId，不参与消息合并（最小实现）。
  */
+@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
     override fun apply(state: JavaAppState) {
         when (update) {
+            is SessionUpdate.UserMessageChunk -> {
+                val text = (update.content as? ContentBlock.Text)?.text ?: ""
+                if (text.isNotEmpty()) {
+                    state.currentSession().messages.add(
+                        ChatMessage(
+                            MessageRole.USER, text
+                        )
+                    )
+                }
+            }
+
             is SessionUpdate.AgentMessageChunk -> {
                 val text = (update.content as? ContentBlock.Text)?.text ?: ""
                 state.appendStreamingContent(text)
@@ -364,8 +382,12 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
                 }
             }
 
-            is SessionUpdate.UsageUpdate -> {
-                state.setTotalTokens(update.used)
+            is SessionUpdate.AvailableCommandsUpdate -> {
+                val cmds = update.availableCommands.map { c ->
+                    val hint = (c.input as? AvailableCommandInput.Unstructured)
+                    AvailableCommand(c.name, c.description, hint)
+                }
+                state.setAvailableCommands(cmds)
             }
 
             is SessionUpdate.CurrentModeUpdate -> {
@@ -403,8 +425,46 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
                 state.setConfigOptions(options)
             }
 
-            else -> {}
+            is SessionUpdate.SessionInfoUpdate -> {
+                update.title?.takeIf { it.isNotBlank() }?.let { state.currentSession().name = it }
+            }
+
+            is SessionUpdate.UsageUpdate -> {
+                val tu = com.xr21.ai.agent.tui.TokenUsage().apply {
+                    totalTokens = update.used
+                    contextWindowSize = update.size
+                    update.cost?.let { c ->
+                        costUsd = c.amount
+                        costCurrency = c.currency
+                    }
+                }
+                state.setTokenUsage(tu)
+            }
+
+            is SessionUpdate.UnknownSessionUpdate -> {
+                state.setLastUnknownUpdateType(update.sessionUpdateType)
+                println("[ACP] Received unknown SessionUpdate type: ${update.sessionUpdateType}")
+            }
         }
+
+        // 记录 messageId（Unstable；除 UnknownSessionUpdate 外，所有子类型都可能携带）
+        // 提取逻辑统一放在 when 之后，避免每个分支重复
+        val messageIdValue: String? = when (update) {
+            is SessionUpdate.UserMessageChunk -> update.messageId?.value
+            is SessionUpdate.AgentMessageChunk -> update.messageId?.value
+            is SessionUpdate.AgentThoughtChunk -> update.messageId?.value
+            is SessionUpdate.ToolCall -> null  // SDK 未为 ToolCall 定义 messageId
+            is SessionUpdate.ToolCallUpdate -> null  // SDK 未为 ToolCallUpdate 定义 messageId
+            is SessionUpdate.PlanUpdate -> null  // SDK 未为 PlanUpdate 定义 messageId
+            is SessionUpdate.AvailableCommandsUpdate -> null
+            is SessionUpdate.CurrentModeUpdate -> null
+            is SessionUpdate.ConfigOptionUpdate -> null
+            is SessionUpdate.SessionInfoUpdate -> null
+            is SessionUpdate.UsageUpdate -> null
+            is SessionUpdate.UnknownSessionUpdate -> null
+        }
+        // 简化：仅在 messageId 实际非空时写入，避免覆盖
+        if (messageIdValue != null) state.setLastMessageId(messageIdValue)
     }
 
     private fun extractText(content: List<ToolCallContent>): String {
@@ -416,12 +476,29 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
 
 /**
  * PromptResponse 事件适配器，将 ACP PromptResponse 转换为 Java 侧的 AppState 更新
+ *
+ * 覆盖 PromptResponse 全部字段（stopReason / userMessageId / usage 全字段）；_meta 为协议扩展，暂不消费。
  */
+@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
 class PromptResponseEventAdapter(private val response: com.agentclientprotocol.model.PromptResponse) : TuiApp.AcpEvent {
     override fun apply(state: JavaAppState) {
+        // 1. stopReason
         state.setStopReason(response.stopReason.name)
+
+        // 2. userMessageId（Unstable；用于客户端发出消息的确认回执）
+        state.setLastUserMessageId(response.userMessageId?.value)
+
+        // 3. usage（Unstable；全字段填入 TokenUsage）
         response.usage?.let { usage ->
-            state.setTotalTokens(usage.totalTokens?.toLong() ?: 0L)
+            val tu = com.xr21.ai.agent.tui.TokenUsage().apply {
+                promptTokens = usage.inputTokens
+                completionTokens = usage.outputTokens
+                totalTokens = usage.totalTokens
+                thoughtTokens = usage.thoughtTokens ?: 0L
+                cachedReadTokens = usage.cachedReadTokens ?: 0L
+                cachedWriteTokens = usage.cachedWriteTokens ?: 0L
+            }
+            state.setTokenUsage(tu)
         }
     }
 }

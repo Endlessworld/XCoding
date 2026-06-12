@@ -13,14 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-@file:OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+@file:OptIn(UnstableApi::class)
 
-package com.agentclientprotocol.launcher
+package com.xr21.ai.agent.acp
 
 import com.agentclientprotocol.agent.AgentInfo
 import com.agentclientprotocol.agent.AgentSession
 import com.agentclientprotocol.agent.AgentSupport
 import com.agentclientprotocol.agent.client
+import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.client.ClientInfo
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
@@ -364,7 +365,7 @@ class AgiAgentSession(
      */
     private suspend fun FlowCollector<Event>.emitAgentOutputEvents(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
-        if (output.tokenUsage != null) {
+        if (output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
             tokenUsageRef.set(Usage(output.tokenUsage.promptTokens.toLong(), output.tokenUsage.completionTokens.toLong(), output.tokenUsage.totalTokens.toLong(),0,0,0))
             totalTokens.addAndGet(output.tokenUsage.totalTokens ?: 0)
             completionTokens.addAndGet(output.tokenUsage.completionTokens ?: 0)

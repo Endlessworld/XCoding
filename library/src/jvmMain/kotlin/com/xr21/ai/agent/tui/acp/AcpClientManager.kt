@@ -15,18 +15,19 @@
  */
 package com.xr21.ai.agent.tui.acp
 
+import com.agentclientprotocol.agent.AgentInfo
 import com.agentclientprotocol.client.Client
 import com.agentclientprotocol.client.ClientInfo
 import com.agentclientprotocol.client.ClientSession
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
-import com.agentclientprotocol.launcher.AgiAgent
-import com.agentclientprotocol.launcher.launchWebSocketServer
 import com.agentclientprotocol.model.*
 import com.agentclientprotocol.protocol.Protocol
 import com.agentclientprotocol.protocol.ProtocolOptions
 import com.agentclientprotocol.transport.acpProtocolOnClientWebSocket
+import com.xr21.ai.agent.acp.AgiAgent
+import com.xr21.ai.agent.acp.launchWebSocketServer
 import com.xr21.ai.agent.tui.AppState
 import com.xr21.ai.agent.tui.config.ACPConnectConfig
 import io.ktor.client.*
@@ -35,7 +36,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.JsonElement
 import java.io.BufferedReader
-import kotlin.coroutines.CoroutineContext
 
 /**
  * ACP 客户端管理器
@@ -74,6 +74,7 @@ class AcpClientManager(private val appState: AppState) {
     private var acpClient: Client? = null
     private var clientSession: ClientSession? = null
     private var serverThread: Thread? = null
+    private var agentInfo: AgentInfo? = null
 
     // ========== 多会话管理 ==========
     private val sessions = mutableMapOf<String, ClientSession>()
@@ -176,17 +177,18 @@ class AcpClientManager(private val appState: AppState) {
             val acpClient = Client(proto)
             this.acpClient = acpClient
 
-            val agentInfo = acpClient.initialize(
+            val info = acpClient.initialize(
                 ClientInfo(implementation = Implementation("XAgent TUI", "0.1.0", "XAgent TUI"))
             )
+            agentInfo = info
             transitionTo(AcpLifecycleState.INITIALIZED)
             emitEvent(AcpLifecycleEvent.Connected(
-                agentName = agentInfo.implementation?.name ?: "Unknown",
-                agentVersion = agentInfo.implementation?.version ?: ""
+                agentName = info.implementation?.name ?: "Unknown",
+                agentVersion = info.implementation?.version ?: ""
             ))
 
-            appState.agentName = agentInfo.implementation?.name ?: "Unknown"
-            appState.agentVersion = agentInfo.implementation?.version ?: ""
+            appState.agentName = info.implementation?.name ?: "Unknown"
+            appState.agentVersion = info.implementation?.version ?: ""
             val session = acpClient.newSession(
                 SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
             ) { _, _ -> TuiClientOperations() }
@@ -277,17 +279,108 @@ class AcpClientManager(private val appState: AppState) {
     // ========== 认证管理 ==========
 
     /**
-     * 向 Agent 发送认证信息。
+     * Agent 在 [initialize] 时声明的可用认证方式（[AuthMethod] 列表）。
+     * 仅在 WebSocket 模式下可用。
+     */
+    val availableAuthMethods: List<AuthMethod>
+        get() = agentInfo?.authMethods ?: emptyList()
+
+    /**
+     * 通过 SDK 标准 [Client.authenticate] 协议发起认证。
+     *
+     * Agent 在 [availableAuthMethods] 中声明认证方式，调用本方法启动对应流程。
+     * 具体的 token/凭据输入由 Agent 端（URL 模式 / 终端模式 / env-var 模式）处理。
+     *
+     * @param methodId Agent 在 [availableAuthMethods] 中声明的认证方式 ID
+     * @return 成功时返回 SDK 的 [AuthenticateResponse]；失败时包装异常
+     */
+    suspend fun authenticate(methodId: AuthMethodId): Result<AuthenticateResponse> {
+        return try {
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法认证"))
+            if (agentInfo == null) {
+                return Result.failure(Exception("尚未初始化，无法认证"))
+            }
+            Result.success(client.authenticate(methodId))
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 便捷重载：按 [provider] 字符串匹配 [availableAuthMethods] 中的首个匹配项并发起认证。
      * 仅在 WebSocket 模式下支持。
+     *
+     * 注意：ACP 标准认证流程中，token/凭据由 Agent 端在 [methodId] 对应的认证子流程中收集，
+     * 不由客户端直接传递。本方法保留旧签名以兼容现有调用方，[token] 参数在标准协议下不使用。
      */
     suspend fun authenticate(provider: String, token: String): Result<Unit> {
+        @Suppress("UNUSED_PARAMETER") val ignored = token
+        val method = availableAuthMethods.firstOrNull { it.id.value == provider }
+            ?: return Result.failure(Exception("未找到认证方式: $provider"))
+        return authenticate(method.id).map { }
+    }
+    /**
+     * 登出当前认证状态（Unstable API）。
+     * 调用后所有新会话将需要重新认证。
+     * 仅在 WebSocket 模式下支持。
+     */
+    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+    suspend fun logout(): Result<Unit> {
         return try {
-            val session = clientSession
-                ?: return Result.failure(Exception("会话未创建，无法认证"))
-            session.setConfigOption(
-                SessionConfigId("auth"),
-                SessionConfigOptionValue.StringValue("$provider:$token")
-            )
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法登出"))
+            if (agentInfo == null) {
+                return Result.failure(Exception("尚未初始化，无法登出"))
+            }
+            client.logout()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    // ========== Provider 管理（Unstable API） ==========
+
+    /**
+     * 列出 Agent 支持的可配置 LLM Provider。
+     * 仅在 WebSocket 模式下支持。
+     */
+    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+    suspend fun listProviders(): Result<ListProvidersResponse> {
+        return try {
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法列出 Provider"))
+            if (agentInfo == null) {
+                return Result.failure(Exception("尚未初始化，无法列出 Provider"))
+            }
+            Result.success(client.listProviders())
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 配置指定 Provider 的连接参数（Unstable API）。
+     * 仅在 WebSocket 模式下支持。
+     */
+    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+    suspend fun setProvider(
+        id: String,
+        apiType: LlmProtocol,
+        baseUrl: String,
+        headers: Map<String, String>? = null
+    ): Result<Unit> {
+        return try {
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法设置 Provider"))
+            if (agentInfo == null) {
+                return Result.failure(Exception("尚未初始化，无法设置 Provider"))
+            }
+            client.setProvider(id, apiType, baseUrl, headers)
             Result.success(Unit)
         } catch (e: Exception) {
             emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
@@ -296,11 +389,18 @@ class AcpClientManager(private val appState: AppState) {
     }
 
     /**
-     * 登出当前会话。
+     * 禁用指定 Provider（Unstable API）。
+     * 仅在 WebSocket 模式下支持。
      */
-    suspend fun logout(): Result<Unit> {
+    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+    suspend fun disableProvider(id: String): Result<Unit> {
         return try {
-            closeSession()
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法禁用 Provider"))
+            if (agentInfo == null) {
+                return Result.failure(Exception("尚未初始化，无法禁用 Provider"))
+            }
+            client.disableProvider(id)
             Result.success(Unit)
         } catch (e: Exception) {
             emitEvent(AcpLifecycleEvent.ErrorOccurred(e))

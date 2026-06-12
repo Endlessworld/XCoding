@@ -142,12 +142,14 @@ AcpClientManager
 
 | 能力 | SDK 提供 | AcpClientManager 覆盖 |
 |------|----------|----------------------|
-| initialize(clientInfo) → AgentInfo | ✅ | ✅ 已实现 |
-| authenticate(methodId) | ✅ | ❌ 未使用 SDK 认证 |
-| logout() | ✅ | ❌ 未使用 SDK 登出 |
-| listProviders() | ✅ | ❌ 未实现 |
-| setProvider() | ✅ | ❌ 未实现 |
-| disableProvider() | ✅ | ❌ 未实现 |
+| initialize(clientInfo) → AgentInfo | ✅ | ✅ 已实现(返回值缓存为 `agentInfo` 字段，供认证/Provider 流程复用) |
+| availableAuthMethods | 派生自 `AgentInfo.authMethods` | ✅ 已暴露(`availableAuthMethods` 只读属性) |
+| authenticate(methodId) | ✅ | ✅ 已实现(基于 SDK `Client.authenticate`) |
+| authenticate(provider, token) | — | ✅ 已实现(便捷重载，按 `provider` 在 `availableAuthMethods` 中匹配首个命中项；`token` 仅保留签名，遵循 ACP 标准协议 token 由 Agent 端在 method 子流程中收集) |
+| logout() | ✅ | ✅ 已实现(Unstable，调用 SDK `Client.logout()`) |
+| listProviders() | ✅ | ✅ 已实现(Unstable，调用 SDK `Client.listProviders()`) |
+| setProvider() | ✅ | ✅ 已实现(Unstable，调用 SDK `Client.setProvider(id, apiType, baseUrl, headers?)`) |
+| disableProvider() | ✅ | ✅ 已实现(Unstable，调用 SDK `Client.disableProvider(id)`) |
 
 ### 4.3 会话生命周期 (Session)
 
@@ -162,6 +164,8 @@ AcpClientManager
 | session.cancel() | ✅ | ✅ 已实现 |
 | session.prompt() → Flow<Event> | ✅ | ✅ 已实现 |
 | 多会话管理 | 内部支持 | ✅ 已实现(本地 map) |
+
+> 现状注记（2026-01）：`loadSession` / `forkSession` / `resumeSession` / `switchSession` / `closeSessionById` 在 `AcpClientManager` 与 `TambouiAcpBridge` 中均已实现，`TuiApp.AcpBridge` 接口也声明了对应 `default` 方法，但 TUI Java 侧尚无任何调用点（`grep acpBridge\.|loadSession|resumeSession|switchSession` 在 `library/src/jvmMain/java` 下 0 命中）。`listSessions()` 仍待实现（本次未做）。
 
 ### 4.4 会话配置 (Session Config)
 
@@ -181,9 +185,22 @@ AcpClientManager
 
 | 能力 | SDK 提供 | AcpClientManager 覆盖 |
 |------|----------|----------------------|
-| Event.SessionUpdateEvent | ✅ | ✅ 已处理 |
-| Event.PromptResponseEvent | ✅ | ✅ 已处理(PromptCompleted) |
-| SessionUpdate 各子类型 | ✅ | ⚠️ 部分(通过 handler) |
+| Event sealed class | ✅ (2 子类型) | ✅ 全部覆盖（`SessionUpdateEvent` + `PromptResponseEvent`） |
+| Event.SessionUpdateEvent | ✅ | ✅ 已处理（`AcEventAdapter` 覆盖 12 子类型 + 1 兜底） |
+| Event.PromptResponseEvent | ✅ | ✅ 已完整覆盖（`PromptResponseEventAdapter`） |
+| PromptResponse.stopReason (StopReason enum) | ✅ 5 值 | ✅ 已用（`setStopReason`） |
+| PromptResponse.userMessageId (Unstable) | ✅ | ✅ 已用（`AppState.lastUserMessageId`） |
+| PromptResponse.usage (Unstable) | ✅ | ✅ 已用（`AppState.setTokenUsage` 一站式写入） |
+| ├─ Usage.inputTokens | ✅ | ✅ 已用（→ `TokenUsage.promptTokens`） |
+| ├─ Usage.outputTokens | ✅ | ✅ 已用（→ `TokenUsage.completionTokens`） |
+| ├─ Usage.totalTokens | ✅ | ✅ 已用（→ `TokenUsage.totalTokens`） |
+| ├─ Usage.thoughtTokens (Unstable) | ✅ | ✅ 已用（→ `TokenUsage.thoughtTokens`） |
+| ├─ Usage.cachedReadTokens (Unstable) | ✅ | ✅ 已用（→ `TokenUsage.cachedReadTokens`） |
+| └─ Usage.cachedWriteTokens (Unstable) | ✅ | ✅ 已用（→ `TokenUsage.cachedWriteTokens`） |
+| SessionUpdate.UsageUpdate.used (Unstable) | ✅ | ✅ 已用（→ `TokenUsage.totalTokens`） |
+| SessionUpdate.UsageUpdate.size (Unstable) | ✅ | ✅ 已用（→ `TokenUsage.contextWindowSize`） |
+| SessionUpdate.UsageUpdate.cost (Unstable) | ✅ | ✅ 已用（→ `TokenUsage.costUsd` + `costCurrency`） |
+| _meta 字段（协议扩展） | ✅ | ❌ 未用（架构层面；可作未来增强） |
 
 ### 4.6 NES (Next Edit Suggestions)
 

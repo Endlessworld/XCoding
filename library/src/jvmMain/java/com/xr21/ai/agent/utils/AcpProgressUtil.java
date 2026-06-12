@@ -24,8 +24,8 @@ import kotlin.coroutines.jvm.internal.RunSuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 
-import static com.agentclientprotocol.launcher.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
-import static com.agentclientprotocol.launcher.AgiAgentKt.SESSION_ID_CONTEXT_KEY;
+import static com.xr21.ai.agent.acp.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
+import static com.xr21.ai.agent.acp.AgiAgentKt.SESSION_ID_CONTEXT_KEY;
 
 /**
  * Utility class for sending ACP real-time progress updates from tools.

@@ -111,6 +111,7 @@ public class LocalAgent {
             请使用当前系统语言:{language}回复用户
             - 使用批量编辑 一次修改多处进行高效修改
             - 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+            <编码指南>
             ## 1.写代码前先思考
                 **别假设。不要掩饰困惑。表面权衡。** 
                 在实施之前：
@@ -150,7 +151,8 @@ public class LocalAgent {
             3. [步骤] →验证：[检查]
             ```
             **这些指南有效条件是：** 
-                差异中不必要的更改减少，因过度复杂而减少重写，澄清问题应在实施前而非错误之后。           
+                差异中不必要的更改减少，因过度复杂而减少重写，澄清问题应在实施前而非错误之后。   
+           </编码指南>        
            """;
     /**
      * 当前工作空间根目录，可在运行时更新
@@ -234,6 +236,7 @@ public class LocalAgent {
                 .maxAttempts(3)
                 .initialDelay(1000)
                 .maxDelay(10000)
+                .retryableExceptionPredicate((e) -> true)
                 .backoffMultiplier(2.0)
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
@@ -241,7 +244,7 @@ public class LocalAgent {
         interceptors.add(largeResultEvictionInterceptor);
         interceptors.add(toolRetryInterceptor);
         interceptors.add(filesystemInterceptor);
-        interceptors.add(retryInterceptor);
+//        interceptors.add(retryInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
         if (runnableConfig.context().get("mode") instanceof String mode && mode.equalsIgnoreCase("Workers")) {

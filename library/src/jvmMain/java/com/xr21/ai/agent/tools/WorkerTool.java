@@ -37,7 +37,7 @@ import reactor.core.publisher.Flux;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static com.agentclientprotocol.launcher.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
+import static com.xr21.ai.agent.acp.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
 
 /**
  * Tool that enables invoking workers to handle complex, isolated tasks.

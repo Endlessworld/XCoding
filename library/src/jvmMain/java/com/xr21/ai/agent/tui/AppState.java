@@ -15,6 +15,7 @@
  */
 package com.xr21.ai.agent.tui;
 
+import com.agentclientprotocol.model.AvailableCommand;
 import com.xr21.ai.agent.tui.acp.ConnectionState;
 import dev.tamboui.widgets.input.TextAreaState;
 
@@ -54,6 +55,22 @@ public class AppState {
     public final List<ConfigOption> configOptions = new ArrayList<>();
     public final List<ModelInfo> availableModels = new ArrayList<>();
     public final List<ModeInfo> availableModes = new ArrayList<>();
+    public final List<AvailableCommand> availableCommands = new ArrayList<>();
+    /**
+     * 最近一次 SessionUpdate 的 messageId（Unstable；当前仅记录不用于消息合并）。
+     * 来源：SessionUpdate 各子类型中的 messageId 字段。
+     */
+    public String lastMessageId = "";
+    /**
+     * 最近一次 PromptResponse 中的 userMessageId（Unstable；与 lastMessageId 区分：后者来自 SessionUpdate）。
+     * 来源：PromptResponse.userMessageId。
+     */
+    public String lastUserMessageId = "";
+    /**
+     * 最近一次未知 SessionUpdate 子类型名（兜底；用于日志/调试，不渲染到 UI）。
+     * 来源：SessionUpdate.UnknownSessionUpdate.sessionUpdateType。
+     */
+    public String lastUnknownUpdateType = "";
     public PanelType focusPanel = PanelType.INPUT;
 
     public boolean isDarkMode = true;
@@ -90,10 +107,32 @@ public class AppState {
     }
 
     /**
-     * 设置总 Token 用量
+     * 设置总 Token 用量（仅写 totalTokens；保留以兼容已有调用方）。
+     * 推荐使用 {@link #setTokenUsage(TokenUsage)} 一站式写入全量字段。
      */
     public void setTotalTokens(long totalTokens) {
         this.tokenUsage.totalTokens = totalTokens;
+    }
+
+    /**
+     * 一站式写入 Token 用量（来自 SDK Usage / UsageUpdate；Unstable 字段可能为 null/缺省）
+     *
+     * <p>写入字段：promptTokens、completionTokens、totalTokens、thoughtTokens、
+     * cachedReadTokens、cachedWriteTokens、contextWindowSize、costUsd、costCurrency。
+     *
+     * @param usage SDK 返回的 TokenUsage；为 null 时不修改状态
+     */
+    public void setTokenUsage(TokenUsage usage) {
+        if (usage == null) return;
+        this.tokenUsage.promptTokens = usage.promptTokens;
+        this.tokenUsage.completionTokens = usage.completionTokens;
+        this.tokenUsage.totalTokens = usage.totalTokens;
+        this.tokenUsage.thoughtTokens = usage.thoughtTokens;
+        this.tokenUsage.cachedReadTokens = usage.cachedReadTokens;
+        this.tokenUsage.cachedWriteTokens = usage.cachedWriteTokens;
+        this.tokenUsage.contextWindowSize = usage.contextWindowSize;
+        this.tokenUsage.costUsd = usage.costUsd;
+        this.tokenUsage.costCurrency = usage.costCurrency == null ? "" : usage.costCurrency;
     }
 
     public void setStopReason(String stopReason) {
@@ -126,6 +165,41 @@ public class AppState {
         if (options != null) {
             this.configOptions.addAll(options);
         }
+    }
+
+    /**
+     * 清空并设置可用命令列表（来自 SessionUpdate.AvailableCommandsUpdate）
+     */
+    public void setAvailableCommands(List<AvailableCommand> commands) {
+        this.availableCommands.clear();
+        if (commands != null) {
+            this.availableCommands.addAll(commands);
+        }
+    }
+
+    /**
+     * 记录最近一次 SessionUpdate 的 messageId（Unstable 字段，仅记录）
+     *
+     * @param messageId SDK 返回的 MessageId；为 null 时记为空串
+     */
+    public void setLastMessageId(String messageId) {
+        this.lastMessageId = messageId == null ? "" : messageId;
+    }
+
+    /**
+     * 记录最近一次 PromptResponse 中的 userMessageId（Unstable 字段，仅记录）
+     *
+     * @param userMessageId SDK 返回的 MessageId；为 null 时记为空串
+     */
+    public void setLastUserMessageId(String userMessageId) {
+        this.lastUserMessageId = userMessageId == null ? "" : userMessageId;
+    }
+
+    /**
+     * 记录最近一次未知 SessionUpdate 子类型名（兜底；不渲染到 UI）
+     */
+    public void setLastUnknownUpdateType(String typeName) {
+        this.lastUnknownUpdateType = typeName == null ? "" : typeName;
     }
 
     public Session currentSession() {

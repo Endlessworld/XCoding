@@ -121,6 +121,7 @@ public class SinksUtil {
         var builder = AgentOutput.builder()
                 .agent(output.agent())
                 .data(output.state().data())
+                .tokenUsage(output.tokenUsage())
                 .node(output.node())
                 .timestamp(System.currentTimeMillis());
         if (output instanceof StreamingOutput<?> streamingOutput) {
@@ -140,7 +141,6 @@ public class SinksUtil {
                         .get("finishReason");
                 if (!OpenAiApi.ChatCompletionFinishReason.STOP.name().equalsIgnoreCase(String.valueOf(finishReason))) {
                     builder.chunk(streamingOutput.chunk());
-                    builder.tokenUsage(streamingOutput.tokenUsage());
                 }
                 builder.originData(streamingOutput.getOriginData());
             }
@@ -153,7 +153,6 @@ public class SinksUtil {
         }
         if (output instanceof InterruptionMetadata interruptionMetadata) {
             builder.interruptionMetadata(interruptionMetadata);
-            builder.tokenUsage(interruptionMetadata.tokenUsage());
             builder.subGraph(interruptionMetadata.isSubGraph());
         }
         if (output instanceof StateSnapshot stateSnapshot) {

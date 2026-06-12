@@ -15,8 +15,8 @@
  */
 package com.xr21.ai.agent;
 
-import com.agentclientprotocol.launcher.AcpAgentLauncher;
-import com.agentclientprotocol.launcher.AgiAgent;
+import com.xr21.ai.agent.acp.AgiAgent;
+import com.xr21.ai.agent.acp.AcpAgentLauncher;
 
 /**
  * XAgent 主入口，支持多种运行模式。
