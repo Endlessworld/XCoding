@@ -44,7 +44,7 @@ public class WriteFileTool {
                 - file_path参数必须是绝对路径，且必须在workspace范围内
                 - 如果文件包含多级目录将自动创建所有父级目录,所以无需创建父级目录可直接写入文件
                 - 内容参数必须是字符串
-                - 文件内容限制500字符以内，未完成的部分使用smart_edit工具的insert_at_line模式继续添加
+                - 文件内容严格限制500字符以内，未完成的部分使用smart_edit工具的insert_at_line模式继续添加
             """;
 
     // @formatter:off

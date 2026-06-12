@@ -101,7 +101,7 @@ class AgiAgentSession(
             ), SessionConfigOption.select(
                 id = "mode",
                 name = "mode",
-                currentValue = "Workers",
+                currentValue = "Agent",
                 description = "mode",
                 options = SessionConfigSelectOptions.Flat(
                     listOf(
@@ -150,7 +150,7 @@ class AgiAgentSession(
     }
 
     override val defaultMode: SessionModeId
-        get() = SessionModeId("Workers")
+        get() = SessionModeId("Agent")
 
     override val availableModels: List<ModelInfo>
         get() = AiModels.availableModels().map { model ->

@@ -83,6 +83,7 @@ public class SmartEditTool {
         - 新增内容使用 insert_at_line
         - 编辑前先使用 read_file 查看文件内容（带行号）
         - 批量编辑同一文件时，按从后到前的顺序排列可避免行号偏移问题
+        - 需要注意该工具参数大小，一次调用参数的总字符长度不可超过6000字符
         """)
     public Map<String, Object> smartEdit(
             @JsonProperty(value = "edits", required = true)
@@ -692,11 +693,11 @@ public class SmartEditTool {
 
         // For search_replace
         @JsonProperty("searchText")
-        @JsonPropertyDescription("Text to search for. Must be unique in the file. Required for search_replace.")
+        @JsonPropertyDescription("Text to search for. Must be unique in the file. Required for search_replace. Maximum 2000 characters")
         public String searchText;
 
         @JsonProperty("replaceText")
-        @JsonPropertyDescription("Text to replace with. Required for search_replace.")
+        @JsonPropertyDescription("Text to replace with. Required for search_replace.  Maximum 2000 characters")
         public String replaceText;
 
         // For insert_at_line
@@ -710,7 +711,7 @@ public class SmartEditTool {
 
         // Shared
         @JsonProperty("newContent")
-        @JsonPropertyDescription("New content to insert or replace with. Required for insert_at_line.")
+        @JsonPropertyDescription("New content to insert or replace with. Required for insert_at_line. Maximum 2000 characters")
         public String newContent;
     }
 
