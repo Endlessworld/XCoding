@@ -45,6 +45,7 @@ public class HelpPopupElement {
                         text("  Space         展开/折叠工具消息"),
                         text(""),
                         text("其他").bold(),
+                        text("  Ctrl+R        模型厂商管理"),
                         text("  Ctrl+H        打开帮助"),
                         text("  Ctrl+Q        退出应用"),
                         text("  Esc           关闭弹框"),

@@ -56,6 +56,10 @@ public class AppState {
     public final List<ModelInfo> availableModels = new ArrayList<>();
     public final List<ModeInfo> availableModes = new ArrayList<>();
     public final List<AvailableCommand> availableCommands = new ArrayList<>();
+    public boolean isProviderPopupVisible = false;
+    public int providerSelectIndex = 0;
+    public final List<ProviderInfo> providers = new ArrayList<>();
+    public String currentProviderId = "";
     /**
      * 最近一次 SessionUpdate 的 messageId（Unstable；当前仅记录不用于消息合并）。
      * 来源：SessionUpdate 各子类型中的 messageId 字段。
@@ -244,6 +248,28 @@ public class AppState {
                     break;
                 }
             }
+        }
+    }
+
+    public void toggleProviderPopup() {
+        isProviderPopupVisible = !isProviderPopupVisible;
+        if (isProviderPopupVisible) {
+            providerSelectIndex = 0;
+        }
+    }
+
+    public void closeProviderPopup() {
+        isProviderPopupVisible = false;
+        notifyStateChanged();
+    }
+
+    /**
+     * 清空并设置 Provider 列表
+     */
+    public void setProviders(List<ProviderInfo> providerList) {
+        this.providers.clear();
+        if (providerList != null) {
+            this.providers.addAll(providerList);
         }
     }
 

@@ -30,4 +30,10 @@ public class TokenUsage {
     public long contextWindowSize = 0;
     public double costUsd = 0.0;
     public String costCurrency = "";
+    /** 会话总 Token（来自 _meta.sessionTotal） */
+    public long sessionTotal = 0;
+    /** 耗时（秒，来自 _meta.duration） */
+    public double duration = 0.0;
+    /** 速度（tokens/s，来自 _meta.speed） */
+    public String speed = "";
 }

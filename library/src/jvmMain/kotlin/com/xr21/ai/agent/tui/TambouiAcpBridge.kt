@@ -13,6 +13,10 @@ import com.xr21.ai.agent.tui.acp.AcpLifecycleState
 import com.xr21.ai.agent.tui.acp.ReconnectStrategy
 import com.xr21.ai.agent.tui.config.ACPConnectConfig
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.long
 import com.xr21.ai.agent.tui.AppState as JavaAppState
 
 /**
@@ -222,6 +226,91 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
     override fun destroy() {
         acpClient.destroy()
     }
+    /** 列出 Provider */
+    override fun listProviders() {
+        scope.launch {
+            val result = acpClient.listProviders()
+            if (result.isSuccess) {
+                // 保留本地已有的 enabled 状态，新增的 Provider 默认 enabled=true
+                val existingEnabled = javaAppState.providers.associate { it.id to it.enabled }
+                val providers = result.getOrThrow().providers.map { provider ->
+                    ProviderInfo(
+                         provider.id,
+                        provider.current?.baseUrl ?: "",
+                        provider.current?.apiType?.value ?: "openai",
+                        existingEnabled[provider.id] ?: true
+                    )
+                }
+                callback?.onEvent(object : TuiApp.AcpEvent {
+                    override fun apply(state: JavaAppState) {
+                        state.setProviders(providers)
+                    }
+                })
+            } else {
+                callback?.onError("列出 Provider 失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 设置 Provider */
+    override fun setProvider(id: String, apiType: String, baseUrl: String) {
+        scope.launch {
+            val result = acpClient.setProvider(id, LlmProtocol(apiType), baseUrl)
+            if (result.isFailure) {
+                callback?.onError("设置 Provider 失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 禁用 Provider */
+    override fun disableProvider(id: String) {
+        scope.launch {
+            val result = acpClient.disableProvider(id)
+            if (result.isSuccess) {
+                // 更新本地状态
+                javaAppState.providers.find { it.id == id }?.setEnabled(false)
+            } else {
+                callback?.onError("禁用 Provider 失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 启用 Provider */
+    override fun enableProvider(id: String) {
+        scope.launch {
+            val result = acpClient.enableProvider(id)
+            if (result.isSuccess) {
+                // 更新本地状态
+                javaAppState.providers.find { it.id == id }?.setEnabled(true)
+            } else {
+                callback?.onError("启用 Provider 失败: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    /** 刷新 Provider 列表 */
+    override fun refreshProviders() {
+        listProviders()
+    }
+
+    /** 切换当前活跃 Provider */
+    override fun switchProvider(id: String) {
+        scope.launch {
+            // 先获取该 Provider 的当前配置
+            val result = acpClient.listProviders()
+            if (result.isSuccess) {
+                val provider = result.getOrThrow().providers.find { it.id == id }
+                if (provider != null) {
+                    val baseUrl = provider.current?.baseUrl ?: ""
+                    val apiType = provider.current?.apiType?.value ?: "openai"
+                    // 通过 setProvider 激活该 Provider
+                    acpClient.setProvider(id, LlmProtocol(apiType), baseUrl)
+                }
+            }
+            // 切换后刷新 Provider 列表以更新 UI 状态
+            listProviders()
+        }
+    }
 
     /** 获取当前生命周期状态 */
     val lifecycleState: AcpLifecycleState get() = acpClient.lifecycleState.value
@@ -327,7 +416,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
  * 覆盖 ACP SDK 全部 SessionUpdate 子类型（12 种 + 1 兜底），其中 messageId 字段为 Unstable，
  * 仅记录到 AppState.lastMessageId，不参与消息合并（最小实现）。
  */
-@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+@OptIn(UnstableApi::class)
 class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
     override fun apply(state: JavaAppState) {
         when (update) {
@@ -430,7 +519,7 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
             }
 
             is SessionUpdate.UsageUpdate -> {
-                val tu = com.xr21.ai.agent.tui.TokenUsage().apply {
+                val tu = TokenUsage().apply {
                     totalTokens = update.used
                     contextWindowSize = update.size
                     update.cost?.let { c ->
@@ -479,8 +568,8 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
  *
  * 覆盖 PromptResponse 全部字段（stopReason / userMessageId / usage 全字段）；_meta 为协议扩展，暂不消费。
  */
-@OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
-class PromptResponseEventAdapter(private val response: com.agentclientprotocol.model.PromptResponse) : TuiApp.AcpEvent {
+@OptIn(UnstableApi::class)
+class PromptResponseEventAdapter(private val response: PromptResponse) : TuiApp.AcpEvent {
     override fun apply(state: JavaAppState) {
         // 1. stopReason
         state.setStopReason(response.stopReason.name)
@@ -488,15 +577,24 @@ class PromptResponseEventAdapter(private val response: com.agentclientprotocol.m
         // 2. userMessageId（Unstable；用于客户端发出消息的确认回执）
         state.setLastUserMessageId(response.userMessageId?.value)
 
-        // 3. usage（Unstable；全字段填入 TokenUsage）
+        // 3. usage（Unstable；全字段填入 TokenUsage，含 _meta 扩展字段）
         response.usage?.let { usage ->
-            val tu = com.xr21.ai.agent.tui.TokenUsage().apply {
+            val tu = TokenUsage().apply {
                 promptTokens = usage.inputTokens
                 completionTokens = usage.outputTokens
                 totalTokens = usage.totalTokens
                 thoughtTokens = usage.thoughtTokens ?: 0L
                 cachedReadTokens = usage.cachedReadTokens ?: 0L
                 cachedWriteTokens = usage.cachedWriteTokens ?: 0L
+                // 从 _meta 中提取扩展字段（kotlinx.serialization.json）
+                usage._meta?.let { meta ->
+                    val obj = meta as? JsonObject
+                    if (obj != null) {
+                        sessionTotal = (obj["sessionTotal"] as? JsonPrimitive)?.long ?: 0L
+                        duration = (obj["duration"] as? JsonPrimitive)?.double ?: 0.0
+                        speed = (obj["speed"] as? JsonPrimitive)?.content ?: ""
+                    }
+                }
             }
             state.setTokenUsage(tu)
         }

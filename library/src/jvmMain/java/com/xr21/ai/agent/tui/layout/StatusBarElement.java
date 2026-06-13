@@ -25,6 +25,7 @@ public class StatusBarElement {
     private Runnable onThemeToggle;
     private java.util.function.BiConsumer<String, String> onConfigChange;
     private java.util.function.Consumer<ConfigOption> onConfigClick;
+    private Runnable onProviderClick;
 
     public StatusBarElement(AppState appState, TuiTheme theme) {
         this.appState = appState;
@@ -33,6 +34,10 @@ public class StatusBarElement {
 
     public StatusBarElement onModelClick(Runnable callback) {
         this.onModelClick = callback;
+        return this;
+    }
+    public StatusBarElement onProviderClick(Runnable callback) {
+        this.onProviderClick = callback;
         return this;
     }
 
@@ -99,6 +104,17 @@ public class StatusBarElement {
                     return EventResult.UNHANDLED;
                 });
 
+        // Provider 区域 — 独立可点击弹出 Provider 管理
+        int providerCount = appState.providers.size();
+        Element providerPart = text(" 厂商: " + providerCount + " ▾ ")
+                .onMouseEvent(e -> {
+                    if (e.kind() == MouseEventKind.PRESS && onProviderClick != null) {
+                        onProviderClick.run();
+                        return EventResult.HANDLED;
+                    }
+                    return EventResult.UNHANDLED;
+                });
+
         // 主题切换区域 — 独立可点击
         Element themePart = text(themeIcon)
                 .onMouseEvent(e -> {
@@ -113,6 +129,8 @@ public class StatusBarElement {
                 text(connSymbol + " |"),
                 row(configPartList.toArray(new Element[0])),
                 modelPart,
+                text(" |"),
+                providerPart,
                 text("| 会话: " + appState.sessionCount() + "/" + appState.totalSessions
                         + " | " + time),
                 spacer(),

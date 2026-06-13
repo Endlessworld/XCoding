@@ -48,6 +48,8 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.apache.commons.lang3.StringUtils
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -94,9 +96,9 @@ class AgiAgentSession(
     private val runnableConfig: RunnableConfig
 ) : AgentSession {
     private val responseBuilder = StringBuilder()
-    private val totalTokens = AtomicInteger(0)
     private val tokenUsageRef = AtomicReference(Usage(0,0,0,0,0,0))
-    private val completionTokens = AtomicInteger(0)
+    private val sessionTokenUsageRef = AtomicReference(Usage(0,0,0,0,0,0))
+
     private val startTime = AtomicLong(0L)
 
     override val configOptions: List<SessionConfigOption>
@@ -199,7 +201,7 @@ class AgiAgentSession(
         _meta: JsonElement?,
     ): Flow<Event> = flow {
         logger.info { "Processing prompt for session $sessionId" }
-        startTime.set(System.currentTimeMillis())
+
         val cancelledFlag = AtomicBoolean(false)
         runnableConfig.context().put("cancelled", cancelledFlag)
         try {
@@ -289,13 +291,13 @@ class AgiAgentSession(
                 emitAgentOutputEvents(output)
             }
             activeRequests.remove(requestId)
-            runnableConfig.context().put("totalTokens", totalTokens.get())
-            runnableConfig.context().put("completionTokens", completionTokens.get())
+            runnableConfig.context()["sessionTotalTokens"] = sessionTokenUsageRef.get().totalTokens
+            runnableConfig.context().put("sessionCompletionTokens", sessionTokenUsageRef.get().outputTokens)
             val latency = System.currentTimeMillis() - startTime.get()
             val duration = latency / 1000.0
-            val tokens = totalTokens.get()
-            val speed = if (duration > 0) String.format("%.2f", completionTokens.toDouble() / duration) else "0.00"
-            val chunk = "Token usage: total=${tokens}, duration=${duration}s, speed=${speed} tokens/s"
+            val tokens = sessionTokenUsageRef.get().totalTokens
+            val speed = if (duration > 0) String.format("%.2f", tokenUsageRef.get().outputTokens / duration) else "0.00"
+            val chunk = "Token usage: sessionTotal=${tokens} ,total=${tokenUsageRef.get().totalTokens},outputTokens=${tokenUsageRef.get().outputTokens }, duration=${duration}s, speed=${speed} tokens/s"
             logger.info { chunk }
             emit(
                 Event.SessionUpdateEvent(
@@ -303,7 +305,22 @@ class AgiAgentSession(
                 )
             )
             logger.info { "events END_TURN" }
-            emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN, null, tokenUsageRef.get())))
+            val sessionUsage = sessionTokenUsageRef.get()
+            val finalUsage = Usage(
+                tokenUsageRef.get().inputTokens,
+                tokenUsageRef.get().outputTokens,
+                tokenUsageRef.get().totalTokens,
+                tokenUsageRef.get().thoughtTokens,
+                tokenUsageRef.get().cachedReadTokens,
+                tokenUsageRef.get().cachedWriteTokens,
+                JsonObject(mapOf(
+                    "sessionTotal" to JsonPrimitive(sessionUsage.totalTokens),
+                    "completionTokens" to JsonPrimitive(sessionUsage.outputTokens),
+                    "duration" to JsonPrimitive(duration),
+                    "speed" to JsonPrimitive(speed)
+                ))
+            )
+            emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN, null, finalUsage)))
         } catch (e: Exception) {
             logger.error(e) { "Error processing prompt" }
             emit(
@@ -342,6 +359,7 @@ class AgiAgentSession(
     private fun createRecursiveAgentFlux(
         agent: Agent, userMessage: UserMessage
     ): Flux<AgentOutput<Any>> {
+        startTime.set(System.currentTimeMillis())
         val initialFlux = SinksUtil.toFlux(agent, userMessage, runnableConfig)
         return initialFlux.expand { output ->
             if (output.interruptionMetadata != null) {
@@ -374,8 +392,15 @@ class AgiAgentSession(
         // Text chunks -> AgentMessageChunk events
         if (output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
             tokenUsageRef.set(Usage(output.tokenUsage.promptTokens.toLong(), output.tokenUsage.completionTokens.toLong(), output.tokenUsage.totalTokens.toLong(),0,0,0))
-            totalTokens.addAndGet(output.tokenUsage.totalTokens ?: 0)
-            completionTokens.addAndGet(output.tokenUsage.completionTokens ?: 0)
+            val prev = sessionTokenUsageRef.get()
+            sessionTokenUsageRef.set(Usage(
+                inputTokens = prev.inputTokens + (output.tokenUsage.promptTokens ?: 0).toLong(),
+                outputTokens = prev.outputTokens + (output.tokenUsage.completionTokens ?: 0).toLong(),
+                totalTokens = prev.totalTokens + (output.tokenUsage.totalTokens ?: 0).toLong(),
+                thoughtTokens = prev.thoughtTokens,
+                cachedReadTokens = prev.cachedReadTokens,
+                cachedWriteTokens = prev.cachedWriteTokens
+            ))
         }
         if (output.chunk != null) {
             responseBuilder.append(output.chunk)

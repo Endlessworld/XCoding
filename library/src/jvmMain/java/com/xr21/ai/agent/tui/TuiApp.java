@@ -127,6 +127,10 @@ public class TuiApp {
                             appState.modelName = modelName;
                             forceRender();
                         });
+                        // 连接成功后自动刷新 Provider 列表
+                        if (acpBridge != null) {
+                            acpBridge.refreshProviders();
+                        }
                     }
 
                     @Override
@@ -210,6 +214,13 @@ public class TuiApp {
                         runner.focusManager().setFocus("config-select-popup");
                     }
                 })
+                .onProviderClick(() -> {
+                    log.debug("statusElement onProviderClick");
+                    appState.toggleProviderPopup();
+                    if (appState.isProviderPopupVisible) {
+                        runner.focusManager().setFocus("provider-select-popup");
+                    }
+                })
                 .build();
 
         // 主布局：上下结构
@@ -264,6 +275,38 @@ public class TuiApp {
                             .build()
             );
         }
+        if (appState.isProviderPopupVisible) {
+            mainLayout = stack(
+                    mainLayout,
+                    new ProviderSelectPopupElement(appState)
+                            .onProviderRefresh(() -> {
+                                if (acpBridge != null) {
+                                    acpBridge.refreshProviders();
+                                }
+                            })
+                            .onProviderSet((id, baseUrl) -> {
+                                if (acpBridge != null) {
+                                    acpBridge.setProvider(id, "openai", baseUrl);
+                                }
+                            })
+                            .onProviderDisable(id -> {
+                                if (acpBridge != null) {
+                                    acpBridge.disableProvider(id);
+                                }
+                            })
+                            .onProviderEnable(id -> {
+                                if (acpBridge != null) {
+                                    acpBridge.enableProvider(id);
+                                }
+                            })
+                            .onProviderSwitch(id -> {
+                                if (acpBridge != null) {
+                                    acpBridge.switchProvider(id);
+                                }
+                            })
+                            .build()
+            );
+        }
         if (appState.isHelpPopupVisible) {
             mainLayout = stack(
                     mainLayout,
@@ -277,6 +320,8 @@ public class TuiApp {
                 runner.focusManager().setFocus("model-select-content");
             } else if (appState.isConfigPopupVisible) {
                 runner.focusManager().setFocus("config-select-content");
+            } else if (appState.isProviderPopupVisible) {
+                runner.focusManager().setFocus("provider-select-content");
             } else if (appState.isSessionListPopupVisible) {
                 runner.focusManager().setFocus("session-list-content");
             } else if (appState.focusPanel == PanelType.INPUT) {
@@ -324,6 +369,15 @@ public class TuiApp {
         if (key.isChar('k') && key.modifiers().ctrl()) {
             appState.clearConversation();
             firstMessageAnimationAdded = false;
+            return EventResult.HANDLED;
+        }
+        if (key.isChar('r') && key.modifiers().ctrl()) {
+            appState.toggleProviderPopup();
+            if (appState.isProviderPopupVisible) {
+                if (acpBridge != null) {
+                    acpBridge.refreshProviders();
+                }
+            }
             return EventResult.HANDLED;
         }
 
@@ -475,6 +529,24 @@ public class TuiApp {
         }
 
         default void destroy() {
+        }
+
+        default void listProviders() {
+        }
+
+        default void setProvider(String id, String apiType, String baseUrl) {
+        }
+
+        default void disableProvider(String id) {
+        }
+
+        default void enableProvider(String id) {
+        }
+
+        default void refreshProviders() {
+        }
+
+        default void switchProvider(String id) {
         }
     }
 

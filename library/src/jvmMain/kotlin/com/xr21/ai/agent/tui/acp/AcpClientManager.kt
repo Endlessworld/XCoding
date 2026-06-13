@@ -408,6 +408,35 @@ class AcpClientManager(private val appState: AppState) {
         }
     }
 
+    /**
+     * 启用指定 Provider（Unstable API）。
+     *
+     * 注意：ACP SDK 尚未提供独立的 enableProvider 方法，
+     * 此处通过重新调用 setProvider 来模拟启用（重新激活已有配置）。
+     * 仅在 WebSocket 模式下支持。
+     */
+    @OptIn(com.agentclientprotocol.annotations.UnstableApi::class)
+    suspend fun enableProvider(id: String): Result<Unit> {
+        return try {
+            val client = acpClient
+                ?: return Result.failure(Exception("客户端未初始化，无法启用 Provider"))
+            if (agentInfo == null) {
+                return Result.failure(Exception("尚未初始化，无法启用 Provider"))
+            }
+            // 先获取该 Provider 的当前配置，再通过 setProvider 重新激活
+            val providersResp = client.listProviders()
+            val provider = providersResp.providers.find { it.id == id }
+                ?: return Result.failure(Exception("未找到 Provider: $id"))
+            val current = provider.current
+                ?: return Result.failure(Exception("Provider $id 没有当前配置，无法启用"))
+            client.setProvider(id, current.apiType, current.baseUrl, null)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            emitEvent(AcpLifecycleEvent.ErrorOccurred(e))
+            Result.failure(e)
+        }
+    }
+
     // ========== 会话管理 ==========
 
     /**

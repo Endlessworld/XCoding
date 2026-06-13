@@ -28,13 +28,16 @@ public class InfoPanelElement {
     }
 
     private Element buildTokenSection() {
-        return column(
-                text("\uD83D\uDCA0 Token 用量").bold(),
-                text("  Prompt: " + appState.tokenUsage.promptTokens),
-                text("  生成:    " + appState.tokenUsage.completionTokens),
-                text("  总计:    " + appState.tokenUsage.totalTokens).bold(),
-                text("")
-        );
+        TokenUsage u = appState.tokenUsage;
+        return column(text("\uD83D\uDCA0 Token 用量").bold(), text("  输入:     " + u.promptTokens),
+                text("  输出:     " + u.completionTokens), text("  总计:     " + u.totalTokens).bold(),
+                u.thoughtTokens > 0 ? text("  思考:     " + u.thoughtTokens) : text(""),
+                u.cachedReadTokens > 0 ? text("  缓存读:   " + u.cachedReadTokens) : text(""),
+                u.cachedWriteTokens > 0 ? text("  缓存写:   " + u.cachedWriteTokens) : text(""),
+                u.sessionTotal > 0 ? text("  会话总计: " + u.sessionTotal) : text(""),
+                u.duration > 0 ? text("  耗时:     " + String.format("%.1fs", u.duration)) : text(""),
+                !u.speed.isEmpty() ? text("  速度:     " + u.speed + " tok/s") : text(""),
+                u.costUsd > 0 ? text("  费用:     $" + String.format("%.6f", u.costUsd)) : text(""), text(""));
     }
 
     private Element buildTodoSection() {
@@ -58,25 +61,7 @@ public class InfoPanelElement {
         return column(items);
     }
 
-    private Element buildConfigSection() {
-        if (appState.configOptions.isEmpty()) return text("");
-        Element[] items = new Element[appState.configOptions.size() + 1];
-        items[0] = text("\u2699 配置").bold();
-        int idx = 1;
-        for (ConfigOption opt : appState.configOptions) {
-            String valueText;
-            if ("boolean".equals(opt.type)) {
-                valueText = Boolean.parseBoolean(opt.currentValue) ? "\u2713 开" : "\u2717 关";
-            } else {
-                valueText = opt.currentValue;
-            }
-            items[idx++] = text("  " + opt.name + ": " + valueText);
-        }
-        return column(items);
-    }
-
     public Element build() {
-        return panel(" 信息 ", buildContent())
-                .id("info-panel");
+        return panel(" 信息 ", buildContent()).id("info-panel").percent(15);
     }
 }
