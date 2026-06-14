@@ -17,12 +17,8 @@
 
 package com.xr21.ai.agent.acp
 
-import com.agentclientprotocol.agent.AgentInfo
-import com.agentclientprotocol.agent.AgentSession
-import com.agentclientprotocol.agent.AgentSupport
-import com.agentclientprotocol.agent.client
+import com.agentclientprotocol.agent.*
 import com.agentclientprotocol.annotations.UnstableApi
-import com.agentclientprotocol.agent.NesAgentSession
 import com.agentclientprotocol.client.ClientInfo
 import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
@@ -33,13 +29,13 @@ import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
 import com.xr21.ai.agent.agent.LocalAgent
 import com.xr21.ai.agent.config.AiModels
+import com.xr21.ai.agent.config.ModelConfigLoader
 import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
-import com.xr21.ai.agent.tools.ToolKindFind
-import com.xr21.ai.agent.utils.SinksUtil
-import com.xr21.ai.agent.config.ModelConfigLoader
 import com.xr21.ai.agent.model.Config
+import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.utils.Json
+import com.xr21.ai.agent.utils.SinksUtil
 import com.xr21.ai.agent.utils.ToolsUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
@@ -51,9 +47,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.apache.commons.lang3.StringUtils
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
@@ -62,9 +55,11 @@ import org.springframework.util.CollectionUtils
 import org.springframework.util.MimeType
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Sinks
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -270,7 +265,7 @@ class AgiAgentSession(
             // Register cancellable request so cancel() can find and cancel it
             val cancellableRequest = CancellableRequest(
                 requestId,
-                sessionId as SessionId,
+                sessionId.value,
                 executionThread,
                 recursiveFlux
             )
@@ -333,11 +328,18 @@ class AgiAgentSession(
     }
 
 
+    override suspend fun close(_meta: JsonElement?): CloseSessionResponse {
+        logger.info { "Closing session: $sessionId" }
+        cancel()
+        sessionsRunnableConfig.remove(sessionId.toString())
+        sessionMcpServers.remove(sessionId.toString())
+        return CloseSessionResponse()
+    }
+
     override suspend fun cancel() {
         logger.info { "Cancellation requested for session: $sessionId" }
-        // Take a snapshot of keys to avoid concurrent modification during iteration
         val requestIdsToCancel = activeRequests.filterValues { request ->
-            request.sessionId == sessionId
+            request.sessionId == sessionId.value
         }.keys.toList()
         for (requestId in requestIdsToCancel) {
             val request = activeRequests[requestId]
@@ -345,10 +347,10 @@ class AgiAgentSession(
                 // 先 dispose 订阅（会级联取消 recursiveFlux），再发送 complete 信号给 agentSink
                 // 确保上游 Flux 先停止发射，再通知下游迭代器结束
                 request.cancel()
+                logger.info { "Cancelled  request : ${request.sessionId}" }
                 activeRequests.remove(requestId)
             }
         }
-
         logger.info { "Cancelled ${requestIdsToCancel.size} active request(s) for session: $sessionId" }
     }
 

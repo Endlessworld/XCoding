@@ -15,7 +15,6 @@
  */
 package com.xr21.ai.agent.entity;
 
-import com.agentclientprotocol.model.SessionId;
 import com.xr21.ai.agent.tools.ShellTools;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.Disposable;
@@ -35,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class CancellableRequest {
     public final String requestId;
-    public final SessionId sessionId;
+    public final String sessionId;
     final Thread executionThread;
     final Flux<?> flux;
     final List<String> activeToolCallIds;
@@ -47,7 +46,7 @@ public class CancellableRequest {
     private Sinks.Many<?> agentSink;
     private final List<Sinks.Many<?>> recursiveSinks = new ArrayList<>();
 
-    public CancellableRequest(String requestId, SessionId sessionId, Thread executionThread, Flux<?> flux) {
+    public CancellableRequest(String requestId, String sessionId, Thread executionThread, Flux<?> flux) {
         this.requestId = requestId;
         this.sessionId = sessionId;
         this.executionThread = executionThread;
