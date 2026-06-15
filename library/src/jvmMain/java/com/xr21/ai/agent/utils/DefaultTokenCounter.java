@@ -29,8 +29,17 @@ import java.util.List;
  * @author Endless
  */
 public class DefaultTokenCounter implements TokenCounter {
-    private final TokenCountEstimator tokenCountEstimator = new JTokkitTokenCountEstimator();
-    int DEFAULT_CHARS_PER_TOKEN = 4;
+
+
+    public static class Holder {
+        private static final TokenCountEstimator TOKEN_COUNT_ESTIMATOR;
+
+        //静态内部类只有在第一次被显式引用时才会被加载和初始化，外部类的加载并不会触发静态内部类的初始化
+        static {
+            TOKEN_COUNT_ESTIMATOR = new JTokkitTokenCountEstimator();
+        }
+
+    }
 
     @Override
     public int countTokens(List<Message> messages) {
@@ -40,20 +49,20 @@ public class DefaultTokenCounter implements TokenCounter {
             if (msg instanceof ToolResponseMessage toolResponseMessage) {
                 for (ToolResponseMessage.ToolResponse response : toolResponseMessage.getResponses()) {
                     if (response.responseData() != null) {
-                        total += tokenCountEstimator.estimate(response.responseData());
+                        total += Holder.TOKEN_COUNT_ESTIMATOR.estimate(response.responseData());
                     }
                 }
             } else if (msg instanceof AssistantMessage assistantMessage) {
                 if (msg.getText() != null) {
-                    total += tokenCountEstimator.estimate(msg.getText());
+                    total += Holder.TOKEN_COUNT_ESTIMATOR.estimate(msg.getText());
                 }
                 for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
                     if (toolCall.arguments() != null) {
-                        total += tokenCountEstimator.estimate(toolCall.arguments());
+                        total += Holder.TOKEN_COUNT_ESTIMATOR.estimate(toolCall.arguments());
                     }
                 }
             } else if (msg.getText() != null) {
-                total += tokenCountEstimator.estimate(msg.getText());
+                total += Holder.TOKEN_COUNT_ESTIMATOR.estimate(msg.getText());
             }
         }
 
