@@ -16,6 +16,7 @@
 package com.xr21.ai.agent.tui;
 
 import com.agentclientprotocol.model.AvailableCommand;
+import com.agentclientprotocol.model.SessionUpdate;
 import com.xr21.ai.agent.tui.acp.ConnectionState;
 import dev.tamboui.widgets.input.TextAreaState;
 
@@ -365,11 +366,12 @@ public class AppState {
         List<ChatMessage> msgs = currentSession().messages;
         for (int i = msgs.size() - 1; i >= 0; i--) {
             ChatMessage m = msgs.get(i);
-            if (m.role == MessageRole.TOOL_CALL || m.role == MessageRole.TOOL_RESULT) {
+            if (m.role == MessageRole.ASSISTANT && com.xr21.ai.agent.bridge.BridgeKt.hasToolCallEvents(m.events)) {
                 m.isExpanded = !m.isExpanded;
                 break;
             }
         }
+        notifyStateChanged();
     }
 
     /**
@@ -394,7 +396,11 @@ public class AppState {
 
     public void sendMessage(String content) {
         if (content == null || content.isBlank()) return;
-        currentSession().messages.add(new ChatMessage(MessageRole.USER, content));
+        com.agentclientprotocol.model.SessionUpdate event =
+            com.xr21.ai.agent.bridge.BridgeKt.createUserMessageChunk(content);
+        ChatMessage msg = new ChatMessage(MessageRole.USER);
+        msg.events.add(event);
+        currentSession().messages.add(msg);
         inputHistory.add(content);
         inputHistoryIndex = inputHistory.size();
         inputState.clear();
@@ -413,122 +419,6 @@ public class AppState {
         }
     }
 
-    public boolean canCreateNewSession() {
-        return sessions.size() < MAX_SESSIONS;
-    }
-
-    public void appendStreamingContent(String content) {
-        List<ChatMessage> msgs = currentSession().messages;
-        if (!msgs.isEmpty()) {
-            ChatMessage last = msgs.get(msgs.size() - 1);
-            if (last.isStreaming && last.role == MessageRole.ASSISTANT) {
-                last.content += content;
-                scrollToBottom();
-                return;
-            }
-        }
-        msgs.add(new ChatMessage(MessageRole.ASSISTANT, content, true));
-        scrollToBottom();
-    }
-
-    public void appendThoughtContent(String content) {
-        List<ChatMessage> msgs = currentSession().messages;
-        if (!msgs.isEmpty()) {
-            ChatMessage last = msgs.get(msgs.size() - 1);
-            if (last.role == MessageRole.ASSISTANT && last.isStreaming) {
-                last.isStreaming = false;
-            }
-        }
-        if (!msgs.isEmpty()) {
-            ChatMessage last = msgs.get(msgs.size() - 1);
-            if (last.role == MessageRole.SYSTEM && last.isStreaming) {
-                last.content += content;
-                scrollToBottom();
-                return;
-            }
-        }
-        msgs.add(new ChatMessage(MessageRole.SYSTEM, "\uD83D\uDCAD " + content, true));
-        scrollToBottom();
-    }
-
-    public void addToolCall(String toolName, String args, String toolCallId) {
-        finishStreaming();
-        ChatMessage msg = new ChatMessage(MessageRole.TOOL_CALL,
-                "\uD83D\uDD27 " + toolName, true);
-        msg.toolCallId = toolCallId;
-        msg.toolStatus = "IN_PROGRESS";
-        msg.toolName = toolName;
-        msg.toolInput = args;
-        currentSession().messages.add(msg);
-        scrollToBottom();
-    }
-
-    public void appendToolCallUpdate(String content, String toolCallId) {
-        List<ChatMessage> msgs = currentSession().messages;
-        for (int i = msgs.size() - 1; i >= 0; i--) {
-            ChatMessage msg = msgs.get(i);
-            if (msg.role == MessageRole.TOOL_CALL && toolCallId.equals(msg.toolCallId)) {
-                if (msg.toolInput == null || msg.toolInput.isEmpty()) {
-                    msg.toolInput = content;
-                } else {
-                    msg.toolInput += content;
-                }
-                scrollToBottom();
-                return;
-            }
-        }
-        // Fallback: append to last tool call if no match
-        if (!msgs.isEmpty()) {
-            ChatMessage last = msgs.get(msgs.size() - 1);
-            if (last.role == MessageRole.TOOL_CALL && last.isStreaming) {
-                last.toolInput = (last.toolInput == null ? "" : last.toolInput) + content;
-                scrollToBottom();
-            }
-        }
-    }
-
-    public void updateToolCall(String toolCallId, String status, String output) {
-        List<ChatMessage> msgs = currentSession().messages;
-        for (int i = msgs.size() - 1; i >= 0; i--) {
-            ChatMessage msg = msgs.get(i);
-            if (toolCallId.equals(msg.toolCallId)) {
-                msg.toolStatus = status;
-                msg.isStreaming = false;
-                if (output != null && !output.isEmpty()) {
-                    msg.toolOutput = output;
-                }
-                scrollToBottom();
-                return;
-            }
-        }
-    }
-
-    public void addToolResult(String content, String toolCallId) {
-        List<ChatMessage> msgs = currentSession().messages;
-        if (!msgs.isEmpty()) {
-            ChatMessage last = msgs.get(msgs.size() - 1);
-            if (last.isStreaming) last.isStreaming = false;
-        }
-        // Try to match existing tool call by toolCallId
-        for (int i = msgs.size() - 1; i >= 0; i--) {
-            ChatMessage msg = msgs.get(i);
-            if (toolCallId.equals(msg.toolCallId)) {
-                msg.toolStatus = "COMPLETED";
-                msg.isStreaming = false;
-                String truncated = content.length() > 500 ? content.substring(0, 500) + "\n\n... (结果过长，已截断)" : content;
-                msg.toolOutput = truncated;
-                scrollToBottom();
-                return;
-            }
-        }
-        // Fallback: add as standalone result
-        String truncated = content.length() > 500 ? content.substring(0, 500) + "\n\n... (结果过长，已截断)" : content;
-        ChatMessage result = new ChatMessage(MessageRole.TOOL_RESULT, "\uD83D\uDCCE " + truncated);
-        result.toolCallId = toolCallId;
-        result.toolStatus = "COMPLETED";
-        currentSession().messages.add(result);
-        scrollToBottom();
-    }
 
     /**
      * 检查当前滚动位置是否在底部附近（3行以内）

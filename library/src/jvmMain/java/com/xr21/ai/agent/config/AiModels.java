@@ -75,6 +75,7 @@ public enum AiModels {
             return OpenAiChatModel.builder().defaultOptions(OpenAiChatOptions.builder()
                     .model(effectiveModelName)
                     .temperature(temperature)
+                    .reasoningEffort("low")
 //                    .parallelToolCalls(true)
 //                    .streamUsage(true)
 //                    .toolChoice("auto")

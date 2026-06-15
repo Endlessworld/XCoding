@@ -6,6 +6,7 @@ package com.xr21.ai.agent.tui
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.model.*
+import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.tui.AppState
 import com.xr21.ai.agent.tui.acp.AcpClientManager
 import com.xr21.ai.agent.tui.acp.AcpLifecycleEvent
@@ -421,45 +422,23 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
     override fun apply(state: JavaAppState) {
         when (update) {
             is SessionUpdate.UserMessageChunk -> {
-                val text = (update.content as? ContentBlock.Text)?.text ?: ""
-                if (text.isNotEmpty()) {
-                    state.currentSession().messages.add(
-                        ChatMessage(
-                            MessageRole.USER, text
-                        )
-                    )
-                }
+                BridgeKt.addEventToMessages(state.currentSession().messages, update)
             }
 
             is SessionUpdate.AgentMessageChunk -> {
-                val text = (update.content as? ContentBlock.Text)?.text ?: ""
-                state.appendStreamingContent(text)
+                BridgeKt.addEventToMessages(state.currentSession().messages, update)
             }
 
             is SessionUpdate.AgentThoughtChunk -> {
-                val text = (update.content as? ContentBlock.Text)?.text ?: ""
-                state.appendThoughtContent(text)
+                BridgeKt.addEventToMessages(state.currentSession().messages, update)
             }
 
             is SessionUpdate.ToolCall -> {
-                val args = extractText(update.content)
-                state.addToolCall(update.title, args, update.toolCallId.value)
+                BridgeKt.addEventToMessages(state.currentSession().messages, update)
             }
 
             is SessionUpdate.ToolCallUpdate -> {
-                val toolCallId = update.toolCallId.value
-                when (update.status) {
-                    ToolCallStatus.COMPLETED, ToolCallStatus.FAILED -> {
-                        val result = extractText(update.content ?: emptyList())
-                        val status = if (update.status == ToolCallStatus.COMPLETED) "COMPLETED" else "FAILED"
-                        state.updateToolCall(toolCallId, status, result)
-                    }
-
-                    else -> {
-                        val content = extractText(update.content ?: emptyList())
-                        if (content.isNotEmpty()) state.appendToolCallUpdate(content, toolCallId)
-                    }
-                }
+                BridgeKt.addEventToMessages(state.currentSession().messages, update)
             }
 
             is SessionUpdate.PlanUpdate -> {

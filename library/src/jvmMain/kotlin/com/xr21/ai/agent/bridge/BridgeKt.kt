@@ -16,16 +16,259 @@
 package com.xr21.ai.agent.bridge
 
 import com.agentclientprotocol.annotations.UnstableApi
-import com.agentclientprotocol.model.ContentBlock
-import com.agentclientprotocol.model.MessageId
-import com.agentclientprotocol.model.SessionUpdate
-import com.agentclientprotocol.model.ToolCallLocation
+import com.agentclientprotocol.model.*
+import com.xr21.ai.agent.tui.ChatMessage
+import com.xr21.ai.agent.tui.MessageRole
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Bridge functions for Java tools to create ACP model types that have Kotlin-specific types (e.g. UInt).
+ * ACP 事件聚合/查询桥接。
+ *
+ * Java 侧通过此类调用 Kotlin 侧的 ACP 类型操作，包括：
+ * - 流式事件聚合（连续同类型 chunk 合并）
+ * - 事件查询/分组
+ * - 文本提取
  */
 object BridgeKt {
+
+    // ========== 事件聚合（核心）==========
+
+    /**
+     * 将 ACP 事件聚合到消息列表中。
+     *
+     * 规则：
+     * - UserMessageChunk → 追加到最后一个 USER 消息；不存在则新建
+     * - AgentMessageChunk / AgentThoughtChunk / ToolCall / ToolCallUpdate → 追加到最后一个 ASSISTANT 消息
+     * - 连续同类型 chunk（message 或 thought）→ 合并文本到同一事件
+     */
+    @JvmStatic
+    fun addEventToMessages(messages: MutableList<ChatMessage>, event: SessionUpdate) {
+        when (event) {
+            is SessionUpdate.UserMessageChunk -> {
+                val text = (event.content as? ContentBlock.Text)?.text ?: ""
+                if (text.isEmpty()) return
+                val last = messages.lastOrNull()
+                if (last != null && last.role == MessageRole.USER) {
+                    mergeOrAppendChunk(last.events, event)
+                } else {
+                    messages.add(ChatMessage(MessageRole.USER).apply {
+                        events.add(SessionUpdate.UserMessageChunk(ContentBlock.Text(text), event.messageId))
+                    })
+                }
+            }
+
+            is SessionUpdate.AgentMessageChunk -> {
+                val text = (event.content as? ContentBlock.Text)?.text ?: ""
+                val last = messages.lastOrNull()
+                if (last != null && last.role == MessageRole.ASSISTANT) {
+                    mergeOrAppendChunk(last.events, event)
+                } else {
+                    messages.add(ChatMessage(MessageRole.ASSISTANT, true).apply {
+                        events.add(SessionUpdate.AgentMessageChunk(ContentBlock.Text(text), event.messageId))
+                    })
+                }
+            }
+
+            is SessionUpdate.AgentThoughtChunk -> {
+                val text = (event.content as? ContentBlock.Text)?.text ?: ""
+                val last = messages.lastOrNull()
+                if (last != null && last.role == MessageRole.ASSISTANT) {
+                    mergeOrAppendChunk(last.events, event)
+                } else {
+                    messages.add(ChatMessage(MessageRole.ASSISTANT, true).apply {
+                        events.add(SessionUpdate.AgentThoughtChunk(ContentBlock.Text(text), event.messageId))
+                    })
+                }
+            }
+
+            is SessionUpdate.ToolCall -> {
+                val last = messages.lastOrNull()
+                if (last != null && last.role == MessageRole.ASSISTANT) {
+                    last.events.add(event)
+                } else {
+                    messages.add(ChatMessage(MessageRole.ASSISTANT, true).apply {
+                        events.add(event)
+                    })
+                }
+            }
+
+            is SessionUpdate.ToolCallUpdate -> {
+                val last = messages.lastOrNull()
+                if (last != null && last.role == MessageRole.ASSISTANT) {
+                    last.events.add(event)
+                } else {
+                    messages.add(ChatMessage(MessageRole.ASSISTANT, true).apply {
+                        events.add(event)
+                    })
+                }
+            }
+
+            else -> {
+                // Unknown / other types: append as standalone ERROR message
+                messages.add(ChatMessage(MessageRole.ERROR).apply {
+                    // Store as a text representation since we can't store arbitrary types
+                })
+            }
+        }
+    }
+
+    /** 合并连续同类型 chunk；不同类型则追加新事件 */
+    private fun mergeOrAppendChunk(events: MutableList<SessionUpdate>, newEvent: SessionUpdate) {
+        if (events.isEmpty()) {
+            events.add(newEvent)
+            return
+        }
+        val last = events.last()
+        when {
+            last is SessionUpdate.UserMessageChunk && newEvent is SessionUpdate.UserMessageChunk -> {
+                val lastText = (last.content as? ContentBlock.Text)?.text ?: ""
+                val newText = (newEvent.content as? ContentBlock.Text)?.text ?: ""
+                events[events.size - 1] = SessionUpdate.UserMessageChunk(
+                    ContentBlock.Text(lastText + newText), newEvent.messageId
+                )
+            }
+            last is SessionUpdate.AgentMessageChunk && newEvent is SessionUpdate.AgentMessageChunk -> {
+                val lastText = (last.content as? ContentBlock.Text)?.text ?: ""
+                val newText = (newEvent.content as? ContentBlock.Text)?.text ?: ""
+                events[events.size - 1] = SessionUpdate.AgentMessageChunk(
+                    ContentBlock.Text(lastText + newText), newEvent.messageId
+                )
+            }
+            last is SessionUpdate.AgentThoughtChunk && newEvent is SessionUpdate.AgentThoughtChunk -> {
+                val lastText = (last.content as? ContentBlock.Text)?.text ?: ""
+                val newText = (newEvent.content as? ContentBlock.Text)?.text ?: ""
+                events[events.size - 1] = SessionUpdate.AgentThoughtChunk(
+                    ContentBlock.Text(lastText + newText), newEvent.messageId
+                )
+            }
+            else -> events.add(newEvent)
+        }
+    }
+
+    // ========== 文本聚合（渲染时用）==========
+
+    /** 聚合所有 UserMessageChunk 的文本 */
+    @JvmStatic
+    fun getUserMessageText(events: List<SessionUpdate>): String = buildString {
+        for (e in events) {
+            if (e is SessionUpdate.UserMessageChunk) {
+                append((e.content as? ContentBlock.Text)?.text ?: "")
+            }
+        }
+    }
+
+    /** 聚合所有 AgentMessageChunk 的文本 */
+    @JvmStatic
+    fun getAgentMessageText(events: List<SessionUpdate>): String = buildString {
+        for (e in events) {
+            if (e is SessionUpdate.AgentMessageChunk) {
+                append((e.content as? ContentBlock.Text)?.text ?: "")
+            }
+        }
+    }
+
+    /** 聚合所有 AgentThoughtChunk 的文本 */
+    @JvmStatic
+    fun getAgentThoughtText(events: List<SessionUpdate>): String = buildString {
+        for (e in events) {
+            if (e is SessionUpdate.AgentThoughtChunk) {
+                append((e.content as? ContentBlock.Text)?.text ?: "")
+            }
+        }
+    }
+
+    // ========== 事件查询 ==========
+
+    /** 获取消息中最后一个事件的简单类名 */
+    @JvmStatic
+    fun getLastEventType(events: List<SessionUpdate>): String {
+        return events.lastOrNull()?.javaClass?.simpleName ?: ""
+    }
+
+    /** 判断最后一个事件是否是可合并的 chunk 类型 */
+    @JvmStatic
+    fun isLastEventChunk(events: List<SessionUpdate>): Boolean {
+        val last = events.lastOrNull() ?: return false
+        return last is SessionUpdate.UserMessageChunk
+                || last is SessionUpdate.AgentMessageChunk
+                || last is SessionUpdate.AgentThoughtChunk
+    }
+
+    /** 查找指定 toolCallId 的 ToolCall 事件 */
+    @JvmStatic
+    fun findToolCall(events: List<SessionUpdate>, toolCallId: String): SessionUpdate.ToolCall? {
+        for (e in events) {
+            if (e is SessionUpdate.ToolCall && e.toolCallId.value == toolCallId) {
+                return e
+            }
+        }
+        return null
+    }
+
+    /** 获取指定 toolCallId 的所有 ToolCallUpdate 事件 */
+    @JvmStatic
+    fun getToolCallUpdates(events: List<SessionUpdate>, toolCallId: String): List<SessionUpdate.ToolCallUpdate> {
+        return events.filterIsInstance<SessionUpdate.ToolCallUpdate>()
+            .filter { it.toolCallId.value == toolCallId }
+    }
+
+    /** 判断消息中是否包含任何 AgentThoughtChunk */
+    @JvmStatic
+    fun hasThoughtEvents(events: List<SessionUpdate>): Boolean {
+        return events.any { it is SessionUpdate.AgentThoughtChunk }
+    }
+
+    /** 判断消息中是否包含任何 ToolCall 事件 */
+    @JvmStatic
+    fun hasToolCallEvents(events: List<SessionUpdate>): Boolean {
+        return events.any { it is SessionUpdate.ToolCall }
+    }
+
+    /** 获取消息中所有 ToolCall 事件 */
+    @JvmStatic
+    fun getToolCalls(events: List<SessionUpdate>): List<SessionUpdate.ToolCall> {
+        return events.filterIsInstance<SessionUpdate.ToolCall>()
+    }
+
+    // ========== 工具调用内容提取 ==========
+
+    /** 从 ToolCall 的 content 列表提取文本 */
+    @JvmStatic
+    fun extractToolCallText(toolCall: SessionUpdate.ToolCall): String {
+        return toolCall.content.joinToString("") {
+            when (it) {
+                is ToolCallContent.Content -> (it.content as? ContentBlock.Text)?.text ?: ""
+                is ToolCallContent.Diff -> it.newText
+                is ToolCallContent.Terminal -> ""
+            }
+        }
+    }
+
+    /** 从 ToolCallUpdate 的 content 列表提取文本 */
+    @JvmStatic
+    fun extractToolCallUpdateText(update: SessionUpdate.ToolCallUpdate): String {
+        return (update.content ?: emptyList()).joinToString("") {
+            when (it) {
+                is ToolCallContent.Content -> (it.content as? ContentBlock.Text)?.text ?: ""
+                is ToolCallContent.Diff -> it.newText
+                is ToolCallContent.Terminal -> ""
+            }
+        }
+    }
+
+    /** 从单个 ToolCallUpdate 提取状态字符串 */
+    @JvmStatic
+    fun getToolCallStatusString(status: ToolCallStatus?): String {
+        return when (status) {
+            ToolCallStatus.COMPLETED -> "COMPLETED"
+            ToolCallStatus.FAILED -> "FAILED"
+            ToolCallStatus.IN_PROGRESS, ToolCallStatus.PENDING -> "IN_PROGRESS"
+            null -> "IN_PROGRESS"
+        }
+    }
+
+    // ========== 已有桥接方法（保留）==========
+
     @OptIn(UnstableApi::class)
     @JvmStatic
     @JvmOverloads
@@ -33,9 +276,7 @@ object BridgeKt {
         content: ContentBlock,
         messageId: MessageId? = null
     ): SessionUpdate.AgentThoughtChunk {
-        return SessionUpdate.AgentThoughtChunk(
-            content,messageId
-        )
+        return SessionUpdate.AgentThoughtChunk(content, messageId)
     }
 
     @JvmStatic
@@ -51,5 +292,90 @@ object BridgeKt {
     @JvmStatic
     fun getLine(location: ToolCallLocation): Int {
         return location.line?.toInt() ?: 0
+    }
+
+    // ========== 工厂方法（Java 侧无法直接构造 Kotlin data/value class）==========
+
+    /** 创建 UserMessageChunk */
+    @OptIn(UnstableApi::class)
+    @JvmStatic
+    fun createUserMessageChunk(text: String): SessionUpdate.UserMessageChunk {
+        return SessionUpdate.UserMessageChunk(ContentBlock.Text(text), null)
+    }
+
+    /** 创建 AgentMessageChunk */
+    @OptIn(UnstableApi::class)
+    @JvmStatic
+    fun createAgentMessageChunk(text: String): SessionUpdate.AgentMessageChunk {
+        return SessionUpdate.AgentMessageChunk(ContentBlock.Text(text), null)
+    }
+
+    /** 创建 AgentThoughtChunk */
+    @OptIn(UnstableApi::class)
+    @JvmStatic
+    fun createAgentThoughtChunk(text: String): SessionUpdate.AgentThoughtChunk {
+        return SessionUpdate.AgentThoughtChunk(ContentBlock.Text(text), null)
+    }
+
+    /** 创建 ToolCallId */
+    @JvmStatic
+    fun createToolCallId(value: String): com.agentclientprotocol.model.ToolCallId {
+        return com.agentclientprotocol.model.ToolCallId(value)
+    }
+
+    /** 创建 ToolCall */
+    @JvmStatic
+    fun createToolCall(
+        toolCallId: com.agentclientprotocol.model.ToolCallId,
+        title: String,
+        content: List<com.agentclientprotocol.model.ToolCallContent>
+    ): SessionUpdate.ToolCall {
+        return SessionUpdate.ToolCall(toolCallId, title, null, null, content, emptyList(), null, null, null)
+    }
+
+    /** 创建 ToolCallUpdate */
+    @JvmStatic
+    fun createToolCallUpdate(
+        toolCallId: com.agentclientprotocol.model.ToolCallId,
+        status: com.agentclientprotocol.model.ToolCallStatus?,
+        content: List<com.agentclientprotocol.model.ToolCallContent>?
+    ): SessionUpdate.ToolCallUpdate {
+        return SessionUpdate.ToolCallUpdate(toolCallId, null, null, status, content, null, null, null, null)
+    }
+
+    /** 创建 ToolCallContent.Content */
+    @JvmStatic
+    fun createToolCallContentText(text: String): com.agentclientprotocol.model.ToolCallContent {
+        return com.agentclientprotocol.model.ToolCallContent.Content(ContentBlock.Text(text))
+    }
+
+    /** 获取 ToolCall.title */
+    @JvmStatic
+    fun getToolCallTitle(toolCall: SessionUpdate.ToolCall): String {
+        return toolCall.title
+    }
+
+    /** 获取 ToolCall.toolCallId.value */
+    @JvmStatic
+    fun getToolCallIdValue(toolCall: SessionUpdate.ToolCall): String {
+        return toolCall.toolCallId.value
+    }
+
+    /** 获取 ToolCallUpdate.toolCallId.value */
+    @JvmStatic
+    fun getToolCallUpdateIdValue(update: SessionUpdate.ToolCallUpdate): String {
+        return update.toolCallId.value
+    }
+
+    /** 获取 ToolCallUpdate.status */
+    @JvmStatic
+    fun getToolCallUpdateStatus(update: SessionUpdate.ToolCallUpdate): com.agentclientprotocol.model.ToolCallStatus? {
+        return update.status
+    }
+
+    /** 获取 ToolCallUpdate.title */
+    @JvmStatic
+    fun getToolCallUpdateTitle(update: SessionUpdate.ToolCallUpdate): String? {
+        return update.title
     }
 }

@@ -78,3 +78,7 @@ Column 的 handler 处理 ↑/↓ → 返回 HANDLED
 Dialog 返回 HANDLED
 这个流程理论上应该能工作，但实际中 DialogElement 的实现可能没有正确转发 ↑/↓ 给 children（文档明确指出 Dialog 只处理 ESCAPE 和 ENTER，其他键可能被直接消费）。
 修复方案：将焦点从 Dialog 元素转移到其内部的 column（内容元素）上，这样 EventRouter 会直接调用 column 的 handleKeyEvent()，完全绕过 Dialog 的事件消费逻辑
+
+
+
+MarkdownListElement.renderContent() 在渲染每个 item 时，用 visibleHeight（滚动裁剪后的可见高度）构造 itemRect 传给 context.renderChild()。当滚动到中间位置时 visibleHeight 可能只有 1-2 像素，导致内部的 Column / Layout.vertical 在极小区域内求解布局，子元素全被压成 0 像素——消息显示为空白。

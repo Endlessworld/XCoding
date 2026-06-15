@@ -234,7 +234,7 @@ class AgiAgentSession(
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(
-                        ContentBlock.Text("✨Processing request✨ \n")
+                        ContentBlock.Text("✨Processing request✨ \r\n<br/>")
                     )
                 )
             )
@@ -417,7 +417,7 @@ class AgiAgentSession(
         if (output.think != null) {
             emit(
                 Event.SessionUpdateEvent(
-                    SessionUpdate.AgentMessageChunk(ContentBlock.Text("> ${output.think}"))
+                    SessionUpdate.AgentThoughtChunk(ContentBlock.Text(output.think))
                 )
             )
         }

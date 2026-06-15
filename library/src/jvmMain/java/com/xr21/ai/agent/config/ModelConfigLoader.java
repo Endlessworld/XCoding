@@ -230,7 +230,7 @@ public class ModelConfigLoader {
         }
 
         for (ModelConfig config : configs) {
-            if (modelName.equals(config.getModelName())) {
+            if (modelName.equals(config.getModelId()) || modelName.equals(config.getModelName())) {
                 return config;
             }
         }

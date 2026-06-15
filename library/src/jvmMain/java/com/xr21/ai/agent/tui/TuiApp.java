@@ -227,7 +227,7 @@ public class TuiApp {
         Element mainLayout = column(
                 // 上部分：左右两栏
                 row(
-                        new ChatPanelElement(appState, themeManager.currentTheme(), chatFocused).build(),
+                        new ChatPanelElement(appState, themeManager.currentTheme()).build(),
                         new InfoPanelElement(appState, themeManager.currentTheme()).build()
                 ).fill(),
                 // 中间：输入面板
