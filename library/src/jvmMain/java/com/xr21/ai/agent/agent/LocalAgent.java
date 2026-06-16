@@ -35,12 +35,10 @@ import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonStateSerializer;
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.config.AiModels;
-import com.xr21.ai.agent.config.ModelConfigLoader;
 import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.interceptors.WorkerInterceptor;
-import com.xr21.ai.agent.model.Config;
 import com.xr21.ai.agent.tools.ContextCacheTool;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.WebTool;
@@ -333,7 +331,7 @@ public class LocalAgent {
 
     @NotNull
     private static ChatModel getChatModel(RunnableConfig runnableConfig) {
-        ChatModel chatModel = null;
+        ChatModel chatModel;
         if (runnableConfig.context().get("model") instanceof String modelId) {
             try {
                 chatModel = AiModels.createChatModelFromJson(modelId);
@@ -343,12 +341,13 @@ public class LocalAgent {
                 throw new RuntimeException("Failed to initialize chat model", e);
             }
         } else {
-            List<Config.ModelConfig> configs = ModelConfigLoader.loadConfigs();
-            chatModel = AiModels.createChatModelFromJson(ModelConfigLoader.getDefaultConfig(configs).getModelId());
-            log.info("No specific model configuration found, using default model : {}", chatModel);
+            String defaultModelId = AiModels.defaultModel();
+            chatModel = AiModels.createChatModelFromJson(defaultModelId);
+            log.info("No specific model configuration found, using default model: {}", defaultModelId);
         }
         return chatModel;
     }
 
 }
+
 

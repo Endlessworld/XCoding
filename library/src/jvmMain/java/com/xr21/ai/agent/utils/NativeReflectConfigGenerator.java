@@ -72,9 +72,9 @@ public class NativeReflectConfigGenerator {
             // Config 类
             "com.xr21.ai.agent.config.AiModels",
             "com.xr21.ai.agent.config.ModelConfigLoader",
-            "com.xr21.ai.agent.config.ModelsConfig",
-            "com.xr21.ai.agent.config.ModelsConfig$ModelConfig",
-            "com.xr21.ai.agent.config.ModelsConfig$ProviderConfig",
+            "com.xr21.ai.agent.model.Config",
+            "com.xr21.ai.agent.model.Config$ModelConfig",
+            "com.xr21.ai.agent.model.Config$ProviderConfig",
             // Entity 类
             "com.xr21.ai.agent.entity.AcpSession",
             "com.xr21.ai.agent.entity.AgentOutput",
