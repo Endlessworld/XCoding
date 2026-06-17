@@ -111,6 +111,9 @@ public class WriteFileTool {
                     .put("line_count", lineCount)
                     .put("action", action);
 
+            // Add diff content - oldText=null signals "creation" semantics
+            result.toolCallContent(ToolResult.createDiffContent(absolutePath, null, content));
+
             // Add locations - for write_file, we add the first line and optionally the last line
             result.location(absolutePath, 1);
             if (lineCount > 1) {

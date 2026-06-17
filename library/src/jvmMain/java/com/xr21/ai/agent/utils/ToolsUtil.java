@@ -15,6 +15,7 @@
  */
 package com.xr21.ai.agent.utils;
 
+import com.agentclientprotocol.model.ContentBlock;
 import com.agentclientprotocol.model.EnvVariable;
 import com.agentclientprotocol.model.McpServer;
 import com.agentclientprotocol.model.ToolCallContent;
@@ -173,10 +174,35 @@ public class ToolsUtil {
                 }
             }
 
-            // 提取 toolCallContents (简化处理，只提取原始数据)
+            // 提取 toolCallContents - 通过字段存在性推断类型（Jackson 不输出 Kotlin Serialization 的 type discriminator）
             if (jsonMap.containsKey(ToolResult.KEY_TOOL_CALL_CONTENTS)) {
-                // 这里可以添加更复杂的解析逻辑
-                // 目前简单地将原始数据保存
+                Object contents = jsonMap.get(ToolResult.KEY_TOOL_CALL_CONTENTS);
+                if (contents instanceof List) {
+                    List<Map<String, Object>> contentList = (List<Map<String, Object>>) contents;
+                    result.toolCallContents = new ArrayList<>();
+                    for (Map<String, Object> item : contentList) {
+                        // Infer type by field presence (Jackson doesn't emit Kotlin Serialization's type discriminator)
+                        if (item.containsKey("terminalId")) {
+                            // Terminal type
+                            String terminalId = item.get("terminalId") != null ? String.valueOf(item.get("terminalId")) : "";
+                            result.toolCallContents.add(new ToolCallContent.Terminal(terminalId, null));
+                        } else if (item.containsKey("path")) {
+                            // Diff type
+                            String path = item.get("path") != null ? String.valueOf(item.get("path")) : "";
+                            String newText = item.get("newText") != null ? String.valueOf(item.get("newText")) : "";
+                            String oldText = item.get("oldText") != null ? String.valueOf(item.get("oldText")) : null;
+                            result.toolCallContents.add(new ToolCallContent.Diff(path, newText, oldText, null));
+                        } else if (item.containsKey("content")) {
+                            // Content type (nested { type: "text", text: "..." })
+                            Object contentObj = item.get("content");
+                            if (contentObj instanceof Map) {
+                                Map<String, Object> contentMap = (Map<String, Object>) contentObj;
+                                String text = contentMap.get("text") != null ? String.valueOf(contentMap.get("text")) : "";
+                                result.toolCallContents.add(new ToolCallContent.Content(new ContentBlock.Text(text,null,null)));
+                            }
+                        }
+                    }
+                }
             }
 
         } catch (Exception e) {
