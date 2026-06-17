@@ -1,0 +1,128 @@
+name: Auto Release on Version Change
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'library/build.gradle.kts'
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '17'
+
+jobs:
+  # 检测 version 是否发生变化
+  check-version:
+    name: Check Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.detect.outputs.changed }}
+      new_version: ${{ steps.detect.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect version change
+        id: detect
+        run: |
+          # 获取当前 commit 的 version
+          CURRENT_VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' library/build.gradle.kts)
+          echo "Current version: $CURRENT_VERSION"
+
+          # 获取上一个 commit 的 version
+          git checkout HEAD~1 -- library/build.gradle.kts 2>/dev/null || true
+          PREV_VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' library/build.gradle.kts 2>/dev/null || echo "")
+
+          # 恢复当前版本文件
+          git checkout HEAD -- library/build.gradle.kts
+          echo "Previous version: $PREV_VERSION"
+
+          if [ "$CURRENT_VERSION" != "$PREV_VERSION" ]; then
+            echo "Version changed: $PREV_VERSION -> $CURRENT_VERSION"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Version unchanged: $CURRENT_VERSION"
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          fi
+
+  # 构建 fatJAR
+  build-jar:
+    name: Build Fat JAR
+    runs-on: ubuntu-latest
+    needs: check-version
+    if: needs.check-version.outputs.version_changed == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build fat JAR
+        run: ./gradlew :library:fatJar --no-daemon
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-artifact
+          path: library/build/libs/*.jar
+          retention-days: 7
+
+  # 创建 GitHub Release
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-jar
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: jar-artifact
+          path: release-assets
+
+      - name: List release assets
+        run: ls -la release-assets/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.check-version.outputs.new_version }}
+          name: Release v${{ needs.check-version.outputs.new_version }}
+          body: |
+            ## XAgent v${{ needs.check-version.outputs.new_version }}
+
+            自动发布 - 检测到 `library/build.gradle.kts` 中版本号变更为 **${{ needs.check-version.outputs.new_version }}**。
+
+            ### 下载
+
+            ```bash
+            java -jar XAgent-${{ needs.check-version.outputs.new_version }}-all.jar
+            ```
+
+            ### 系统要求
+            - Java 17 或更高版本
+
+          files: release-assets/*.jar
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
