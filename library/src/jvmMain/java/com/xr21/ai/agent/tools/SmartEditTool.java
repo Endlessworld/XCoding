@@ -265,11 +265,13 @@ public class SmartEditTool {
     }
 
     private EditResult executeEdit(EditOperation edit, Path path, FileContent fileContent, int lineOffset) {
-        return switch (edit.mode) {
+        EditResult raw = switch (edit.mode) {
             case "search_replace" -> executeSearchReplace(edit, path, fileContent);
             case "insert_at_line" -> executeInsertAtLine(edit, path, fileContent, lineOffset);
             default -> new EditResult(-1, false, "Unknown mode: " + edit.mode, null);
         };
+        // Attach the original edit operation so buildFinalResult can produce diff content
+        return new EditResult(raw.index, raw.success, raw.message, raw.detail, raw.lineDelta, edit);
     }
 
     private EditResult executeSearchReplace(EditOperation edit, Path path, FileContent fileContent) {
@@ -488,6 +490,31 @@ public class SmartEditTool {
                 }
                 if (filePath != null && line != null) {
                     result.location(filePath, line);
+                }
+            }
+
+            // Build diff content from the original edit operation
+            if (er.success && er.edit != null) {
+                EditOperation op = er.edit;
+                String filePath = op.filePath;
+                if (filePath != null) {
+                    switch (op.mode) {
+                        case "search_replace" -> {
+                            String oldText = op.searchText != null ? op.searchText : "";
+                            String newText = op.replaceText != null ? op.replaceText : "";
+                            if (!oldText.isEmpty() || !newText.isEmpty()) {
+                                result.toolCallContent(ToolResult.createDiffContent(
+                                    filePath, oldText.isEmpty() ? null : oldText, newText));
+                            }
+                        }
+                        case "insert_at_line" -> {
+                            if (op.newContent != null && !op.newContent.isEmpty()) {
+                                // oldText=null signals "insertion" semantics
+                                result.toolCallContent(ToolResult.createDiffContent(
+                                    filePath, null, op.newContent));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -762,17 +789,24 @@ public class SmartEditTool {
         final String message;
         final Map<String, Object> detail;
         final int lineDelta;
+        /** The EditOperation that produced this result (for building diff content). */
+        final EditOperation edit;
 
         EditResult(int index, boolean success, String message, Map<String, Object> detail) {
-            this(index, success, message, detail, 0);
+            this(index, success, message, detail, 0, null);
         }
 
         EditResult(int index, boolean success, String message, Map<String, Object> detail, int lineDelta) {
+            this(index, success, message, detail, lineDelta, null);
+        }
+
+        EditResult(int index, boolean success, String message, Map<String, Object> detail, int lineDelta, EditOperation edit) {
             this.index = index;
             this.success = success;
             this.message = message;
             this.detail = detail;
             this.lineDelta = lineDelta;
+            this.edit = edit;
         }
     }
 }

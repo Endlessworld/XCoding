@@ -427,6 +427,7 @@ class AgiAgentSession(
             val message = output.message as AssistantMessage
             if (!CollectionUtils.isEmpty(message.toolCalls)) {
                 message.toolCalls.forEach { toolCall ->
+                    val content = buildToolCallContent(toolCall.name(), toolCall.arguments())
                     emit(
                         Event.SessionUpdateEvent(
                             SessionUpdate.ToolCallUpdate(
@@ -434,9 +435,7 @@ class AgiAgentSession(
                                 title = toolCall.name(),
                                 kind = ToolKindFind.find(toolCall.name()) as ToolKind?,
                                 status = ToolCallStatus.IN_PROGRESS,
-                                content = if (StringUtils.isNotBlank(toolCall.arguments())) listOf(
-                                    ToolCallContent.Content(ContentBlock.Text(toolCall.arguments()))
-                                ) else emptyList()
+                                content = content
                             )
                         )
                     )
@@ -470,6 +469,78 @@ class AgiAgentSession(
 
     }
 
+
+    /**
+     * Build optimistic ToolCallContent list from tool name and arguments JSON.
+     * For edit/write tools, this produces a Diff content block so the ACP client
+     * can show a diff preview before the tool completes.
+     */
+    private fun buildToolCallContent(toolName: String, arguments: String?): List<ToolCallContent> {
+        if (arguments.isNullOrBlank()) return emptyList()
+
+        return try {
+            val args = Json.to(arguments, Map::class.java) as? Map<String, Any?> ?: return fallbackContent(arguments)
+
+            when (toolName) {
+                "edit_file" -> {
+                    val filePath = args["filePath"] as? String ?: return fallbackContent(arguments)
+                    val oldText = args["oldText"] as? String ?: ""
+                    val newText = args["newText"] as? String ?: ""
+                    if (oldText.isEmpty() && newText.isEmpty()) return fallbackContent(arguments)
+                    listOf(ToolCallContent.Diff(filePath, newText, oldText.ifEmpty { null }, null))
+                }
+                "write_file" -> {
+                    val filePath = args["filePath"] as? String ?: return fallbackContent(arguments)
+                    val content = args["content"] as? String ?: return fallbackContent(arguments)
+                    // oldText=null signals "creation" semantics
+                    listOf(ToolCallContent.Diff(filePath, content, null, null))
+                }
+                "smart_edit" -> {
+                    buildSmartEditDiffContent(args, arguments)
+                }
+                else -> fallbackContent(arguments)
+            }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to build tool call content for $toolName" }
+            fallbackContent(arguments)
+        }
+    }
+
+    /** Build diff content for smart_edit batch edits. */
+    private fun buildSmartEditDiffContent(args: Map<String, Any?>, rawArguments: String): List<ToolCallContent> {
+        val edits = args["edits"] as? List<*>
+        if (edits.isNullOrEmpty()) return fallbackContent(rawArguments)
+
+        val results = mutableListOf<ToolCallContent>()
+        for (edit in edits) {
+            if (edit !is Map<*, *>) continue
+            val filePath = edit["filePath"] as? String ?: continue
+            val mode = edit["mode"] as? String ?: continue
+            when (mode) {
+                "search_replace" -> {
+                    val searchText = edit["searchText"] as? String ?: ""
+                    val replaceText = edit["replaceText"] as? String ?: ""
+                    if (searchText.isNotEmpty() || replaceText.isNotEmpty()) {
+                        results.add(ToolCallContent.Diff(filePath, replaceText, searchText.ifEmpty { null }, null))
+                    }
+                }
+                "insert_at_line" -> {
+                    val newContent = edit["newContent"] as? String ?: ""
+                    if (newContent.isNotEmpty()) {
+                        // oldText=null signals "insertion" semantics
+                        results.add(ToolCallContent.Diff(filePath, newContent, null, null))
+                    }
+                }
+            }
+        }
+        // If no diff content could be built, fall back to showing raw arguments
+        return results.ifEmpty { fallbackContent(rawArguments) }
+    }
+
+    /** Fallback: wrap raw arguments as text content. */
+    private fun fallbackContent(arguments: String): List<ToolCallContent> {
+        return listOf(ToolCallContent.Content(ContentBlock.Text(arguments)))
+    }
     /**
      * Build a Spring AI UserMessage from ACP content blocks.
      * Supports text, image, audio, and resource content types.
