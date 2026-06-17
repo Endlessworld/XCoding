@@ -24,16 +24,18 @@ import com.xr21.ai.agent.utils.GitignoreUtil;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 import static com.xr21.ai.agent.utils.AcpProgressUtil.sendProgress;
@@ -46,6 +48,19 @@ import static com.xr21.ai.agent.utils.AcpProgressUtil.sendProgress;
 public class GrepTool {
 
     private static final int MAX_RESULTS = 25;
+
+    /**
+     * Progress reporting interval: report every N files.
+     * Higher values reduce ACP progress message overhead.
+     */
+    private static final int PROGRESS_INTERVAL = 50;
+
+    /**
+     * Maximum file size to search (bytes). Files larger than this are skipped
+     * to avoid excessive I/O on huge logs/binaries.
+     * 10MB is sufficient for virtually all source code files.
+     */
+    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
 
     // @formatter:off
     @Tool(name = "grep", description = """
@@ -80,113 +95,60 @@ public class GrepTool {
             sendProgress(toolContext, "🔍 Searching for pattern: \"" + pattern + "\"...<br/>");
 
             Path searchPath = path != null ? Paths.get(path) : Paths.get(WORKSPACE_ROOT);
-            List<String> matches = new ArrayList<>();
-            List<ToolCallLocation> locations = new ArrayList<>();
+            List<String> matches = Collections.synchronizedList(new ArrayList<>());
+            List<ToolCallLocation> locations = Collections.synchronizedList(new ArrayList<>());
             Map<String, Integer> fileMatchCounts = new ConcurrentHashMap<>();
             AtomicInteger matchCounter = new AtomicInteger(0);
             AtomicLong fileCounter = new AtomicLong(0);
+            AtomicLong skippedFileCounter = new AtomicLong(0);
 
             PathMatcher globMatcher = glob != null ? FileSystems.getDefault()
                     .getPathMatcher("glob:" + glob) : null;
 
             GitignoreUtil gitignoreUtil = GitignoreUtil.getInstance(searchPath);
 
-            // First pass: count total files for progress reporting
-            long totalFiles = Files.walk(searchPath)
-                    .parallel()
+            // Single pass: walk and search simultaneously
+            // Uses sequential stream to avoid I/O contention on directory walking
+            try (Stream<Path> fileStream = Files.walk(searchPath)
                     .filter(Files::isRegularFile)
                     .filter(p -> !gitignoreUtil.isIgnored(p))
-                    .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))
-                    .count();
-            sendProgress(toolContext, "📁 Scanning " + totalFiles + " files for \"" + pattern + "\"...<br/>");
+                    .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))) {
 
-            // Second pass: search with progress reporting
-            Files.walk(searchPath)
-                    .filter(Files::isRegularFile)
-                    .filter(p -> !gitignoreUtil.isIgnored(p))
-                    .filter(p -> globMatcher == null || globMatcher.matches(p.getFileName()))
-                    .forEach(p -> {
-                        if (matchCounter.get() >= MAX_RESULTS) {
-                            return;
-                        }
-                        long scanned = fileCounter.incrementAndGet();
-                        // Report progress every 10 files or at 25%/50%/75%/100%
-                        if (scanned % 10 == 0 || scanned == totalFiles) {
-                            sendProgress(toolContext, "  Progress: " + scanned + "/" + totalFiles
-                                    + " files, " + matchCounter.get() + " matches found<br/>");
-                        }
-                        try {
-                            String absolutePath = p.toAbsolutePath().toString();
-                            boolean[] fileAdded = {false};
+                fileStream.forEach(p -> {
+                    if (matchCounter.get() >= MAX_RESULTS) {
+                        return;
+                    }
 
-                            // Read file lines with index to track actual line numbers
-                            List<String> lines = Files.readAllLines(p, StandardCharsets.UTF_8);
-                            IntStream.range(0, lines.size())
-                                    .parallel()
-                                    .filter(i -> lines.get(i).contains(pattern))
-                                    .forEachOrdered(i -> {
-                                        int currentTotal = matchCounter.incrementAndGet();
-                                        if (currentTotal > MAX_RESULTS) {
-                                            return;
-                                        }
+                    long scanned = fileCounter.incrementAndGet();
+                    // Report progress at intervals
+                    if (scanned % PROGRESS_INTERVAL == 0) {
+                        sendProgress(toolContext, "  Progress: " + scanned
+                                + " files, " + matchCounter.get() + " matches found<br/>");
+                    }
 
-                                        int currentLine = i + 1; // line numbers are 1-based
-                                        fileMatchCounts.merge(absolutePath, 1, Integer::sum);
-
-                                        String matchEntry;
-                                        switch (outputMode != null ? outputMode : "files_with_matches") {
-                                            case "files_with_matches":
-                                                synchronized (this) {
-                                                    if (!fileAdded[0]) {
-                                                        matchEntry = p.toString();
-                                                        fileAdded[0] = true;
-                                                        // Push each matched file in real-time
-                                                        sendProgress(toolContext, "  ✅ Match in: "
-                                                                + p.getFileName() + "<br/>");
-                                                    } else {
-                                                        return;
-                                                    }
-                                                }
-                                                break;
-                                            case "content":
-                                                matchEntry = p + ":" + currentLine + ": " + lines.get(i);
-                                                break;
-                                            case "count":
-                                                return;
-                                            default:
-                                                synchronized (this) {
-                                                    if (!fileAdded[0]) {
-                                                        matchEntry = p.toString();
-                                                        fileAdded[0] = true;
-                                                    } else {
-                                                        return;
-                                                    }
-                                                }
-                                                break;
-                                        }
-
-                                        matches.add(matchEntry);
-                                        locations.add(BridgeKt.createToolCallLocation(absolutePath, currentLine));
-                                    });
-                        } catch (Exception e) {
-                            // Ignore file read errors (including encoding errors)
-                        }
-                    });
+                    searchFile(p, pattern, outputMode, matches, locations,
+                            fileMatchCounts, matchCounter, skippedFileCounter, toolContext);
+                });
+            }
 
             // Send final summary
-            if (matchCounter.get() == 0) {
-                sendProgress(toolContext, "❌ No matches found for pattern: \"" + pattern + "\"<br/>");
+            int totalMatches = matchCounter.get();
+            long skippedFiles = skippedFileCounter.get();
+            if (totalMatches == 0) {
+                String suffix = skippedFiles > 0 ? " (" + skippedFiles + " large files skipped)" : "";
+                sendProgress(toolContext, "❌ No matches found for pattern: \"" + pattern + "\"" + suffix + "<br/>");
             } else {
-                sendProgress(toolContext, "✅ Search complete: " + matchCounter.get()
-                        + " matches in " + fileMatchCounts.size() + " files<br/>");
+                String suffix = skippedFiles > 0 ? " (" + skippedFiles + " large files skipped)" : "";
+                sendProgress(toolContext, "✅ Search complete: " + totalMatches
+                        + " matches in " + fileMatchCounts.size() + " files" + suffix + "<br/>");
             }
 
             ToolResult result = ToolResult.builder();
 
-            boolean truncated = matchCounter.get() > MAX_RESULTS;
+            boolean truncated = totalMatches > MAX_RESULTS;
             if (truncated) {
                 result.metadata("truncated", true);
-                result.metadata("totalMatches", matchCounter.get());
+                result.metadata("totalMatches", totalMatches);
             }
 
             if ("count".equals(outputMode) && !fileMatchCounts.isEmpty()) {
@@ -207,7 +169,7 @@ public class GrepTool {
             if (!locations.isEmpty()) {
                 result.locations(locations.size() > MAX_RESULTS ? locations.subList(0, MAX_RESULTS) : locations);
             }
-            result.metadata("matchCount", Math.min(matchCounter.get(), MAX_RESULTS));
+            result.metadata("matchCount", Math.min(totalMatches, MAX_RESULTS));
             result.metadata("fileCount", fileMatchCounts.size());
 
             return result.build();
@@ -216,6 +178,76 @@ public class GrepTool {
             return ToolResult.builder()
                     .error("Error searching files: " + e.getMessage())
                     .build();
+        }
+    }
+
+    /**
+     * Search a single file for the pattern using line-by-line streaming.
+     * Avoids loading the entire file into memory.
+     */
+    private void searchFile(
+            Path file,
+            String pattern,
+            String outputMode,
+            List<String> matches,
+            List<ToolCallLocation> locations,
+            Map<String, Integer> fileMatchCounts,
+            AtomicInteger matchCounter,
+            AtomicLong skippedFileCounter,
+            ToolContext toolContext
+    ) {
+        String absolutePath = file.toAbsolutePath().toString();
+        boolean isFilesMode = "files_with_matches".equals(outputMode) || outputMode == null;
+        boolean isCountMode = "count".equals(outputMode);
+        boolean fileAlreadyReported = fileMatchCounts.containsKey(absolutePath);
+
+        // Skip oversized files to avoid excessive I/O on huge logs/binaries
+        long fileSize;
+        try {
+            fileSize = Files.size(file);
+            if (fileSize > MAX_FILE_SIZE_BYTES) {
+                skippedFileCounter.incrementAndGet();
+                return;
+            }
+        } catch (IOException e) {
+            return;
+        }
+
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String line;
+            int lineNum = 0;
+
+            while ((line = reader.readLine()) != null) {
+                lineNum++;
+
+                if (!line.contains(pattern)) {
+                    continue;
+                }
+
+                int currentTotal = matchCounter.incrementAndGet();
+                if (currentTotal > MAX_RESULTS) {
+                    return;
+                }
+
+                fileMatchCounts.merge(absolutePath, 1, Integer::sum);
+
+                if (isFilesMode) {
+                    if (!fileAlreadyReported) {
+                        fileAlreadyReported = true;
+                        matches.add(file.toString());
+                        locations.add(BridgeKt.createToolCallLocation(absolutePath, lineNum));
+                        sendProgress(toolContext, "  ✅ Match in: " + file.getFileName() + "<br/>");
+                    }
+                } else if (isCountMode) {
+                    // count mode: just track counts, no output
+                } else {
+                    // content mode
+                    matches.add(file + ":" + lineNum + ": " + line);
+                    locations.add(BridgeKt.createToolCallLocation(absolutePath, lineNum));
+                }
+            }
+        } catch (Exception e) {
+            // Ignore file read errors (including encoding errors)
         }
     }
 }

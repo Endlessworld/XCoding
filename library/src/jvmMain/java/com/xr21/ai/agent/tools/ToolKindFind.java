@@ -34,9 +34,9 @@ public class ToolKindFind {
         NAME_TO_KIND.put("read_file", ToolKind.READ);
         NAME_TO_KIND.put("ls", ToolKind.SEARCH);
         // EDIT tools
-        NAME_TO_KIND.put("write_file", ToolKind.EXECUTE);
-        NAME_TO_KIND.put("edit_file", ToolKind.OTHER);
-        NAME_TO_KIND.put("edit_file_with_git_patch", ToolKind.OTHER);
+        NAME_TO_KIND.put("write_file", ToolKind.EDIT);
+        NAME_TO_KIND.put("edit_file", ToolKind.EDIT);
+        NAME_TO_KIND.put("smart_edit", ToolKind.EDIT);
         // SEARCH tools
         NAME_TO_KIND.put("glob", ToolKind.SEARCH);
         NAME_TO_KIND.put("grep", ToolKind.SEARCH);

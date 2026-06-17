@@ -444,6 +444,26 @@ public class GitignoreUtil {
     }
 
     /**
+     * Checks if a given relative path string should be ignored.
+     * This method skips the path-to-cache-key conversion overhead and is intended
+     * for high-throughput callers (e.g. GlobTool) that already hold the relative path.
+     *
+     * @param relativePath the path string relative to basePath (using '/' as separator)
+     * @param isDirectory  whether the path is a directory
+     * @return true if the path should be ignored, false otherwise
+     */
+    public boolean isIgnoredRelative(String relativePath, boolean isDirectory) {
+        String pathStr = relativePath.replace('\\', '/');
+        boolean ignored = false;
+        for (IgnorePattern pattern : ignorePatterns) {
+            if (pattern.matches(pathStr, isDirectory)) {
+                ignored = !pattern.isNegation;
+            }
+        }
+        return ignored;
+    }
+
+    /**
      * Checks if a given path string should be ignored.
      * Convenience method that converts string to Path.
      *
