@@ -139,8 +139,8 @@ public class SinksUtil {
                 var finishReason = streamingOutput.message()
                         .getMetadata()
                         .get("finishReason");
-                if (!OpenAiApi.ChatCompletionFinishReason.STOP.name().equalsIgnoreCase(String.valueOf(finishReason))) {
-                    builder.chunk(streamingOutput.chunk());
+                if (StringUtils.hasText(streamingOutput.message().getText()) &&!OpenAiApi.ChatCompletionFinishReason.STOP.name().equalsIgnoreCase(String.valueOf(finishReason))) {
+                    builder.chunk(streamingOutput.message().getText());
                 }
                 builder.originData(streamingOutput.getOriginData());
             }
