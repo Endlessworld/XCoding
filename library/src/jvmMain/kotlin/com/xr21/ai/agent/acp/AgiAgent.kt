@@ -88,7 +88,8 @@ class AgiAgentSession(
     override val sessionId: SessionId,
     private val cwd: String,
     private val mcpServers: List<McpServer>?,
-    private val runnableConfig: RunnableConfig
+    private val runnableConfig: RunnableConfig,
+    private val clientInfo: ClientInfo? = null
 ) : AgentSession {
     private val responseBuilder = StringBuilder()
     private val tokenUsageRef = AtomicReference(Usage(0,0,0,0,0,0))
@@ -97,41 +98,89 @@ class AgiAgentSession(
     private val startTime = AtomicLong(0L)
 
     override val configOptions: List<SessionConfigOption>
-        get() = listOf(
-            SessionConfigOption.boolean(
+        get() {
+            var options = arrayListOf<SessionConfigOption>()
+            if (!isIntelliJ2026()) {
+                options.add(
+                    SessionConfigOption.select(
+                        id = "mode",
+                        name = "mode",
+                        currentValue = "Agent",
+                        description = "mode",
+                        options = SessionConfigSelectOptions.Flat(
+                            listOf(
+                                SessionConfigSelectOption(
+                                    SessionConfigValueId("Agent"), "Agent", "单智能体模式"
+                                ), SessionConfigSelectOption(
+                                    SessionConfigValueId("Workers"), "Workers", "动态并行子代理"
+                                )
+                            )
+                        ),
+                        category = SessionConfigOptionCategory.MODE
+                    )
+                )
+            }
+            options.add(
+                SessionConfigOption.boolean(
                 id = "auto_approve",
                 name = "Auto Approve",
                 currentValue = true,
                 description = "Automatically approve all tool calls"
-            ), SessionConfigOption.select(
-                id = "mode",
-                name = "mode",
-                currentValue = "Agent",
-                description = "mode",
-                options = SessionConfigSelectOptions.Flat(
-                    listOf(
-                        SessionConfigSelectOption(
-                            SessionConfigValueId("Agent"), "Agent", "单智能体模式"
-                        ), SessionConfigSelectOption(
-                            SessionConfigValueId("Workers"), "Workers", "动态并行子代理"
+                )
+            )
+            options.add(
+                SessionConfigOption.select(
+                    id = "thought_level",
+                    name = "Thought",
+                    currentValue = "low",
+                    description = "思考深度级别",
+                    options = SessionConfigSelectOptions.Flat(
+                        listOf(
+                            SessionConfigSelectOption(
+                                SessionConfigValueId("disabled"), "Disabled", "关闭思考"
+                            ), SessionConfigSelectOption(
+                                SessionConfigValueId("low"), "Low", "低度思考"
+                            ), SessionConfigSelectOption(
+                                SessionConfigValueId("medium"), "Medium", "中度思考"
+                            ), SessionConfigSelectOption(
+                                SessionConfigValueId("high"), "High", "高度思考"
+                            ), SessionConfigSelectOption(
+                                SessionConfigValueId("max"), "Max", "最高程度思考"
+                            )
                         )
+                    ),
+                    category = SessionConfigOptionCategory.THOUGHT_LEVEL
+                )
+            )
+            if (!isIntelliJ2026()) {
+                options.add(
+                    SessionConfigOption.select(
+                        id = "model",
+                        name = "model",
+                        currentValue = AiModels.defaultModel(),
+                        description = "model",
+                        options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
+                            SessionConfigSelectOption(
+                                SessionConfigValueId(model.modelId ?: ""),
+                                model.modelName ?: "",
+                                model.modelName ?: "",
+                                null
+                            )
+                        }),
+                        category = SessionConfigOptionCategory.MODEL
                     )
                 )
-            ), SessionConfigOption.select(
-                id = "model",
-                name = "model",
-                currentValue = AiModels.defaultModel(),
-                description = "model",
-                options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
-                    SessionConfigSelectOption(
-                        SessionConfigValueId(model.modelId ?: ""),
-                        model.modelName ?: "",
-                        model.modelName ?: "",
-                        null
-                    )
-                })
-            )
-        )
+            }
+
+            return options
+        }
+
+    /** 判断是否为 IntelliJ 2026 客户端 */
+    private fun isIntelliJ2026(): Boolean {
+        val impl = clientInfo?.implementation ?: return false
+        return impl.name.contains("IntelliJ") && impl.version.contains("2026")
+    }
+
     override val availableModes: List<SessionMode>
         get() = listOf(
             SessionMode(SessionModeId("Agent"), "Agent", "单智能体模式"),
@@ -406,6 +455,7 @@ class AgiAgentSession(
         }
         if (output.chunk != null) {
             responseBuilder.append(output.chunk)
+            logger.info { "output.chunk $output.chunk " }
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentMessageChunk(ContentBlock.Text(output.chunk))
@@ -415,6 +465,7 @@ class AgiAgentSession(
 
         // Thinking/reasoning content
         if (output.think != null) {
+            logger.info { "output.think $output.think " }
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(ContentBlock.Text(output.think))
@@ -428,6 +479,7 @@ class AgiAgentSession(
             if (!CollectionUtils.isEmpty(message.toolCalls)) {
                 message.toolCalls.forEach { toolCall ->
                     val content = buildToolCallContent(toolCall.name(), toolCall.arguments())
+                    logger.info { "output.toolCalls $content" }
                     emit(
                         Event.SessionUpdateEvent(
                             SessionUpdate.ToolCallUpdate(
@@ -449,6 +501,7 @@ class AgiAgentSession(
             if (!CollectionUtils.isEmpty(message.responses)) {
                 message.responses.forEach { response ->
                     val resultData = ToolsUtil.parseToolResult(response.responseData())
+                    logger.info { "output.responses $resultData" }
                     emit(
                         Event.SessionUpdateEvent(
                             SessionUpdate.ToolCallUpdate(
@@ -588,9 +641,12 @@ class AgiAgent : AgentSupport {
 
     private val sessions = ConcurrentHashMap<String, AgiAgentSession>()
 
-    override suspend fun initialize(clientInfo: ClientInfo): AgentInfo {
-        logger.info { "Initializing agent with protocol version ${clientInfo.protocolVersion}" }
+    /** 最近一次 initialize 的 clientInfo，用于创建 session 时传递 */
+    private var lastClientInfo: ClientInfo? = null
 
+    override suspend fun initialize(clientInfo: ClientInfo): AgentInfo {
+        logger.info { "Initializing agent with protocol version ${Json.toJson(clientInfo)}" }
+        lastClientInfo = clientInfo
         return AgentInfo(
             protocolVersion = LATEST_PROTOCOL_VERSION,
             capabilities = AgentCapabilities(
@@ -639,7 +695,7 @@ class AgiAgent : AgentSupport {
             sessionMcpServers[sessionIdStr] = mcpServers
             logger.info { "Received ${mcpServers.size} MCP server(s) for session $sessionIdStr" }
         }
-        val session = AgiAgentSession(sessionId, cwd, mcpServers, runnableConfig)
+        val session = AgiAgentSession(sessionId, cwd, mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session
         logger.info { "Created session $sessionIdStr with cwd: $cwd" }
         return session
@@ -660,7 +716,7 @@ class AgiAgent : AgentSupport {
         val runnableConfig = sessionsRunnableConfig[sessionIdStr] ?: RunnableConfig.builder().threadId(sessionIdStr)
             .addStateUpdate(emptyMap<String, Any>()).build()
 
-        val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig)
+        val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session
         return session
     }
@@ -794,7 +850,7 @@ class AgiAgent : AgentSupport {
         val runnableConfig = RunnableConfig.builder().threadId(sessionIdStr)
             .addStateUpdate(emptyMap<String, Any>()).build()
         sessionsRunnableConfig[sessionIdStr] = runnableConfig
-        val session = AgiAgentSession(newSessionId, cwd, sessionParameters.mcpServers, runnableConfig)
+        val session = AgiAgentSession(newSessionId, cwd, sessionParameters.mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session
         return session
     }
@@ -812,7 +868,7 @@ class AgiAgent : AgentSupport {
         val sessionIdStr = sessionId.toString()
         val runnableConfig = sessionsRunnableConfig[sessionIdStr] ?: RunnableConfig.builder().threadId(sessionIdStr)
             .addStateUpdate(emptyMap<String, Any>()).build()
-        val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig)
+        val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session
         return session
     }

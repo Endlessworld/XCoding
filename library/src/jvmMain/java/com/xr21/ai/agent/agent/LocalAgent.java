@@ -285,8 +285,15 @@ public class LocalAgent {
                 "language", displayName,
                 "lineSeparator", System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n"))).build().render();
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
-        if (chatModel.getDefaultOptions().getModel().contains("deepseek-v4")) {
+        String thoughtLevel = "low";
+        if (runnableConfig.context().get("thought_level") instanceof String tl) {
+            thoughtLevel = tl;
+        }
+        if ("disabled".equals(thoughtLevel)) {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));
+        } else {
+            chatOptions.extraBody(Map.of("thinking", Map.of("type", "enabled")));
+            chatOptions.reasoningEffort(thoughtLevel);
         }
         var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
