@@ -28,11 +28,10 @@ import com.alibaba.cloud.ai.graph.RunnableConfig
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
 import com.xr21.ai.agent.agent.LocalAgent
+import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.config.AiModels
-import com.xr21.ai.agent.config.ModelConfigLoader
 import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
-import com.xr21.ai.agent.model.Config
 import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.utils.Json
 import com.xr21.ai.agent.utils.SinksUtil
@@ -50,14 +49,9 @@ import org.apache.commons.lang3.StringUtils
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
-import org.springframework.ai.content.Media
 import org.springframework.util.CollectionUtils
-import org.springframework.util.MimeType
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Sinks
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -96,101 +90,18 @@ class AgiAgentSession(
     private val sessionTokenUsageRef = AtomicReference(Usage(0,0,0,0,0,0))
 
     private val startTime = AtomicLong(0L)
-
     override val configOptions: List<SessionConfigOption>
-        get() {
-            var options = arrayListOf<SessionConfigOption>()
-            if (!isIntelliJ2026()) {
-                options.add(
-                    SessionConfigOption.select(
-                        id = "mode",
-                        name = "mode",
-                        currentValue = "Agent",
-                        description = "mode",
-                        options = SessionConfigSelectOptions.Flat(
-                            listOf(
-                                SessionConfigSelectOption(
-                                    SessionConfigValueId("Agent"), "Agent", "单智能体模式"
-                                ), SessionConfigSelectOption(
-                                    SessionConfigValueId("Workers"), "Workers", "动态并行子代理"
-                                )
-                            )
-                        ),
-                        category = SessionConfigOptionCategory.MODE
-                    )
-                )
-            }
-            options.add(
-                SessionConfigOption.boolean(
-                id = "auto_approve",
-                name = "Auto Approve",
-                currentValue = true,
-                description = "Automatically approve all tool calls"
-                )
-            )
-            options.add(
-                SessionConfigOption.select(
-                    id = "thought_level",
-                    name = "Thought",
-                    currentValue = "low",
-                    description = "思考深度级别",
-                    options = SessionConfigSelectOptions.Flat(
-                        listOf(
-                            SessionConfigSelectOption(
-                                SessionConfigValueId("disabled"), "Disabled", "关闭思考"
-                            ), SessionConfigSelectOption(
-                                SessionConfigValueId("low"), "Low", "低度思考"
-                            ), SessionConfigSelectOption(
-                                SessionConfigValueId("medium"), "Medium", "中度思考"
-                            ), SessionConfigSelectOption(
-                                SessionConfigValueId("high"), "High", "高度思考"
-                            ), SessionConfigSelectOption(
-                                SessionConfigValueId("max"), "Max", "最高程度思考"
-                            )
-                        )
-                    ),
-                    category = SessionConfigOptionCategory.THOUGHT_LEVEL
-                )
-            )
-            if (!isIntelliJ2026()) {
-                options.add(
-                    SessionConfigOption.select(
-                        id = "model",
-                        name = "model",
-                        currentValue = AiModels.defaultModel(),
-                        description = "model",
-                        options = SessionConfigSelectOptions.Flat(AiModels.availableModels().map { model ->
-                            SessionConfigSelectOption(
-                                SessionConfigValueId(model.modelId ?: ""),
-                                model.modelName ?: "",
-                                model.modelName ?: "",
-                                null
-                            )
-                        }),
-                        category = SessionConfigOptionCategory.MODEL
-                    )
-                )
-            }
-
-            return options
-        }
-
-    /** 判断是否为 IntelliJ 2026 客户端 */
-    private fun isIntelliJ2026(): Boolean {
-        val impl = clientInfo?.implementation ?: return false
-        return impl.name.contains("IntelliJ") && impl.version.contains("2026")
-    }
+        get() = SessionConfigOptionsFactory.create(clientInfo)
 
     override val availableModes: List<SessionMode>
-        get() = listOf(
-            SessionMode(SessionModeId("Agent"), "Agent", "单智能体模式"),
-            SessionMode(SessionModeId("Workers"), "Workers", "动态并行子代理")
-        )
+        get() = SessionConfigOptionsFactory.AgentMode.entries.map {
+            SessionMode(SessionModeId(it.valueId), it.label, it.description)
+        }
 
     override suspend fun postInitialize() {
         currentCoroutineContext().client.notify(
             notification = SessionUpdate.CurrentModeUpdate(
-                currentModeId = SessionModeId("Agent"),
+                currentModeId = SessionModeId(SessionConfigOptionsFactory.AgentMode.AGENT.valueId),
             )
         )
         currentCoroutineContext().client.notify(
@@ -204,7 +115,7 @@ class AgiAgentSession(
     }
 
     override val defaultMode: SessionModeId
-        get() = SessionModeId("Agent")
+        get() = SessionModeId(SessionConfigOptionsFactory.AgentMode.AGENT.valueId)
 
     override val availableModels: List<ModelInfo>
         get() = AiModels.availableModels().map { model ->
@@ -221,7 +132,7 @@ class AgiAgentSession(
             runnableConfig.context().put(configId.value, value.value)
         }
         if (value is SessionConfigOptionValue.StringValue) {
-            runnableConfig.context()[configId.value] = value.value
+            runnableConfig.context().put(configId.value, value.value)
         }
         val context = runnableConfig.context();
         logger.info { "set config option ${configId.value} to $value  $context" }
@@ -279,7 +190,7 @@ class AgiAgentSession(
                     }
                 }
             }
-            val userMessage = buildUserMessage(messages)
+            val userMessage = UserMessageBuilder.build(messages)
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(
@@ -287,8 +198,6 @@ class AgiAgentSession(
                     )
                 )
             )
-
-            val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
             val requestId = "request_${System.currentTimeMillis()}_$sessionId"
             val executionThread = Thread.currentThread()
             runnableConfig.context().put("requestId", requestId)
@@ -301,6 +210,7 @@ class AgiAgentSession(
             runnableConfig.context().putIfAbsent("isFirstMessage", AtomicBoolean(true))
             // Store client session operations in context so tools running on non-coroutine threads can use it
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
+            val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
             val recursiveFlux = createRecursiveAgentFlux(agent, userMessage)
             val agentSink = Sinks.many().unicast().onBackpressureBuffer<AgentOutput<Any>>()
             val disposable = recursiveFlux.subscribe({ output -> agentSink.tryEmitNext(output) }, { error ->
@@ -332,7 +242,7 @@ class AgiAgentSession(
             ) {
                 val output = agentIterator.next()
                 if (cancellableRequest.cancelled || !currentCoroutineContext().isActive) break
-                emitAgentOutputEvents(output)
+                emitOutput(output)
             }
             activeRequests.remove(requestId)
             runnableConfig.context()["sessionTotalTokens"] = sessionTokenUsageRef.get().totalTokens
@@ -346,6 +256,11 @@ class AgiAgentSession(
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(ContentBlock.Text(chunk))
+                )
+            )
+            emit(
+                Event.SessionUpdateEvent(
+                    SessionUpdate.UsageUpdate(tokens,0, Cost(0.0,"CNY"))
                 )
             )
             logger.info { "events END_TURN" }
@@ -405,7 +320,7 @@ class AgiAgentSession(
 
     /**
      * Create a recursive agent Flux that handles human-in-the-loop interruptions.
-     * Processing of outputs is handled by the caller (prompt method) via emitAgentOutputEvents.
+     * Processing of outputs is handled by the caller (prompt method) via emitOutput.
      */
     private fun createRecursiveAgentFlux(
         agent: Agent, userMessage: UserMessage
@@ -439,7 +354,7 @@ class AgiAgentSession(
      * Called from coroutine flow body, safe to use emit().
      * Unified output processing - replaces old processAgentOutput (SyncPromptContext mode).
      */
-    private suspend fun FlowCollector<Event>.emitAgentOutputEvents(output: AgentOutput<Any>) {
+    private suspend fun FlowCollector<Event>.emitOutput(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
         if (output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
             tokenUsageRef.set(Usage(output.tokenUsage.promptTokens.toLong(), output.tokenUsage.completionTokens.toLong(), output.tokenUsage.totalTokens.toLong(),0,0,0))
@@ -455,7 +370,6 @@ class AgiAgentSession(
         }
         if (output.chunk != null) {
             responseBuilder.append(output.chunk)
-            logger.info { "output.chunk $output.chunk " }
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentMessageChunk(ContentBlock.Text(output.chunk))
@@ -465,7 +379,6 @@ class AgiAgentSession(
 
         // Thinking/reasoning content
         if (output.think != null) {
-            logger.info { "output.think $output.think " }
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(ContentBlock.Text(output.think))
@@ -478,7 +391,7 @@ class AgiAgentSession(
             val message = output.message as AssistantMessage
             if (!CollectionUtils.isEmpty(message.toolCalls)) {
                 message.toolCalls.forEach { toolCall ->
-                    val content = buildToolCallContent(toolCall.name(), toolCall.arguments())
+                    val content = BridgeKt.build(toolCall.name(), toolCall.arguments())
                     logger.info { "output.toolCalls $content" }
                     emit(
                         Event.SessionUpdateEvent(
@@ -523,109 +436,7 @@ class AgiAgentSession(
     }
 
 
-    /**
-     * Build optimistic ToolCallContent list from tool name and arguments JSON.
-     * For edit/write tools, this produces a Diff content block so the ACP client
-     * can show a diff preview before the tool completes.
-     */
-    private fun buildToolCallContent(toolName: String, arguments: String?): List<ToolCallContent> {
-        if (arguments.isNullOrBlank()) return emptyList()
 
-        return try {
-            val args = Json.to(arguments, Map::class.java) as? Map<String, Any?> ?: return fallbackContent(arguments)
-
-            when (toolName) {
-                "edit_file" -> {
-                    val filePath = args["filePath"] as? String ?: return fallbackContent(arguments)
-                    val oldText = args["oldText"] as? String ?: ""
-                    val newText = args["newText"] as? String ?: ""
-                    if (oldText.isEmpty() && newText.isEmpty()) return fallbackContent(arguments)
-                    listOf(ToolCallContent.Diff(filePath, newText, oldText.ifEmpty { null }, null))
-                }
-                "write_file" -> {
-                    val filePath = args["filePath"] as? String ?: return fallbackContent(arguments)
-                    val content = args["content"] as? String ?: return fallbackContent(arguments)
-                    // oldText=null signals "creation" semantics
-                    listOf(ToolCallContent.Diff(filePath, content, null, null))
-                }
-                "smart_edit" -> {
-                    buildSmartEditDiffContent(args, arguments)
-                }
-                else -> fallbackContent(arguments)
-            }
-        } catch (e: Exception) {
-            logger.warn(e) { "Failed to build tool call content for $toolName" }
-            fallbackContent(arguments)
-        }
-    }
-
-    /** Build diff content for smart_edit batch edits. */
-    private fun buildSmartEditDiffContent(args: Map<String, Any?>, rawArguments: String): List<ToolCallContent> {
-        val edits = args["edits"] as? List<*>
-        if (edits.isNullOrEmpty()) return fallbackContent(rawArguments)
-
-        val results = mutableListOf<ToolCallContent>()
-        for (edit in edits) {
-            if (edit !is Map<*, *>) continue
-            val filePath = edit["filePath"] as? String ?: continue
-            val mode = edit["mode"] as? String ?: continue
-            when (mode) {
-                "search_replace" -> {
-                    val searchText = edit["searchText"] as? String ?: ""
-                    val replaceText = edit["replaceText"] as? String ?: ""
-                    if (searchText.isNotEmpty() || replaceText.isNotEmpty()) {
-                        results.add(ToolCallContent.Diff(filePath, replaceText, searchText.ifEmpty { null }, null))
-                    }
-                }
-                "insert_at_line" -> {
-                    val newContent = edit["newContent"] as? String ?: ""
-                    if (newContent.isNotEmpty()) {
-                        // oldText=null signals "insertion" semantics
-                        results.add(ToolCallContent.Diff(filePath, newContent, null, null))
-                    }
-                }
-            }
-        }
-        // If no diff content could be built, fall back to showing raw arguments
-        return results.ifEmpty { fallbackContent(rawArguments) }
-    }
-
-    /** Fallback: wrap raw arguments as text content. */
-    private fun fallbackContent(arguments: String): List<ToolCallContent> {
-        return listOf(ToolCallContent.Content(ContentBlock.Text(arguments)))
-    }
-    /**
-     * Build a Spring AI UserMessage from ACP content blocks.
-     * Supports text, image, audio, and resource content types.
-     */
-    private fun buildUserMessage(content: List<ContentBlock>): UserMessage {
-        val builder = UserMessage.builder()
-        val textParts = StringBuilder()
-
-        for (block in content) {
-            when (block) {
-                is ContentBlock.Text -> {
-                    if (block.text.isNotBlank()) textParts.append(block.text)
-                }
-
-                is ContentBlock.Image -> {
-                    val imageData = block.data
-                    val mediaType = block.mimeType ?: "image/png"
-                    builder.media(Media.builder().data(imageData).mimeType(MimeType.valueOf(mediaType)).build());
-                }
-
-                else -> {
-                    logger.warn { "Unsupported content block type: ${block::class.simpleName}" }
-                }
-            }
-        }
-
-        if (textParts.isNotBlank()) {
-            builder.text(textParts.toString())
-        }
-
-        return builder.build()
-    }
 }
 
 /**
@@ -652,7 +463,7 @@ class AgiAgent : AgentSupport {
             capabilities = AgentCapabilities(
                 loadSession = true,
                 promptCapabilities = PromptCapabilities(
-                    audio = false, image = false, embeddedContext = true
+                    audio = true, image = true, embeddedContext = true
                 ),
                 mcpCapabilities = McpCapabilities(http = true, sse = true),
                 sessionCapabilities = SessionCapabilities(
@@ -731,42 +542,9 @@ class AgiAgent : AgentSupport {
         return LogoutResponse()
     }
 
-    /**
-     * Load all provider configurations from models.json.
-     * Returns a map of providerId -> baseUrl.
-     */
-    private fun loadAllProviderConfigs(): Map<String, String> {
-        val configPath = Paths.get(ModelConfigLoader.getConfigFilePath())
-        if (!Files.exists(configPath)) {
-            logger.warn { "Config file not found at: $configPath" }
-            return emptyMap()
-        }
-        return try {
-            val content = Files.readString(configPath, StandardCharsets.UTF_8)
-            val config = Json.to(content, Config::class.java)
-            config.providers
-                .filterNotNull()
-                .filter { it.providerId != null && it.baseUrl != null }
-                .associate { it.providerId!! to it.baseUrl!! }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to load provider configs" }
-            emptyMap()
-        }
-    }
     override suspend fun listProviders(_meta: JsonElement?): ListProvidersResponse {
         logger.info { "List providers requested" }
-        val providerConfigs = loadAllProviderConfigs()
-        val providers = providerConfigs.map { (id, baseUrl) ->
-            ProviderInfo(
-                id = id,
-                supported = listOf(LlmProtocol(LlmProtocol.OPENAI.value)),
-                required = false,
-                current = ProviderCurrentConfig(
-                    apiType = LlmProtocol(LlmProtocol.OPENAI.value),
-                    baseUrl = baseUrl
-                )
-            )
-        }
+        val providers = ProviderConfigManager.listProviders()
         logger.info { "Returning ${providers.size} providers" }
         return ListProvidersResponse(providers = providers)
     }
@@ -779,63 +557,13 @@ class AgiAgent : AgentSupport {
         _meta: JsonElement?
     ): SetProvidersResponse {
         logger.info { "Set provider: $id, type: $apiType, baseUrl: $baseUrl" }
-        try {
-            val configPath = Paths.get(ModelConfigLoader.getConfigFilePath())
-            if (!Files.exists(configPath)) {
-                logger.warn { "Config file not found at: $configPath" }
-                return SetProvidersResponse()
-            }
-            val content = Files.readString(configPath, StandardCharsets.UTF_8)
-            val config = Json.to(content, Config::class.java)
-
-            // Find or create provider config
-            var provider = config.providers.find { it?.providerId == id }
-            if (provider == null) {
-                provider = Config.ProviderConfig()
-                provider.providerId = id
-                config.providers.add(provider)
-            }
-            provider!!.baseUrl = baseUrl
-            // Preserve existing apiKey if headers don't contain authorization
-            if (headers != null && headers.containsKey("Authorization")) {
-                provider.apiKey = headers["Authorization"]!!.removePrefix("Bearer ")
-            }
-
-            val updatedJson = Json.toPrettyJson(config)
-            Files.writeString(configPath, updatedJson, StandardCharsets.UTF_8)
-            logger.info { "Provider $id updated successfully" }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to set provider: $id" }
-        }
+        ProviderConfigManager.setProvider(id, baseUrl, headers)
         return SetProvidersResponse()
     }
 
     override suspend fun disableProvider(id: String, _meta: JsonElement?): DisableProvidersResponse {
         logger.info { "Disable provider: $id" }
-        try {
-            val configPath = Paths.get(ModelConfigLoader.getConfigFilePath())
-            if (!Files.exists(configPath)) {
-                logger.warn { "Config file not found at: $configPath" }
-                return DisableProvidersResponse()
-            }
-            val content = Files.readString(configPath, StandardCharsets.UTF_8)
-            val config = Json.to(content, Config::class.java)
-
-            // Remove the provider from the list
-            config.providers.removeAll { it?.providerId == id }
-            // Also disable all models that reference this provider
-            config.models.forEach { model ->
-                if (model?.providerId == id) {
-                    model.disabled = true
-                }
-            }
-
-            val updatedJson = Json.toPrettyJson(config)
-            Files.writeString(configPath, updatedJson, StandardCharsets.UTF_8)
-            logger.info { "Provider $id disabled successfully" }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to disable provider: $id" }
-        }
+        ProviderConfigManager.disableProvider(id)
         return DisableProvidersResponse()
     }
 

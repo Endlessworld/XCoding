@@ -163,16 +163,16 @@ public class AiModels {
         }
 //        optionsBuilder.serviceTier("auto");
 //        optionsBuilder.reasoningEffort("max");
-        if (!config.getModelName().contains("deepseek")) {
-           optionsBuilder.reasoningEffort("low");
-        }
-        // 构建 extraBody：合并默认的 thinking 配置和自定义 extraBody
-        Map<String, Object> extraBody = new HashMap<>();
-        extraBody.put("thinking", Map.of("type", "enabled"));
-        if (config.getExtraBody() != null) {
-            extraBody.putAll(config.getExtraBody());
-        }
-        optionsBuilder.extraBody(extraBody);
+//        if (!config.getModelName().contains("deepseek")) {
+//           optionsBuilder.reasoningEffort("low");
+//        }
+//        // 构建 extraBody：合并默认的 thinking 配置和自定义 extraBody
+//        Map<String, Object> extraBody = new HashMap<>();
+//        extraBody.put("thinking", Map.of("type", "enabled"));
+//        if (config.getExtraBody() != null) {
+//            extraBody.putAll(config.getExtraBody());
+//        }
+//        optionsBuilder.extraBody(extraBody);
 
         return OpenAiChatModel.builder()
                 .defaultOptions(optionsBuilder.build())

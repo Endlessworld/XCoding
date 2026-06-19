@@ -34,6 +34,7 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryIntercept
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonStateSerializer;
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
+import com.xr21.ai.agent.acp.SessionConfigOptionsFactory;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
@@ -245,7 +246,8 @@ public class LocalAgent {
 //        interceptors.add(retryInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
-        if (runnableConfig.context().get("mode") instanceof String mode && mode.equalsIgnoreCase("Workers")) {
+        if (runnableConfig.context().get("mode") instanceof String mode && mode.equalsIgnoreCase(
+                SessionConfigOptionsFactory.AgentMode.WORKERS.getValueId())) {
             interceptors.add(workerInterceptor);
             log.info("Workers mode use workerInterceptor");
         }
@@ -273,8 +275,8 @@ public class LocalAgent {
             throw new IllegalArgumentException("RunnableConfig cannot be null");
         }
         log.info("Building LocalAgent for workspace: {}", cwd);
+        log.info("Building LocalAgent for context: {}", runnableConfig.context());
         WORKSPACE_ROOT = cwd;
-        log.debug("Setting workspace root to: {}", WORKSPACE_ROOT);
         ChatModel chatModel = getChatModel(runnableConfig);
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
         List<Hook> hooks = getHooks(runnableConfig, chatModel);
@@ -285,11 +287,12 @@ public class LocalAgent {
                 "language", displayName,
                 "lineSeparator", System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n"))).build().render();
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
-        String thoughtLevel = "low";
-        if (runnableConfig.context().get("thought_level") instanceof String tl) {
-            thoughtLevel = tl;
+        String thoughtLevel = SessionConfigOptionsFactory.ThoughtLevel.LOW.getValueId();
+        if (runnableConfig.context().get("thought_level") instanceof String level) {
+            log.info("thought_level: {}", level);
+            thoughtLevel = level;
         }
-        if ("disabled".equals(thoughtLevel)) {
+        if (SessionConfigOptionsFactory.ThoughtLevel.DISABLED.getValueId().equals(thoughtLevel)) {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));
         } else {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "enabled")));

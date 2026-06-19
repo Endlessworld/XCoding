@@ -19,8 +19,9 @@ import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.model.*
 import com.xr21.ai.agent.tui.ChatMessage
 import com.xr21.ai.agent.tui.MessageRole
+import com.xr21.ai.agent.utils.Json
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonElement
-
 /**
  * ACP 事件聚合/查询桥接。
  *
@@ -31,6 +32,7 @@ import kotlinx.serialization.json.JsonElement
  */
 object BridgeKt {
 
+    private val logger = KotlinLogging.logger {}
     // ========== 事件聚合（核心）==========
 
     /**
@@ -288,7 +290,67 @@ object BridgeKt {
             _meta = _meta
         )
     }
+    fun build(toolName: String, arguments: String?): List<ToolCallContent> {
+        if (arguments.isNullOrBlank()) return emptyList()
+        return try {
+            val args = Json.to(arguments, Map::class.java) as? Map<String, Any?>
+                ?: return fallback(arguments)
+            when (toolName) {
+                "edit_file" -> buildEditFileDiff(args, arguments)
+                "write_file" -> buildWriteFileDiff(args, arguments)
+                "smart_edit" -> buildSmartEditDiff(args, arguments)
+                else -> fallback(arguments)
+            }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to build tool call content for $toolName" }
+            fallback(arguments)
+        }
+    }
 
+    private fun buildEditFileDiff(args: Map<String, Any?>, rawArguments: String): List<ToolCallContent> {
+        val filePath = args["filePath"] as? String ?: return fallback(rawArguments)
+        val oldText = args["oldText"] as? String ?: ""
+        val newText = args["newText"] as? String ?: ""
+        if (oldText.isEmpty() && newText.isEmpty()) return fallback(rawArguments)
+        return listOf(ToolCallContent.Diff(filePath, newText, oldText.ifEmpty { null }, null))
+    }
+
+    private fun buildWriteFileDiff(args: Map<String, Any?>, rawArguments: String): List<ToolCallContent> {
+        val filePath = args["filePath"] as? String ?: return fallback(rawArguments)
+        val content = args["content"] as? String ?: return fallback(rawArguments)
+        return listOf(ToolCallContent.Diff(filePath, content, null, null))
+    }
+
+    private fun buildSmartEditDiff(args: Map<String, Any?>, rawArguments: String): List<ToolCallContent> {
+        val edits = args["edits"] as? List<*>
+        if (edits.isNullOrEmpty()) return fallback(rawArguments)
+        val results = mutableListOf<ToolCallContent>()
+        for (edit in edits) {
+            if (edit !is Map<*, *>) continue
+            val filePath = edit["filePath"] as? String ?: continue
+            val mode = edit["mode"] as? String ?: continue
+            when (mode) {
+                "search_replace" -> {
+                    val searchText = edit["searchText"] as? String ?: ""
+                    val replaceText = edit["replaceText"] as? String ?: ""
+                    if (searchText.isNotEmpty() || replaceText.isNotEmpty()) {
+                        results.add(ToolCallContent.Diff(filePath, replaceText, searchText.ifEmpty { null }, null))
+                    }
+                }
+                "insert_at_line" -> {
+                    val newContent = edit["newContent"] as? String ?: ""
+                    if (newContent.isNotEmpty()) {
+                        results.add(ToolCallContent.Diff(filePath, newContent, null, null))
+                    }
+                }
+            }
+        }
+        return results.ifEmpty { fallback(rawArguments) }
+    }
+
+    private fun fallback(arguments: String): List<ToolCallContent> {
+        return listOf(ToolCallContent.Content(ContentBlock.Text(arguments)))
+    }
     @JvmStatic
     fun getLine(location: ToolCallLocation): Int {
         return location.line?.toInt() ?: 0

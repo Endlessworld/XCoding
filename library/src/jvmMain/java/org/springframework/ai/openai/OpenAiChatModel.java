@@ -229,7 +229,7 @@ public class OpenAiChatModel implements ChatModel {
         // Before moving any further, build the final request Prompt,
         // merging runtime and default options.
         Prompt requestPrompt = buildRequestPrompt(prompt);
-        logger.info("stream prompt {}",prompt.getOptions());
+//        logger.info("stream prompt {}",prompt.getOptions());
         return internalStream(requestPrompt, null);
     }
 
