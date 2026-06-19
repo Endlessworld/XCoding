@@ -190,7 +190,7 @@ class AgiAgentSession(
                     }
                 }
             }
-            val userMessage = UserMessageBuilder.build(messages)
+            val userMessage = UserMessageBuilder.buildUserMessage(messages)
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(
@@ -463,7 +463,7 @@ class AgiAgent : AgentSupport {
             capabilities = AgentCapabilities(
                 loadSession = true,
                 promptCapabilities = PromptCapabilities(
-                    audio = true, image = true, embeddedContext = true
+                    audio = false, image = false, embeddedContext = true
                 ),
                 mcpCapabilities = McpCapabilities(http = true, sse = true),
                 sessionCapabilities = SessionCapabilities(
