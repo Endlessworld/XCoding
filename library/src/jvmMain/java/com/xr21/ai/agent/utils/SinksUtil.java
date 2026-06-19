@@ -133,13 +133,13 @@ public class SinksUtil {
                         .getMetadata()
                         .getOrDefault("reasoningContent", "")
                         .toString();
-                if (StringUtils.hasText(reasoningContent)) {
+                if (StringUtils.hasLength(reasoningContent)) {
                     builder.think(reasoningContent);
                 }
                 var finishReason = streamingOutput.message()
                         .getMetadata()
                         .get("finishReason");
-                if (StringUtils.hasText(streamingOutput.message().getText()) &&!OpenAiApi.ChatCompletionFinishReason.STOP.name().equalsIgnoreCase(String.valueOf(finishReason))) {
+                if (StringUtils.hasLength(streamingOutput.message().getText()) &&!OpenAiApi.ChatCompletionFinishReason.STOP.name().equalsIgnoreCase(String.valueOf(finishReason))) {
                     builder.chunk(streamingOutput.message().getText());
                 }
                 builder.originData(streamingOutput.getOriginData());
