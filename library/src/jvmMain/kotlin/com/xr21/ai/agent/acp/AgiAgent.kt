@@ -329,7 +329,7 @@ class AgiAgentSession(
         runnableConfig.metadata().ifPresent { it.remove(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY) }
         val initialFlux = SinksUtil.toFlux(agent, userMessage, runnableConfig)
         return initialFlux.expand { output ->
-            logger.info { "output" + Json.toJson(output) }
+//            logger.info { "output" + Json.toJson(output) }
             if (output.interruptionMetadata != null) {
                 logger.info { "Detected human intervention, requesting permission..." }
                 val approvalMetadata = processHumanIntervention(output.interruptionMetadata)
