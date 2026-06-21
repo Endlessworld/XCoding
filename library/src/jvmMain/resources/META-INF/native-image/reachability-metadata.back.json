@@ -1,3520 +1,3424 @@
 {
   "reflection": [
     {
-      "type": "[B"
+      "type": "[B",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lcom.fasterxml.jackson.databind.deser.BeanDeserializerModifier;"
+      "type": "[Lcom.fasterxml.jackson.databind.deser.BeanDeserializerModifier;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lcom.fasterxml.jackson.databind.deser.Deserializers;"
+      "type": "[Lcom.fasterxml.jackson.databind.deser.Deserializers;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lcom.fasterxml.jackson.databind.deser.KeyDeserializers;"
+      "type": "[Lcom.fasterxml.jackson.databind.deser.KeyDeserializers;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lcom.fasterxml.jackson.databind.deser.ValueInstantiators;"
+      "type": "[Lcom.fasterxml.jackson.databind.deser.ValueInstantiators;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lcom.fasterxml.jackson.databind.ser.BeanSerializerModifier;"
+      "type": "[Lcom.fasterxml.jackson.databind.ser.BeanSerializerModifier;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lcom.fasterxml.jackson.databind.ser.Serializers;"
+      "type": "[Lcom.fasterxml.jackson.databind.ser.Serializers;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Ljava.lang.Object;"
+      "type": "[Ljava.lang.Object;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lorg.springframework.ai.chat.messages.AssistantMessage$ToolCall;"
+      "type": "[Lorg.springframework.ai.chat.messages.AssistantMessage$ToolCall;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lorg.springframework.ai.content.Media;"
+      "type": "[Lorg.springframework.ai.content.Media;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lorg.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$ToolCall;"
+      "type": "[Lorg.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$ToolCall;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lorg.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage;"
+      "type": "[Lorg.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lorg.springframework.ai.openai.api.OpenAiApi$FunctionTool;"
+      "type": "[Lorg.springframework.ai.openai.api.OpenAiApi$FunctionTool;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "[Lorg.springframework.util.ConcurrentReferenceHashMap$Segment;"
+      "type": "[Lorg.springframework.util.ConcurrentReferenceHashMap$Segment;",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.classic.Level",
-      "methods": [
-        {
-          "name": "valueOf",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.classic.encoder.PatternLayoutEncoder",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.classic.filter.LevelFilter",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "setLevel",
-          "parameterTypes": [
-            "ch.qos.logback.classic.Level"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.classic.filter.ThresholdFilter",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "setLevel",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "ch.qos.logback.classic.spi.LogbackServiceProvider"
+      "type": "ch.qos.logback.classic.spi.LogbackServiceProvider",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.classic.util.DefaultJoranConfigurator",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "ch.qos.logback.core.FileAppender"
+      "type": "ch.qos.logback.core.FileAppender",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.OutputStreamAppender",
-      "methods": [
-        {
-          "name": "setEncoder",
-          "parameterTypes": [
-            "ch.qos.logback.core.encoder.Encoder"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.UnsynchronizedAppenderBase",
-      "methods": [
-        {
-          "name": "addFilter",
-          "parameterTypes": [
-            "ch.qos.logback.core.filter.Filter"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "ch.qos.logback.core.encoder.Encoder"
+      "type": "ch.qos.logback.core.encoder.Encoder",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.encoder.LayoutWrappingEncoder",
-      "methods": [
-        {
-          "name": "setParent",
-          "parameterTypes": [
-            "ch.qos.logback.core.spi.ContextAware"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.filter.AbstractMatcherFilter",
-      "methods": [
-        {
-          "name": "setOnMatch",
-          "parameterTypes": [
-            "ch.qos.logback.core.spi.FilterReply"
-          ]
-        },
-        {
-          "name": "setOnMismatch",
-          "parameterTypes": [
-            "ch.qos.logback.core.spi.FilterReply"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "ch.qos.logback.core.filter.Filter"
+      "type": "ch.qos.logback.core.filter.Filter",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.pattern.PatternLayoutEncoderBase",
-      "methods": [
-        {
-          "name": "setPattern",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.rolling.RollingFileAppender",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "setFile",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setRollingPolicy",
-          "parameterTypes": [
-            "ch.qos.logback.core.rolling.RollingPolicy"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "ch.qos.logback.core.rolling.RollingPolicy"
+      "type": "ch.qos.logback.core.rolling.RollingPolicy",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.rolling.RollingPolicyBase",
-      "methods": [
-        {
-          "name": "setFileNamePattern",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setParent",
-          "parameterTypes": [
-            "ch.qos.logback.core.FileAppender"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.rolling.TimeBasedRollingPolicy",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "setMaxHistory",
-          "parameterTypes": [
-            "int"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "ch.qos.logback.core.spi.ContextAware"
+      "type": "io.micrometer.core.instrument.binder.cache.HazelcastCacheMetrics",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "ch.qos.logback.core.spi.FilterReply"
+      "type": "ch.qos.logback.core.rolling.TimeBasedFileNamingTriggeringPolicy",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.rolling.TimeBasedFileNamingTriggeringPolicyBase",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.rolling.RollingFileAppenderBase",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.rolling.TimeBasedTriggeringPolicy",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.rolling.TimeBasedRollingAndNamingPolicy",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.rolling.helpers.RenameUtil",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.rolling.helpers.ArchiveValidator",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.spi.ContextAware",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "ch.qos.logback.core.spi.FilterReply",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "ch.qos.logback.core.status.NopStatusListener",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AgentCapabilities",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "loadSession",
-          "parameterTypes": []
-        },
-        {
-          "name": "mcpCapabilities",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "promptCapabilities",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AgentMessageChunk",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "content",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionUpdate",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AgentThoughtChunk",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "content",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionUpdate",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$Annotations",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AuthMethod",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "description",
-          "parameterTypes": []
-        },
-        {
-          "name": "id",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AvailableCommand",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "description",
-          "parameterTypes": []
-        },
-        {
-          "name": "input",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AvailableCommandInput",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "hint",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AvailableCommandsUpdate",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "availableCommands",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionUpdate",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$CurrentModeUpdate",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$CancelNotification",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$KillTerminalCommandResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$KillTerminalCommandRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$WaitForTerminalExitResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ClientCapabilities",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "com.agentclientprotocol.sdk.spec.AcpSchema$FileSystemCapability",
-            "java.lang.Boolean",
-            "java.util.Map"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ContentBlock"
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ContentBlock",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$Resource",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ResourceLink",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AudioContent",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ImageContent",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$EmbeddedResourceResource",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$TextResourceContents",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$BlobResourceContents",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$UserMessageChunk",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$FileSystemCapability",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Boolean"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$InitializeRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Integer",
-            "com.agentclientprotocol.sdk.spec.AcpSchema$ClientCapabilities",
-            "java.util.Map"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$InitializeResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "agentCapabilities",
-          "parameterTypes": []
-        },
-        {
-          "name": "authMethods",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "protocolVersion",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCError",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCMessage"
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCMessage",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCNotification",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.Object"
-          ]
-        },
-        {
-          "name": "jsonrpc",
-          "parameterTypes": []
-        },
-        {
-          "name": "method",
-          "parameterTypes": []
-        },
-        {
-          "name": "params",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.Object",
-            "java.lang.String",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$JSONRPCResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "error",
-          "parameterTypes": []
-        },
-        {
-          "name": "id",
-          "parameterTypes": []
-        },
-        {
-          "name": "jsonrpc",
-          "parameterTypes": []
-        },
-        {
-          "name": "result",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$McpCapabilities",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "http",
-          "parameterTypes": []
-        },
-        {
-          "name": "sse",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$McpServer"
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$McpServer",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$McpServerStdio",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$McpServerHttp",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$McpServerSse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$EnvVariable",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$HttpHeader",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$TerminalExitStatus",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$AuthMethod",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PermissionOption",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$RequestPermissionOutcome",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PermissionCancelled",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PermissionSelected",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ModelInfo",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "description",
-          "parameterTypes": []
-        },
-        {
-          "name": "modelId",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$NewSessionRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.util.List",
-            "java.util.Map"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$NewSessionResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "models",
-          "parameterTypes": []
-        },
-        {
-          "name": "modes",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionId",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$Plan",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "entries",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionUpdate",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PlanEntry",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "content",
-          "parameterTypes": []
-        },
-        {
-          "name": "priority",
-          "parameterTypes": []
-        },
-        {
-          "name": "status",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PlanEntryPriority",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PlanEntryStatus",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PromptCapabilities",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "audio",
-          "parameterTypes": []
-        },
-        {
-          "name": "embeddedContext",
-          "parameterTypes": []
-        },
-        {
-          "name": "image",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PromptRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.util.List",
-            "java.util.Map"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PromptResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "stopReason",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$Role",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$PermissionOptionKind",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$NewSessionRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$NewSessionResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$LoadSessionResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$LoadSessionRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SessionMode",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "description",
-          "parameterTypes": []
-        },
-        {
-          "name": "id",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SessionModeState",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "availableModes",
-          "parameterTypes": []
-        },
-        {
-          "name": "currentModeId",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SessionModelState",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "availableModels",
-          "parameterTypes": []
-        },
-        {
-          "name": "currentModelId",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$RequestPermissionResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$RequestPermissionRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SessionNotification",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionId",
-          "parameterTypes": []
-        },
-        {
-          "name": "update",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SessionUpdate"
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SessionUpdate",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SetSessionModeRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SetSessionModeResponse",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SetSessionModelRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$SetSessionModelResponse",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$StopReason",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$TextContent",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String",
-            "com.agentclientprotocol.sdk.spec.AcpSchema$Annotations",
-            "java.util.Map"
-          ]
-        },
-        {
-          "name": "annotations",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "text",
-          "parameterTypes": []
-        },
-        {
-          "name": "type",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCall",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "content",
-          "parameterTypes": []
-        },
-        {
-          "name": "kind",
-          "parameterTypes": []
-        },
-        {
-          "name": "locations",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "rawInput",
-          "parameterTypes": []
-        },
-        {
-          "name": "rawOutput",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionUpdate",
-          "parameterTypes": []
-        },
-        {
-          "name": "status",
-          "parameterTypes": []
-        },
-        {
-          "name": "title",
-          "parameterTypes": []
-        },
-        {
-          "name": "toolCallId",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallContent"
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallContent",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallContentBlock",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "content",
-          "parameterTypes": []
-        },
-        {
-          "name": "type",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallDiff",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "newText",
-          "parameterTypes": []
-        },
-        {
-          "name": "oldText",
-          "parameterTypes": []
-        },
-        {
-          "name": "path",
-          "parameterTypes": []
-        },
-        {
-          "name": "type",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallLocation",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "line",
-          "parameterTypes": []
-        },
-        {
-          "name": "path",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallStatus",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallTerminal",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "terminalId",
-          "parameterTypes": []
-        },
-        {
-          "name": "type",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallUpdateNotification",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "content",
-          "parameterTypes": []
-        },
-        {
-          "name": "kind",
-          "parameterTypes": []
-        },
-        {
-          "name": "locations",
-          "parameterTypes": []
-        },
-        {
-          "name": "meta",
-          "parameterTypes": []
-        },
-        {
-          "name": "rawInput",
-          "parameterTypes": []
-        },
-        {
-          "name": "rawOutput",
-          "parameterTypes": []
-        },
-        {
-          "name": "sessionUpdate",
-          "parameterTypes": []
-        },
-        {
-          "name": "status",
-          "parameterTypes": []
-        },
-        {
-          "name": "title",
-          "parameterTypes": []
-        },
-        {
-          "name": "toolCallId",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
+    },
+    {
+      "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolCallUpdate",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.agentclientprotocol.sdk.spec.AcpSchema$ToolKind",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.alibaba.cloud.ai.graph.agent.hook.skills.ReadSkillTool$ReadSkillRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.core.JsonGenerator"
+      "type": "com.fasterxml.jackson.core.JsonGenerator",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.databind.ObjectMapper"
+      "type": "com.fasterxml.jackson.databind.ObjectMapper",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.fasterxml.jackson.databind.ext.Java7SupportImpl",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.dataformat.cbor.CBORFactory"
+      "type": "com.fasterxml.jackson.dataformat.cbor.CBORFactory",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.dataformat.smile.SmileFactory"
+      "type": "com.fasterxml.jackson.dataformat.smile.SmileFactory",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.dataformat.xml.XmlMapper"
+      "type": "com.fasterxml.jackson.dataformat.xml.XmlMapper",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.dataformat.yaml.YAMLFactory"
+      "type": "com.fasterxml.jackson.dataformat.yaml.YAMLFactory",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.fasterxml.jackson.datatype.jdk8.Jdk8Module",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.module.kotlin.KotlinModule"
+      "type": "com.fasterxml.jackson.module.kotlin.KotlinModule",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.fasterxml.jackson.module.paramnames.ParameterNamesModule"
+      "type": "com.fasterxml.jackson.module.paramnames.ParameterNamesModule",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.google.gson.Gson"
+      "type": "com.google.gson.Gson",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.google.protobuf.Message"
+      "type": "com.google.protobuf.Message",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.rometools.rome.feed.WireFeed"
+      "type": "com.rometools.rome.feed.WireFeed",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.AESCipher$General",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.ARCFOURCipher",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.ChaCha20Cipher$ChaCha20Poly1305",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.DESCipher",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.DESedeCipher",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.DHParameters",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.GaloisCounterMode$AESGCM",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.TlsKeyMaterialGenerator",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.TlsMasterSecretGenerator",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.crypto.provider.TlsPrfGenerator$V12",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.agent.AcpAgent",
-      "methods": [
-        {
-          "name": "cancelSession",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "init",
-          "parameterTypes": [
-            "com.agentclientprotocol.sdk.spec.AcpSchema$InitializeRequest"
-          ]
-        },
-        {
-          "name": "newSession",
-          "parameterTypes": [
-            "com.agentclientprotocol.sdk.spec.AcpSchema$NewSessionRequest"
-          ]
-        },
-        {
-          "name": "prompt",
-          "parameterTypes": [
-            "com.agentclientprotocol.sdk.spec.AcpSchema$PromptRequest",
-            "com.agentclientprotocol.sdk.agent.SyncPromptContext"
-          ]
-        },
-        {
-          "name": "setSessionMode",
-          "parameterTypes": [
-            "com.agentclientprotocol.sdk.spec.AcpSchema$SetSessionModeRequest"
-          ]
-        },
-        {
-          "name": "setSessionModel",
-          "parameterTypes": [
-            "com.agentclientprotocol.sdk.spec.AcpSchema$SetSessionModelRequest"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "com.xr21.ai.agent.config.ModelsConfig",
+      "type": "com.xr21.ai.agent.model.Config",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "setModels",
-          "parameterTypes": [
-            "java.util.List"
-          ]
-        },
-        {
-          "name": "setProviders",
-          "parameterTypes": [
-            "java.util.List"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "com.xr21.ai.agent.config.ModelsConfig$ModelConfig",
+      "type": "com.xr21.ai.agent.model.Config$ModelConfig",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "setIsDefault",
-          "parameterTypes": [
-            "java.lang.Boolean"
-          ]
-        },
-        {
-          "name": "setMaxTokens",
-          "parameterTypes": [
-            "java.lang.Integer"
-          ]
-        },
-        {
-          "name": "setModelId",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setModelName",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setProviderId",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setTemperature",
-          "parameterTypes": [
-            "java.lang.Double"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "com.xr21.ai.agent.config.ModelsConfig$ProviderConfig",
+      "type": "com.xr21.ai.agent.model.Config$ProviderConfig",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "setApiKey",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setBaseUrl",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setProviderId",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.AcpWriteTodosTool",
-      "methods": [
-        {
-          "name": "writeTodos",
-          "parameterTypes": [
-            "java.util.List",
-            "org.springframework.ai.chat.model.ToolContext"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.AcpWriteTodosTool$RequestEntry",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.EditFileTool",
-      "methods": [
-        {
-          "name": "editFile",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.Boolean",
-            "java.lang.Boolean"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.GlobTool",
-      "methods": [
-        {
-          "name": "glob",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.GrepTool",
-      "methods": [
-        {
-          "name": "grep",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.ListFilesTool",
-      "methods": [
-        {
-          "name": "listFiles",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.Integer",
-            "org.springframework.ai.chat.model.ToolContext"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.ReadFileTool",
-      "methods": [
-        {
-          "name": "readFile",
-          "parameterTypes": [
-            "java.util.List",
-            "java.lang.Integer",
-            "java.lang.Integer"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.ShellTools",
-      "methods": [
-        {
-          "name": "bash",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.Long",
-            "java.lang.String",
-            "java.lang.Boolean",
-            "org.springframework.ai.chat.model.ToolContext"
-          ]
-        },
-        {
-          "name": "bashOutput",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "killShell",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.WebSearchTool",
-      "methods": [
-        {
-          "name": "webSearch",
-          "parameterTypes": [
-            "java.util.List",
-            "java.lang.String",
-            "java.lang.Boolean",
-            "java.lang.Integer"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.WorkerTool$WorkerRequest",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "com.xr21.ai.agent.tools.WriteFileTool",
-      "methods": [
-        {
-          "name": "writeFile",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.micrometer.context.ContextRegistry"
+      "type": "com.xr21.ai.agent.tools.SmartEditTool",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.micrometer.context.ContextSnapshotFactory"
+      "type": "com.xr21.ai.agent.tools.SmartEditTool$EditOperation",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.micrometer.context.ThreadLocalAccessor"
+      "type": "io.micrometer.context.ContextRegistry",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor"
+      "type": "io.micrometer.context.ContextSnapshotFactory",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier"
+      "type": "io.micrometer.context.ThreadLocalAccessor",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.netty.buffer.ByteBuf"
+      "type": "io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.netty5.buffer.Buffer"
+      "type": "io.modelcontextprotocol.json.jackson.JacksonMcpJsonMapperSupplier",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.reactivex.rxjava3.core.Flowable"
+      "type": "io.netty.buffer.ByteBuf",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "io.smallrye.mutiny.Multi"
+      "type": "io.netty5.buffer.Buffer",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "jakarta.json.bind.Jsonb"
+      "type": "io.reactivex.rxjava3.core.Flowable",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "jakarta.xml.bind.Binder"
+      "type": "io.smallrye.mutiny.Multi",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.beans.Introspector"
+      "type": "jakarta.json.bind.Jsonb",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.io.Serializable"
+      "type": "jakarta.xml.bind.Binder",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.lang.AutoCloseable"
+      "type": "java.beans.Introspector",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "java.io.Serializable",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "java.lang.AutoCloseable",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.Boolean",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.lang.CharSequence"
+      "type": "java.lang.CharSequence",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.Class",
-      "methods": [
-        {
-          "name": "getRecordComponents",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.lang.Comparable"
+      "type": "java.lang.Comparable",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.Double",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.Integer",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.lang.Iterable"
+      "type": "java.lang.Iterable",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.Long",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.Number",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.Record",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.String",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.lang.constant.Constable"
+      "type": "java.lang.constant.Constable",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.lang.constant.ConstantDesc"
+      "type": "java.lang.constant.ConstantDesc",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.reflect.ParameterizedType",
-      "methods": [
-        {
-          "name": "getActualTypeArguments",
-          "parameterTypes": []
-        },
-        {
-          "name": "getRawType",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.lang.reflect.RecordComponent",
-      "methods": [
-        {
-          "name": "getName",
-          "parameterTypes": []
-        },
-        {
-          "name": "getType",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.net.http.HttpClient"
+      "type": "java.net.http.HttpClient",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.security.AlgorithmParametersSpi"
+      "type": "java.security.AlgorithmParametersSpi",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.security.KeyStoreSpi"
+      "type": "java.security.KeyStoreSpi",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.security.interfaces.RSAPrivateKey"
+      "type": "java.security.interfaces.RSAPrivateKey",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.security.interfaces.RSAPublicKey"
+      "type": "java.security.interfaces.RSAPublicKey",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.sql.Date"
+      "type": "java.sql.Date",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.sql.Time"
+      "type": "java.sql.Time",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.sql.Timestamp"
+      "type": "java.sql.Timestamp",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.AbstractCollection",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.AbstractMap",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.util.Collection"
+      "type": "java.util.Collection",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.util.Deque"
+      "type": "java.util.Deque",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.HashMap",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.ImmutableCollections$AbstractImmutableCollection",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.ImmutableCollections$AbstractImmutableList",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.ImmutableCollections$AbstractImmutableMap",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.ImmutableCollections$List12",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.ImmutableCollections$ListN",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.ImmutableCollections$Map1",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "java.util.ImmutableCollections$MapN",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.util.List"
+      "type": "java.util.List",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.util.Map"
+      "type": "java.util.Map",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.util.RandomAccess"
+      "type": "java.util.RandomAccess",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "java.util.SequencedCollection"
+      "type": "java.util.SequencedCollection",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "kotlin.Metadata"
+      "type": "kotlin.Metadata",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "kotlin.jvm.JvmInline"
+      "type": "kotlin.jvm.JvmInline",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "kotlin.reflect.full.KClasses"
+      "type": "kotlin.reflect.full.KClasses",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "kotlinx.coroutines.reactor.MonoKt"
+      "type": "kotlinx.coroutines.reactor.MonoKt",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "kotlinx.serialization.cbor.Cbor"
+      "type": "kotlinx.serialization.cbor.Cbor",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "kotlinx.serialization.json.Json"
+      "type": "kotlinx.serialization.json.Json",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "kotlinx.serialization.protobuf.ProtoBuf"
+      "type": "kotlinx.serialization.protobuf.ProtoBuf",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.apache.hc.client5.http.classic.HttpClient"
+      "type": "org.apache.hc.client5.http.classic.HttpClient",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient"
+      "type": "org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.apache.logging.log4j.spi.ExtendedLogger"
+      "type": "org.apache.logging.log4j.spi.ExtendedLogger",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.apache.logging.slf4j.SLF4JProvider"
+      "type": "org.apache.logging.slf4j.SLF4JProvider",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.eclipse.jetty.client.HttpClient"
+      "type": "org.eclipse.jetty.client.HttpClient",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.reactivestreams.Publisher"
+      "type": "org.reactivestreams.Publisher",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.slf4j.Logger"
+      "type": "org.slf4j.Logger",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.slf4j.spi.LocationAwareLogger"
+      "type": "org.slf4j.spi.LocationAwareLogger",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.chat.messages.AbstractMessage",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "getMessageType",
-          "parameterTypes": []
-        },
-        {
-          "name": "getMetadata",
-          "parameterTypes": []
-        },
-        {
-          "name": "getText",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.chat.messages.AssistantMessage",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "getMedia",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolCalls",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.chat.messages.AssistantMessage$ToolCall",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "arguments",
-          "parameterTypes": []
-        },
-        {
-          "name": "id",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        },
-        {
-          "name": "type",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.chat.messages.Message"
+      "type": "org.springframework.ai.chat.messages.Message",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.chat.messages.MessageType",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.chat.messages.ToolResponseMessage",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "getResponses",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.chat.messages.ToolResponseMessage$ToolResponse",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "id",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        },
-        {
-          "name": "responseData",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.chat.messages.UserMessage",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "getMedia",
-          "parameterTypes": []
-        },
-        {
-          "name": "getText",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.chat.prompt.ChatOptions"
+      "type": "org.springframework.ai.chat.prompt.ChatOptions",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.content.Content"
+      "type": "org.springframework.ai.content.Content",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.content.Media",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.content.MediaContent"
+      "type": "org.springframework.ai.content.MediaContent",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.model.ModelOptions"
+      "type": "org.springframework.ai.model.ModelOptions",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.model.tool.DefaultToolCallingChatOptions",
-      "fields": [
-        {
-          "name": "copy"
-        }
-      ],
-      "methods": [
-        {
-          "name": "getFrequencyPenalty",
-          "parameterTypes": []
-        },
-        {
-          "name": "getInternalToolExecutionEnabled",
-          "parameterTypes": []
-        },
-        {
-          "name": "getMaxTokens",
-          "parameterTypes": []
-        },
-        {
-          "name": "getModel",
-          "parameterTypes": []
-        },
-        {
-          "name": "getPresencePenalty",
-          "parameterTypes": []
-        },
-        {
-          "name": "getStopSequences",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTemperature",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolCallbacks",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolContext",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolNames",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTopK",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTopP",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.model.tool.StructuredOutputChatOptions"
+      "type": "org.springframework.ai.model.tool.StructuredOutputChatOptions",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.model.tool.ToolCallingChatOptions"
+      "type": "org.springframework.ai.model.tool.ToolCallingChatOptions",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.OpenAiChatOptions",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "getExtraBody",
-          "parameterTypes": []
-        },
-        {
-          "name": "getFrequencyPenalty",
-          "parameterTypes": []
-        },
-        {
-          "name": "getInternalToolExecutionEnabled",
-          "parameterTypes": []
-        },
-        {
-          "name": "getLogitBias",
-          "parameterTypes": []
-        },
-        {
-          "name": "getLogprobs",
-          "parameterTypes": []
-        },
-        {
-          "name": "getMaxCompletionTokens",
-          "parameterTypes": []
-        },
-        {
-          "name": "getMaxTokens",
-          "parameterTypes": []
-        },
-        {
-          "name": "getMetadata",
-          "parameterTypes": []
-        },
-        {
-          "name": "getModel",
-          "parameterTypes": []
-        },
-        {
-          "name": "getN",
-          "parameterTypes": []
-        },
-        {
-          "name": "getOutputAudio",
-          "parameterTypes": []
-        },
-        {
-          "name": "getOutputModalities",
-          "parameterTypes": []
-        },
-        {
-          "name": "getParallelToolCalls",
-          "parameterTypes": []
-        },
-        {
-          "name": "getPresencePenalty",
-          "parameterTypes": []
-        },
-        {
-          "name": "getPromptCacheKey",
-          "parameterTypes": []
-        },
-        {
-          "name": "getReasoningEffort",
-          "parameterTypes": []
-        },
-        {
-          "name": "getResponseFormat",
-          "parameterTypes": []
-        },
-        {
-          "name": "getSafetyIdentifier",
-          "parameterTypes": []
-        },
-        {
-          "name": "getSeed",
-          "parameterTypes": []
-        },
-        {
-          "name": "getServiceTier",
-          "parameterTypes": []
-        },
-        {
-          "name": "getStop",
-          "parameterTypes": []
-        },
-        {
-          "name": "getStore",
-          "parameterTypes": []
-        },
-        {
-          "name": "getStreamOptions",
-          "parameterTypes": []
-        },
-        {
-          "name": "getStreamUsage",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTemperature",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolCallbacks",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolChoice",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolContext",
-          "parameterTypes": []
-        },
-        {
-          "name": "getToolNames",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTools",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTopLogprobs",
-          "parameterTypes": []
-        },
-        {
-          "name": "getTopP",
-          "parameterTypes": []
-        },
-        {
-          "name": "getUser",
-          "parameterTypes": []
-        },
-        {
-          "name": "getVerbosity",
-          "parameterTypes": []
-        },
-        {
-          "name": "getWebSearchOptions",
-          "parameterTypes": []
-        },
-        {
-          "name": "setExtraBody",
-          "parameterTypes": [
-            "java.util.Map"
-          ]
-        },
-        {
-          "name": "setInternalToolExecutionEnabled",
-          "parameterTypes": [
-            "java.lang.Boolean"
-          ]
-        },
-        {
-          "name": "setModel",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setParallelToolCalls",
-          "parameterTypes": [
-            "java.lang.Boolean"
-          ]
-        },
-        {
-          "name": "setReasoningEffort",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setStreamOptions",
-          "parameterTypes": [
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$StreamOptions"
-          ]
-        },
-        {
-          "name": "setTemperature",
-          "parameterTypes": [
-            "java.lang.Double"
-          ]
-        },
-        {
-          "name": "setToolCallbacks",
-          "parameterTypes": [
-            "java.util.List"
-          ]
-        },
-        {
-          "name": "setToolChoice",
-          "parameterTypes": [
-            "java.lang.Object"
-          ]
-        },
-        {
-          "name": "setToolContext",
-          "parameterTypes": [
-            "java.util.Map"
-          ]
-        },
-        {
-          "name": "setToolNames",
-          "parameterTypes": [
-            "java.util.Set"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionChunk",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.util.List",
-            "java.lang.Long",
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String",
-            "org.springframework.ai.openai.api.OpenAiApi$Usage"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionChunk$ChunkChoice",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionFinishReason",
-            "java.lang.Integer",
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage",
-            "org.springframework.ai.openai.api.OpenAiApi$LogProbs"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionFinishReason",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Object",
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$Role",
-            "java.lang.String",
-            "java.lang.String",
-            "java.util.List",
-            "java.lang.String",
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$AudioOutput",
-            "java.util.List",
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "annotations",
-          "parameterTypes": []
-        },
-        {
-          "name": "audioOutput",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        },
-        {
-          "name": "rawContent",
-          "parameterTypes": []
-        },
-        {
-          "name": "reasoningContent",
-          "parameterTypes": []
-        },
-        {
-          "name": "refusal",
-          "parameterTypes": []
-        },
-        {
-          "name": "role",
-          "parameterTypes": []
-        },
-        {
-          "name": "toolCallId",
-          "parameterTypes": []
-        },
-        {
-          "name": "toolCalls",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$Annotation",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$Annotation$UrlCitation",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$AudioOutput",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$ChatCompletionFunction",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.String",
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "arguments",
-          "parameterTypes": []
-        },
-        {
-          "name": "name",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$Role",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$ToolCall",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Integer",
-            "java.lang.String",
-            "java.lang.String",
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionMessage$ChatCompletionFunction"
-          ]
-        },
-        {
-          "name": "function",
-          "parameterTypes": []
-        },
-        {
-          "name": "id",
-          "parameterTypes": []
-        },
-        {
-          "name": "index",
-          "parameterTypes": []
-        },
-        {
-          "name": "type",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.util.List",
-            "java.lang.String",
-            "java.lang.Boolean",
-            "java.util.Map",
-            "java.lang.Double",
-            "java.util.Map",
-            "java.lang.Boolean",
-            "java.lang.Integer",
-            "java.lang.Integer",
-            "java.lang.Integer",
-            "java.lang.Integer",
-            "java.util.List",
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters",
-            "java.lang.Double",
-            "org.springframework.ai.openai.api.ResponseFormat",
-            "java.lang.Integer",
-            "java.lang.String",
-            "java.util.List",
-            "java.lang.Boolean",
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$StreamOptions",
-            "java.lang.Double",
-            "java.lang.Double",
-            "java.util.List",
-            "java.lang.Object",
-            "java.lang.Boolean",
-            "java.lang.String",
-            "java.lang.String",
-            "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$WebSearchOptions",
-            "java.lang.String",
-            "java.lang.String",
-            "java.lang.String",
-            "java.util.Map"
-          ]
-        },
-        {
-          "name": "audioParameters",
-          "parameterTypes": []
-        },
-        {
-          "name": "extraBody",
-          "parameterTypes": []
-        },
-        {
-          "name": "frequencyPenalty",
-          "parameterTypes": []
-        },
-        {
-          "name": "logitBias",
-          "parameterTypes": []
-        },
-        {
-          "name": "logprobs",
-          "parameterTypes": []
-        },
-        {
-          "name": "maxCompletionTokens",
-          "parameterTypes": []
-        },
-        {
-          "name": "maxTokens",
-          "parameterTypes": []
-        },
-        {
-          "name": "messages",
-          "parameterTypes": []
-        },
-        {
-          "name": "metadata",
-          "parameterTypes": []
-        },
-        {
-          "name": "model",
-          "parameterTypes": []
-        },
-        {
-          "name": "n",
-          "parameterTypes": []
-        },
-        {
-          "name": "outputModalities",
-          "parameterTypes": []
-        },
-        {
-          "name": "parallelToolCalls",
-          "parameterTypes": []
-        },
-        {
-          "name": "presencePenalty",
-          "parameterTypes": []
-        },
-        {
-          "name": "promptCacheKey",
-          "parameterTypes": []
-        },
-        {
-          "name": "reasoningEffort",
-          "parameterTypes": []
-        },
-        {
-          "name": "responseFormat",
-          "parameterTypes": []
-        },
-        {
-          "name": "safetyIdentifier",
-          "parameterTypes": []
-        },
-        {
-          "name": "seed",
-          "parameterTypes": []
-        },
-        {
-          "name": "serviceTier",
-          "parameterTypes": []
-        },
-        {
-          "name": "stop",
-          "parameterTypes": []
-        },
-        {
-          "name": "store",
-          "parameterTypes": []
-        },
-        {
-          "name": "stream",
-          "parameterTypes": []
-        },
-        {
-          "name": "streamOptions",
-          "parameterTypes": []
-        },
-        {
-          "name": "temperature",
-          "parameterTypes": []
-        },
-        {
-          "name": "toolChoice",
-          "parameterTypes": []
-        },
-        {
-          "name": "tools",
-          "parameterTypes": []
-        },
-        {
-          "name": "topLogprobs",
-          "parameterTypes": []
-        },
-        {
-          "name": "topP",
-          "parameterTypes": []
-        },
-        {
-          "name": "user",
-          "parameterTypes": []
-        },
-        {
-          "name": "verbosity",
-          "parameterTypes": []
-        },
-        {
-          "name": "webSearchOptions",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters$AudioResponseFormat",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$AudioParameters$Voice",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$StreamOptions",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean"
-          ]
-        },
-        {
-          "name": "includeUsage",
-          "parameterTypes": []
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$WebSearchOptions",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$WebSearchOptions$SearchContextSize",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$WebSearchOptions$UserLocation",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$ChatCompletionRequest$WebSearchOptions$UserLocation$Approximate",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$FunctionTool",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "getFunction",
-          "parameterTypes": []
-        },
-        {
-          "name": "getType",
-          "parameterTypes": []
-        },
-        {
-          "name": "setFunction",
-          "parameterTypes": [
-            "org.springframework.ai.openai.api.OpenAiApi$FunctionTool$Function"
-          ]
-        },
-        {
-          "name": "setType",
-          "parameterTypes": [
-            "org.springframework.ai.openai.api.OpenAiApi$FunctionTool$Type"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$FunctionTool$Function",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        },
-        {
-          "name": "getDescription",
-          "parameterTypes": []
-        },
-        {
-          "name": "getName",
-          "parameterTypes": []
-        },
-        {
-          "name": "getParameters",
-          "parameterTypes": []
-        },
-        {
-          "name": "getStrict",
-          "parameterTypes": []
-        },
-        {
-          "name": "setDescription",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setName",
-          "parameterTypes": [
-            "java.lang.String"
-          ]
-        },
-        {
-          "name": "setParameters",
-          "parameterTypes": [
-            "java.util.Map"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$FunctionTool$Type",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$LogProbs",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$LogProbs$Content",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$LogProbs$Content$TopLogProbs",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$OutputModality",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$Usage",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Integer",
-            "java.lang.Integer",
-            "java.lang.Integer",
-            "org.springframework.ai.openai.api.OpenAiApi$Usage$PromptTokensDetails",
-            "org.springframework.ai.openai.api.OpenAiApi$Usage$CompletionTokenDetails"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$Usage$CompletionTokenDetails",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Integer",
-            "java.lang.Integer",
-            "java.lang.Integer",
-            "java.lang.Integer"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.OpenAiApi$Usage$PromptTokensDetails",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
       "allDeclaredFields": true,
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Integer",
-            "java.lang.Integer"
-          ]
-        }
-      ]
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.ResponseFormat",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.ResponseFormat$JsonSchema",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.openai.api.ResponseFormat$Type",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.ai.tool.annotation.Tool"
+      "type": "org.springframework.ai.tool.annotation.Tool",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.ai.tool.execution.DefaultToolCallResultConverter",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.boot.logging.logback.RootLogLevelConfigurator"
+      "type": "org.springframework.boot.logging.logback.RootLogLevelConfigurator",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.http.codec.ClientCodecConfigurer"
+      "type": "org.springframework.http.codec.ClientCodecConfigurer",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.http.codec.ServerCodecConfigurer"
+      "type": "org.springframework.http.codec.ServerCodecConfigurer",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.http.codec.support.DefaultClientCodecConfigurer",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "org.springframework.http.codec.support.DefaultServerCodecConfigurer"
+      "type": "org.springframework.http.codec.support.DefaultServerCodecConfigurer",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.springframework.util.MimeType",
-      "allDeclaredFields": true
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "org.stringtemplate.v4.misc.ObjectModelAdaptor",
-      "fields": [
-        {
-          "name": "INVALID_MEMBER"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FlatMapTracker",
-      "fields": [
-        {
-          "name": "size"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "reactor.core.publisher.Flux"
+      "type": "reactor.core.publisher.Flux",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxArray$ArraySubscription",
-      "fields": [
-        {
-          "name": "requested"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxAutoConnect",
-      "fields": [
-        {
-          "name": "remaining"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxBuffer$BufferOverlappingSubscriber",
-      "fields": [
-        {
-          "name": "once"
-        },
-        {
-          "name": "requested"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxBufferPredicate$BufferPredicateSubscriber",
-      "fields": [
-        {
-          "name": "requestedBuffers"
-        },
-        {
-          "name": "requestedFromSource"
-        },
-        {
-          "name": "s"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxConcatArray$ConcatArraySubscriber",
-      "fields": [
-        {
-          "name": "requested"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxConcatIterable$ConcatIterableSubscriber",
-      "fields": [
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxConcatMapNoPrefetch$FluxConcatMapNoPrefetchSubscriber",
-      "fields": [
-        {
-          "name": "error"
-        },
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxDoFinally$DoFinallySubscriber",
-      "fields": [
-        {
-          "name": "once"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxExpand$ExpandBreathSubscriber",
-      "fields": [
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxFlatMap$FlatMapInner",
-      "fields": [
-        {
-          "name": "s"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxFlatMap$FlatMapMain",
-      "fields": [
-        {
-          "name": "error"
-        },
-        {
-          "name": "requested"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxFlattenIterable$FlattenIterableSubscriber",
-      "fields": [
-        {
-          "name": "error"
-        },
-        {
-          "name": "requested"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxPublish",
-      "fields": [
-        {
-          "name": "connection"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxPublish$PubSubInner",
-      "fields": [
-        {
-          "name": "requested"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxPublish$PublishSubscriber",
-      "fields": [
-        {
-          "name": "error"
-        },
-        {
-          "name": "state"
-        },
-        {
-          "name": "subscribers"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxPublishOn$PublishOnConditionalSubscriber",
-      "fields": [
-        {
-          "name": "discardGuard"
-        },
-        {
-          "name": "requested"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxSubscribeOnCallable$CallableSubscribeOnSubscription",
-      "fields": [
-        {
-          "name": "mainFuture"
-        },
-        {
-          "name": "requestFuture"
-        },
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxSwitchMapNoPrefetch$SwitchMapMain",
-      "fields": [
-        {
-          "name": "requested"
-        },
-        {
-          "name": "state"
-        },
-        {
-          "name": "throwable"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxWindowPredicate$WindowFlux",
-      "fields": [
-        {
-          "name": "actual"
-        },
-        {
-          "name": "once"
-        },
-        {
-          "name": "parent"
-        },
-        {
-          "name": "requested"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.FluxWindowPredicate$WindowPredicateMain",
-      "fields": [
-        {
-          "name": "cancelled"
-        },
-        {
-          "name": "error"
-        },
-        {
-          "name": "requested"
-        },
-        {
-          "name": "windowCount"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.LambdaMonoSubscriber",
-      "fields": [
-        {
-          "name": "subscription"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.LambdaSubscriber",
-      "fields": [
-        {
-          "name": "subscription"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.MonoCacheTime",
-      "fields": [
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.MonoCompletionStage$MonoCompletionStageSubscription",
-      "fields": [
-        {
-          "name": "requestedOnce"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.MonoFlatMap$FlatMapMain",
-      "fields": [
-        {
-          "name": "second"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.MonoFlatMapMany$FlatMapManyMain",
-      "fields": [
-        {
-          "name": "inner"
-        },
-        {
-          "name": "requested"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.MonoIgnoreThen$ThenIgnoreMain",
-      "fields": [
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.MonoZip$ZipCoordinator",
-      "fields": [
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.MonoZip$ZipInner",
-      "fields": [
-        {
-          "name": "s"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.Operators$BaseFluxToMonoOperator",
-      "fields": [
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.Operators$MonoInnerProducerBase",
-      "fields": [
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.Operators$MultiSubscriptionSubscriber",
-      "fields": [
-        {
-          "name": "missedProduced"
-        },
-        {
-          "name": "missedRequested"
-        },
-        {
-          "name": "missedSubscription"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.Operators$ScalarSubscription",
-      "fields": [
-        {
-          "name": "once"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.SinkEmptyMulticast",
-      "fields": [
-        {
-          "name": "subscribers"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.SinkManyUnicast",
-      "fields": [
-        {
-          "name": "discardGuard"
-        },
-        {
-          "name": "onTerminate"
-        },
-        {
-          "name": "once"
-        },
-        {
-          "name": "requested"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.publisher.SinksSpecs$AbstractSerializedSink",
-      "fields": [
-        {
-          "name": "lockedAt"
-        },
-        {
-          "name": "wip"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.scheduler.BoundedElasticScheduler",
-      "fields": [
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.scheduler.BoundedElasticScheduler$BoundedServices",
-      "fields": [
-        {
-          "name": "busyStates"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.scheduler.BoundedElasticScheduler$BoundedState",
-      "fields": [
-        {
-          "name": "markCount"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.scheduler.DelegateServiceScheduler",
-      "fields": [
-        {
-          "name": "state"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.scheduler.SchedulerTask",
-      "fields": [
-        {
-          "name": "future"
-        },
-        {
-          "name": "parent"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.core.scheduler.WorkerTask",
-      "fields": [
-        {
-          "name": "future"
-        },
-        {
-          "name": "parent"
-        },
-        {
-          "name": "thread"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "reactor.netty.http.client.HttpClient"
+      "type": "reactor.netty.http.client.HttpClient",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "reactor.netty5.http.client.HttpClient"
+      "type": "reactor.netty5.http.client.HttpClient",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.util.concurrent.SpscArrayQueueConsumer",
-      "fields": [
-        {
-          "name": "consumerIndex"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.util.concurrent.SpscArrayQueueProducer",
-      "fields": [
-        {
-          "name": "producerIndex"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "reactor.util.concurrent.SpscLinkedArrayQueue",
-      "fields": [
-        {
-          "name": "consumerIndex"
-        },
-        {
-          "name": "producerIndex"
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": "reactor.util.context.ReactorContextAccessor"
+      "type": "reactor.util.context.ReactorContextAccessor",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.pkcs12.PKCS12KeyStore",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.pkcs12.PKCS12KeyStore$DualFormatPKCS12",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.DRBG",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.security.SecureRandomParameters"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.DSA$SHA224withDSA",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.DSA$SHA256withDSA",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.JavaKeyStore$DualFormatJKS",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.JavaKeyStore$JKS",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.SHA",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.SHA2$SHA224",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.SHA2$SHA256",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.SHA5$SHA384",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.SHA5$SHA512",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.X509Factory",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.provider.certpath.PKIXCertPathValidator",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.rsa.PSSParameters",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.rsa.RSAKeyFactory$Legacy",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.rsa.RSAPSSSignature",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.rsa.RSASignature$SHA224withRSA",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.rsa.RSASignature$SHA256withRSA",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.ssl.KeyManagerFactoryImpl$SunX509",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.ssl.SSLContextImpl$DefaultSSLContext",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.ssl.TrustManagerFactoryImpl$PKIXFactory",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": []
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.AuthorityInfoAccessExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.AuthorityKeyIdentifierExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.BasicConstraintsExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.CRLDistributionPointsExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.CertificatePoliciesExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.ExtendedKeyUsageExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.KeyUsageExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.NetscapeCertTypeExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.PrivateKeyUsageExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.SubjectAlternativeNameExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
       "type": "sun.security.x509.SubjectKeyIdentifierExtension",
-      "methods": [
-        {
-          "name": "<init>",
-          "parameterTypes": [
-            "java.lang.Boolean",
-            "java.lang.Object"
-          ]
-        }
-      ]
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     },
     {
-      "type": {
-        "proxy": [
-          "java.lang.reflect.ParameterizedType",
-          "org.springframework.core.SerializableTypeWrapper$SerializableTypeProxy",
-          "java.io.Serializable"
-        ]
-      }
+      "type": "",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
     }
   ],
   "resources": [
@@ -3590,6 +3494,36 @@
     {
       "module": "java.xml",
       "glob": "jdk/xml/internal/jdkcatalog/JDKCatalog.xml"
+    },
+    {
+      "glob": ".*\\.properties$"
+    },
+    {
+      "glob": ".*\\.xml$"
+    },
+    {
+      "glob": ".*\\.json$"
+    },
+    {
+      "glob": "META-INF/services/.*"
+    },
+    {
+      "glob": "META-INF/.*"
+    },
+    {
+      "glob": "prompt/.*"
+    },
+    {
+      "glob": ".*\\.md$"
+    },
+    {
+      "glob": ".*logback.*\\.xml$"
+    },
+    {
+      "glob": ".*spring.*\\.xml$"
+    },
+    {
+      "glob": ".*spring.*\\.properties$"
     }
   ],
   "bundles": [],

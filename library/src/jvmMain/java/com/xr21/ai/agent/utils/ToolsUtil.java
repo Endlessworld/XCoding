@@ -101,7 +101,11 @@ public class ToolsUtil {
         }
         ServerParameters serverParameters = builder.build();
         StdioClientTransport transport = new StdioClientTransport(serverParameters, McpJsonMapper.getDefault());
-        McpSyncClient mcpClient = McpClient.sync(transport).build();
+        // Native Image 中进程启动和 stdio 通信可能较慢，增加初始化超时时间
+        McpSyncClient mcpClient = McpClient.sync(transport)
+                .initializationTimeout(Duration.ofSeconds(3))
+                .requestTimeout(Duration.ofSeconds(3))
+                .build();
         return McpToolUtils.getToolCallbacksFromSyncClients(mcpClient);
     }
 

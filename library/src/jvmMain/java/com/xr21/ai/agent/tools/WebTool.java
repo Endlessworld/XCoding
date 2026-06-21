@@ -228,17 +228,5 @@ public class WebTool {
 
         return result;
     }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record SearchRequest(
-            @JsonProperty(value = "queryList", required = true)
-            @JsonPropertyDescription("queryList: Search query List (required) Up to 5 queries") List<String> queryList,
-            @JsonProperty(value = "freshness")
-            @JsonPropertyDescription("freshness: The time range for the search results. (Available options noLimit, oneYear, oneMonth, oneWeek, oneDay. Default is noLimit)") String freshness,
-            @JsonProperty(value = "summary")
-            @JsonPropertyDescription("summary: Whether to return a summary. default true") Boolean summary,
-            @JsonProperty(value = "count")
-            @JsonPropertyDescription("count: Number of results (1-10, default 3)") Integer count) {
-    }
     // @formatter:on
 }

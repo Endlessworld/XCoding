@@ -105,11 +105,11 @@ class AgiAgentSession(
         get() = SessionModeId("plan")
 
     override suspend fun postInitialize() {
-        currentCoroutineContext().client.notify(
-            notification = SessionUpdate.CurrentModeUpdate(
-                currentModeId = defaultMode,
-            )
-        )
+//        currentCoroutineContext().client.notify(
+//            notification = SessionUpdate.CurrentModeUpdate(
+//                currentModeId = defaultMode,
+//            )
+//        )
         currentCoroutineContext().client.notify(
             notification = SessionUpdate.AvailableCommandsUpdate(
                 availableCommands = listOf(
@@ -615,6 +615,7 @@ class AgiAgent : AgentSupport {
     }
 
     override suspend fun createSession(sessionParameters: SessionCreationParameters): AgentSession {
+        logger.info { "createSession ${Json.toJson(sessionParameters)}" }
         val sessionIdStr = "session-${System.currentTimeMillis()}"
         val sessionId = SessionId(sessionIdStr)
         val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
