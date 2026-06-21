@@ -22,7 +22,6 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -161,19 +160,6 @@ public class AiModels {
         if (config.getToolChoice() != null) {
             optionsBuilder.toolChoice(config.getToolChoice());
         }
-//        optionsBuilder.serviceTier("auto");
-//        optionsBuilder.reasoningEffort("max");
-//        if (!config.getModelName().contains("deepseek")) {
-//           optionsBuilder.reasoningEffort("low");
-//        }
-//        // 构建 extraBody：合并默认的 thinking 配置和自定义 extraBody
-//        Map<String, Object> extraBody = new HashMap<>();
-//        extraBody.put("thinking", Map.of("type", "enabled"));
-//        if (config.getExtraBody() != null) {
-//            extraBody.putAll(config.getExtraBody());
-//        }
-//        optionsBuilder.extraBody(extraBody);
-
         return OpenAiChatModel.builder()
                 .defaultOptions(optionsBuilder.build())
                 .openAiApi(api)
@@ -189,7 +175,7 @@ public class AiModels {
             return "v1/chat/completions";
         }
         // 火山引擎格式: /api/v3 -> /chat/completions
-        if (baseUrl.endsWith("/v3") || baseUrl.contains("/v3")) {
+        if (baseUrl.contains("/v3")) {
             return "/chat/completions";
         }
         // OpenRouter 格式: /api -> /v1/chat/completions

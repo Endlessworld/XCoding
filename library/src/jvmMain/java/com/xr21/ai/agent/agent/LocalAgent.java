@@ -187,7 +187,7 @@ public class LocalAgent {
     }
 
     private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers) {
-        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new ContextCacheTool()).build();
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具
@@ -215,9 +215,11 @@ public class LocalAgent {
                 .maxDelay(5000)     // 最大延迟5秒
                 .onFailure(ToolRetryInterceptor.OnFailureBehavior.RETURN_MESSAGE).errorFormatter(e -> Json.toJson(Map.of("error", "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage()))).jitter(true)        // 启用抖动)
                 .build();
-        var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(false).withDefaultSecurity().build();
-
-        // 创建Worker拦截器
+        // 根据当前模式决定文件系统是否只读
+        log.info(" runnableConfig.context() {}", runnableConfig.context().get("mode"));
+        String currentMode = runnableConfig.context().get("mode") instanceof String mode ? mode : "accept_edits";
+        boolean readOnly = "plan".equalsIgnoreCase(currentMode);
+        var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(readOnly).withDefaultSecurity().build();
         WorkerInterceptor workerInterceptor = WorkerInterceptor.builder().defaultModel(chatModel).defaultTools(filesystemInterceptor.getTools())
 //                .addWorker(WorkerSpec.builder()
 //                        .name("research-analyst")
@@ -243,14 +245,11 @@ public class LocalAgent {
         interceptors.add(largeResultEvictionInterceptor);
         interceptors.add(toolRetryInterceptor);
         interceptors.add(filesystemInterceptor);
+        interceptors.add(workerInterceptor);
 //        interceptors.add(retryInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
-        if (runnableConfig.context().get("mode") instanceof String mode && mode.equalsIgnoreCase(
-                SessionConfigOptionsFactory.AgentMode.WORKERS.getValueId())) {
-            interceptors.add(workerInterceptor);
-            log.info("Workers mode use workerInterceptor");
-        }
+        log.info("Agent mode: {}, filesystem readOnly: {}", currentMode, readOnly);
         return interceptors;
     }
 
@@ -270,9 +269,6 @@ public class LocalAgent {
     public static Agent buildAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
         if (cwd == null || cwd.trim().isEmpty()) {
             throw new IllegalArgumentException("Workspace directory (cwd) cannot be null or empty");
-        }
-        if (runnableConfig == null) {
-            throw new IllegalArgumentException("RunnableConfig cannot be null");
         }
         log.info("Building LocalAgent for workspace: {}", cwd);
         log.info("Building LocalAgent for context: {}", runnableConfig.context());
@@ -320,22 +316,35 @@ public class LocalAgent {
 
     @NotNull
     private static List<Hook> getHooks(RunnableConfig runnableConfig, ChatModel chatModel) {
-        List<Hook> hooks = new ArrayList<>();
-        Map<String, ToolConfig> approvalOn = Map.of("feed_back_tool", ToolConfig.builder().description("请确认信息收集工具执行").build(), "Bash", ToolConfig.builder().description("是否允许执行命令").build());
-        if (runnableConfig.context().get("auto_approve") instanceof Boolean autoApprove && !autoApprove) {
+        List<Hook> hooks = new ArrayList<>(3);
+        String currentMode = runnableConfig.context().get("mode") instanceof String m ? m : "accept_edits";
+        log.info("getHooks: currentMode {}", currentMode);
+        if (!"yolo".equalsIgnoreCase(currentMode)) {
+            log.info("approvalOn: currentMode {}", currentMode);
+            String description = "是否允许执行命令";
+            Map<String, ToolConfig> approvalOn = Map.of("Bash", ToolConfig.builder().description(description).build());
             HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
             hooks.add(humanInTheLoopHook);
+            log.info("{} mode: Bash commands require human approval",currentMode);
+        } else {
+            log.info("YOLO mode: all operations auto-approved");
         }
-        SummarizationHook summarizationHook = SummarizationHook.builder()
+        hooks.add(SkillsAgentHook.builder()
+                .skillRegistry(FileSystemSkillRegistry.builder()
+                        .userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString())
+                        .projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills")
+                        .autoLoad(true)
+                        .build())
+                .autoReload(true)
+                .build());
+
+        hooks.add(SummarizationHook.builder()
                 .model(chatModel)
-                .maxTokensBeforeSummary(256 * 1024)     // ← 窗口的 ~84%
-                .messagesToKeep(10)                // ← 保留更多原始消息
+                .maxTokensBeforeSummary(256 * 1024)
+                .messagesToKeep(10)
                 .keepFirstUserMessage(true)
-                .build();
-        FileSystemSkillRegistry registry = FileSystemSkillRegistry.builder().userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString()).projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills").autoLoad(true).build();
-        SkillsAgentHook hook = SkillsAgentHook.builder().skillRegistry(registry).autoReload(true).build();
-        hooks.add(hook);
-        hooks.add(summarizationHook);
+                .build());
+
         return hooks;
     }
 

@@ -26,21 +26,6 @@ import com.xr21.ai.agent.config.AiModels
 object SessionConfigOptionsFactory {
 
     /**
-     * Agent 运行模式选项枚举。
-     */
-    enum class AgentMode(
-        val valueId: String,
-        val label: String,
-        val description: String
-    ) {
-        AGENT("Agent", "Agent", "单智能体模式"),
-        WORKERS("Workers", "Workers", "动态并行子代理");
-
-        fun toSelectOption(): SessionConfigSelectOption =
-            SessionConfigSelectOption(SessionConfigValueId(valueId), label, description)
-    }
-
-    /**
      * 思考深度级别选项枚举。
      */
     enum class ThoughtLevel(
@@ -60,31 +45,6 @@ object SessionConfigOptionsFactory {
 
     fun create(clientInfo: ClientInfo?): List<SessionConfigOption> {
         val options = arrayListOf<SessionConfigOption>()
-
-        if (!isIntelliJ2026(clientInfo)) {
-            options.add(
-                SessionConfigOption.select(
-                    id = "mode",
-                    name = "mode",
-                    currentValue = AgentMode.AGENT.valueId,
-                    description = "mode",
-                    options = SessionConfigSelectOptions.Flat(
-                        AgentMode.entries.map { it.toSelectOption() }
-                    ),
-                    category = SessionConfigOptionCategory.MODE
-                )
-            )
-        }
-
-        options.add(
-            SessionConfigOption.boolean(
-                id = "auto_approve",
-                name = "Auto Approve",
-                currentValue = true,
-                description = "Automatically approve all tool calls"
-            )
-        )
-
         options.add(
             SessionConfigOption.select(
                 id = "thought_level",

@@ -34,6 +34,7 @@ import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
 import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.utils.Json
+import com.xr21.ai.agent.utils.PermissionSettings
 import com.xr21.ai.agent.utils.SinksUtil
 import com.xr21.ai.agent.utils.ToolsUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -82,26 +84,30 @@ class AgiAgentSession(
     override val sessionId: SessionId,
     private val cwd: String,
     private val mcpServers: List<McpServer>?,
-    private val runnableConfig: RunnableConfig,
+    private var runnableConfig: RunnableConfig,
     private val clientInfo: ClientInfo? = null
 ) : AgentSession {
-    private val responseBuilder = StringBuilder()
-    private val tokenUsageRef = AtomicReference(Usage(0,0,0,0,0,0))
-    private val sessionTokenUsageRef = AtomicReference(Usage(0,0,0,0,0,0))
+    private val tokenUsageRef = AtomicReference(Usage(0, 0, 0, 0, 0, 0))
+    private val sessionTokenUsageRef = AtomicReference(Usage(0, 0, 0, 0, 0, 0))
 
     private val startTime = AtomicLong(0L)
     override val configOptions: List<SessionConfigOption>
         get() = SessionConfigOptionsFactory.create(clientInfo)
 
     override val availableModes: List<SessionMode>
-        get() = SessionConfigOptionsFactory.AgentMode.entries.map {
-            SessionMode(SessionModeId(it.valueId), it.label, it.description)
-        }
+        get() = listOf(
+            SessionMode(SessionModeId("plan"), "Plan", "L1 探索与规划：只读模式，仅允许代码搜索、文件读取和架构分析"),
+            SessionMode(SessionModeId("accept_edits"), "Accept", "L2 日常开发：自动批准文件读写，Shell命令需人工确认"),
+            SessionMode(SessionModeId("yolo"), "YOLO", "L3 全自动执行，跳过所有权限检查"),
+        )
+
+    override val defaultMode: SessionModeId
+        get() = SessionModeId("plan")
 
     override suspend fun postInitialize() {
         currentCoroutineContext().client.notify(
             notification = SessionUpdate.CurrentModeUpdate(
-                currentModeId = SessionModeId(SessionConfigOptionsFactory.AgentMode.AGENT.valueId),
+                currentModeId = defaultMode,
             )
         )
         currentCoroutineContext().client.notify(
@@ -114,8 +120,6 @@ class AgiAgentSession(
         )
     }
 
-    override val defaultMode: SessionModeId
-        get() = SessionModeId(SessionConfigOptionsFactory.AgentMode.AGENT.valueId)
 
     override val availableModels: List<ModelInfo>
         get() = AiModels.availableModels().map { model ->
@@ -140,14 +144,14 @@ class AgiAgentSession(
     }
 
     override suspend fun setMode(modeId: SessionModeId, _meta: JsonElement?): SetSessionModeResponse {
+        logger.info { "[AcpAgent] setMode ${modeId.value}" }
         runnableConfig.context().put("mode", modeId.value)
-        logger.info { "AcpAgent] setMode $SessionModeId" }
         return SetSessionModeResponse()
     }
 
     override suspend fun setModel(modelId: ModelId, _meta: JsonElement?): SetSessionModelResponse {
-        runnableConfig.context().put("model", modelId.value)
         logger.info { "[AcpAgent] setModel {} $modelId" }
+        runnableConfig.context().put("model", modelId.value)
         return SetSessionModelResponse()
     }
 
@@ -205,13 +209,12 @@ class AgiAgentSession(
             runnableConfig.context().put("executionThread", executionThread)
             runnableConfig.context().putIfAbsent("totalTokens", 0)
             runnableConfig.context().putIfAbsent("completionTokens", 0)
-            runnableConfig.context().putIfAbsent("responseBuilder", responseBuilder)
             runnableConfig.context().putIfAbsent("isFirst", AtomicBoolean(true))
             runnableConfig.context().putIfAbsent("isFirstMessage", AtomicBoolean(true))
             // Store client session operations in context so tools running on non-coroutine threads can use it
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
-            val recursiveFlux = createRecursiveAgentFlux(agent, userMessage)
+            val recursiveFlux = recursiveAgentFlux(agent, userMessage)
             val agentSink = Sinks.many().unicast().onBackpressureBuffer<AgentOutput<Any>>()
             val disposable = recursiveFlux.subscribe({ output -> agentSink.tryEmitNext(output) }, { error ->
                 logger.error(error) { "Error in agent flux" }
@@ -220,13 +223,9 @@ class AgiAgentSession(
                 logger.info { "disposable dispose" }
                 agentSink.tryEmitComplete()
             })
-
             // Register cancellable request so cancel() can find and cancel it
             val cancellableRequest = CancellableRequest(
-                requestId,
-                sessionId.value,
-                executionThread,
-                recursiveFlux
+                requestId, sessionId.value, executionThread, recursiveFlux
             )
             cancellableRequest.setFluxDisposable(disposable)
             // 将 agentSink 注册到 CancellableRequest，以便 cancel() 时发送 complete 信号
@@ -235,11 +234,7 @@ class AgiAgentSession(
             activeRequests[requestId] = cancellableRequest
 
             val agentIterator = agentSink.asFlux().toIterable().iterator()
-            while (agentIterator.hasNext()
-                && !disposable.isDisposed
-                && !cancellableRequest.cancelled
-                && currentCoroutineContext().isActive
-            ) {
+            while (agentIterator.hasNext() && !disposable.isDisposed && !cancellableRequest.cancelled && currentCoroutineContext().isActive) {
                 val output = agentIterator.next()
                 if (cancellableRequest.cancelled || !currentCoroutineContext().isActive) break
                 emitOutput(output)
@@ -251,7 +246,8 @@ class AgiAgentSession(
             val duration = latency / 1000.0
             val tokens = sessionTokenUsageRef.get().totalTokens
             val speed = if (duration > 0) String.format("%.2f", tokenUsageRef.get().outputTokens / duration) else "0.00"
-            val chunk = "Token usage: sessionTotal=${tokens} ,total=${tokenUsageRef.get().totalTokens},outputTokens=${tokenUsageRef.get().outputTokens }, duration=${duration}s, speed=${speed} tokens/s"
+            val chunk =
+                "Token usage: sessionTotal=${tokens} ,total=${tokenUsageRef.get().totalTokens},outputTokens=${tokenUsageRef.get().outputTokens}, duration=${duration}s, speed=${speed} tokens/s"
             logger.info { chunk }
             emit(
                 Event.SessionUpdateEvent(
@@ -260,7 +256,7 @@ class AgiAgentSession(
             )
             emit(
                 Event.SessionUpdateEvent(
-                    SessionUpdate.UsageUpdate(tokens,0, Cost(0.0,"CNY"))
+                    SessionUpdate.UsageUpdate(tokens, 0, Cost(0.0, "CNY"))
                 )
             )
             logger.info { "events END_TURN" }
@@ -271,13 +267,14 @@ class AgiAgentSession(
                 tokenUsageRef.get().totalTokens,
                 tokenUsageRef.get().thoughtTokens,
                 tokenUsageRef.get().cachedReadTokens,
-                tokenUsageRef.get().cachedWriteTokens,
-                JsonObject(mapOf(
-                    "sessionTotal" to JsonPrimitive(sessionUsage.totalTokens),
-                    "completionTokens" to JsonPrimitive(sessionUsage.outputTokens),
-                    "duration" to JsonPrimitive(duration),
-                    "speed" to JsonPrimitive(speed)
-                ))
+                tokenUsageRef.get().cachedWriteTokens, JsonObject(
+                    mapOf(
+                        "sessionTotal" to JsonPrimitive(sessionUsage.totalTokens),
+                        "completionTokens" to JsonPrimitive(sessionUsage.outputTokens),
+                        "duration" to JsonPrimitive(duration),
+                        "speed" to JsonPrimitive(speed)
+                    )
+                )
             )
             emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN, null, finalUsage)))
         } catch (e: Exception) {
@@ -322,31 +319,145 @@ class AgiAgentSession(
      * Create a recursive agent Flux that handles human-in-the-loop interruptions.
      * Processing of outputs is handled by the caller (prompt method) via emitOutput.
      */
-    private fun createRecursiveAgentFlux(
+    private fun recursiveAgentFlux(
         agent: Agent, userMessage: UserMessage
     ): Flux<AgentOutput<Any>> {
         startTime.set(System.currentTimeMillis())
+        logger.info { "runnableConfig $runnableConfig" }
+        // 清除上一次 HITL 审批残留的 HUMAN_FEEDBACK metadata，
+        // 否则 GraphRunnerContext 会误判为 Resume 请求，直接跳到 __END__
+        runnableConfig.metadata().ifPresent { it.remove(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY) }
         val initialFlux = SinksUtil.toFlux(agent, userMessage, runnableConfig)
         return initialFlux.expand { output ->
+            logger.info { "output" + Json.toJson(output) }
             if (output.interruptionMetadata != null) {
-                logger.info { "Detected human intervention, auto-approving..." }
-                val approvalMetadata = InterruptionMetadata.builder().nodeId(output.interruptionMetadata.node())
-                    .state(output.interruptionMetadata.state()).apply {
-                        output.interruptionMetadata.toolFeedbacks().forEach { fb ->
-                            addToolFeedback(
-                                InterruptionMetadata.ToolFeedback.builder(fb)
-                                    .result(InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED).build()
-                            )
-                        }
-                    }.build()
-                runnableConfig.metadata().ifPresent { metadata ->
-                    metadata[RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY] = approvalMetadata
+                logger.info { "Detected human intervention, requesting permission..." }
+                val approvalMetadata = processHumanIntervention(output.interruptionMetadata)
+                val toolFeedbacks = approvalMetadata.toolFeedbacks()
+                logger.info { "Resuming agent flow with approval metadata $toolFeedbacks" }
+                runnableConfig =  RunnableConfig.builder(runnableConfig)
+                    .addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, approvalMetadata)
+                    .build();
+                val allRejected = approvalMetadata.toolFeedbacks()
+                    .all { it.result == InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED }
+                if (allRejected) {
+                    logger.info { "All tool calls were rejected, ending flow" }
+                    Flux.empty()
+                } else {
+                    SinksUtil.toFlux(agent, userMessage, runnableConfig)
                 }
-                SinksUtil.toFlux(agent, userMessage, runnableConfig)
             } else {
                 Flux.empty()
             }
         }
+    }
+
+    /**
+     * Process human intervention for tool call permissions.
+     * Checks persisted permissions first, then requests user decision via ACP ClientSessionOperations.
+     */
+    fun processHumanIntervention(
+        interruptionMetadata: InterruptionMetadata
+    ): InterruptionMetadata {
+        PermissionSettings.load(cwd)
+        val feedbackBuilder = InterruptionMetadata.builder()
+            .nodeId(interruptionMetadata.node())
+            .state(interruptionMetadata.state())
+        for (toolFeedback in interruptionMetadata.toolFeedbacks()) {
+            val approvedFeedbackBuilder = InterruptionMetadata.ToolFeedback.builder(toolFeedback)
+            val toolName = toolFeedback.name
+            val toolArgs = toolFeedback.arguments
+            val toolId = toolFeedback.id
+            val toolPattern = buildToolPattern(toolName, toolArgs)
+            val persistedAction = PermissionSettings.checkPermission(toolName, toolArgs)
+            if (persistedAction != null) {
+                val result = when (persistedAction) {
+                    PermissionSettings.PermissionAction.ALLOW -> {
+                        logger.info { "Auto-approved (persisted) for tool: $toolName" }
+                        InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED
+                    }
+
+                    PermissionSettings.PermissionAction.REJECT -> {
+                        logger.info { "Auto-rejected (persisted) for tool: $toolName" }
+                        InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED
+                    }
+                }
+                feedbackBuilder.addToolFeedback(approvedFeedbackBuilder.result(result).build())
+                continue
+            }
+
+            val clientOps = runnableConfig.context()[CLIENT_SESSION_CONTEXT_KEY] as? ClientSessionOperations
+            if (clientOps == null) {
+                logger.warn { "No ClientSessionOperations available, auto-approving: $toolName" }
+                feedbackBuilder.addToolFeedback(
+                    approvedFeedbackBuilder.result(InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED).build()
+                )
+                continue
+            }
+
+            val toolCallUpdate = SessionUpdate.ToolCallUpdate(
+                toolCallId = ToolCallId(toolId ?: ""),
+                title = toolName,
+                kind = ToolKindFind.find(toolName),
+                status = ToolCallStatus.PENDING,
+                content = BridgeKt.build(toolName ?: "", toolArgs)
+            )
+
+            val permissionOptions = PermissionOptionKind.values().map { kind ->
+                PermissionOption(PermissionOptionId(kind.name), kind.name, kind)
+            }
+
+            val permissionResponse = runBlocking {
+                clientOps.requestPermissions(toolCallUpdate, permissionOptions, null)
+            }
+
+            val result = when (val outcome = permissionResponse.outcome) {
+                is RequestPermissionOutcome.Cancelled -> {
+                    logger.info { "Permission cancelled for tool: $toolName" }
+                    InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED
+                }
+
+                is RequestPermissionOutcome.Selected -> {
+                    val optionKind = PermissionOptionKind.valueOf(outcome.optionId.value)
+                    when (optionKind) {
+                        PermissionOptionKind.ALLOW_ONCE -> {
+                            logger.info { "Permission granted (once) for tool: $toolName" }
+                            InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED
+                        }
+
+                        PermissionOptionKind.ALLOW_ALWAYS -> {
+                            logger.info { "Permission granted (always) for tool: $toolName" }
+                            PermissionSettings.addAllowPermission(cwd, toolPattern)
+                            InterruptionMetadata.ToolFeedback.FeedbackResult.APPROVED
+                        }
+
+                        PermissionOptionKind.REJECT_ONCE -> {
+                            logger.info { "Permission rejected (once) for tool: $toolName" }
+                            InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED
+                        }
+
+                        PermissionOptionKind.REJECT_ALWAYS -> {
+                            logger.info { "Permission rejected (always) for tool: $toolName" }
+                            PermissionSettings.addRejectPermission(cwd, toolPattern)
+                            InterruptionMetadata.ToolFeedback.FeedbackResult.REJECTED
+                        }
+                    }
+                }
+            }
+
+            feedbackBuilder.addToolFeedback(approvedFeedbackBuilder.result(result).build())
+        }
+
+        return feedbackBuilder.build()
+    }
+
+    /**
+     * Build a tool pattern string for permission persistence.
+     * Format: "ToolName(arguments)" or just "ToolName" if no arguments.
+     */
+    fun buildToolPattern(toolName: String?, arguments: String?): String {
+        if (toolName == null) return ""
+        return if (arguments.isNullOrEmpty()) toolName else "$toolName($arguments)"
     }
 
     /**
@@ -357,19 +468,29 @@ class AgiAgentSession(
     private suspend fun FlowCollector<Event>.emitOutput(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
         if (output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
-            tokenUsageRef.set(Usage(output.tokenUsage.promptTokens.toLong(), output.tokenUsage.completionTokens.toLong(), output.tokenUsage.totalTokens.toLong(),0,0,0))
+            tokenUsageRef.set(
+                Usage(
+                    output.tokenUsage.promptTokens.toLong(),
+                    output.tokenUsage.completionTokens.toLong(),
+                    output.tokenUsage.totalTokens.toLong(),
+                    0,
+                    0,
+                    0
+                )
+            )
             val prev = sessionTokenUsageRef.get()
-            sessionTokenUsageRef.set(Usage(
-                inputTokens = prev.inputTokens + (output.tokenUsage.promptTokens ?: 0).toLong(),
-                outputTokens = prev.outputTokens + (output.tokenUsage.completionTokens ?: 0).toLong(),
-                totalTokens = prev.totalTokens + (output.tokenUsage.totalTokens ?: 0).toLong(),
-                thoughtTokens = prev.thoughtTokens,
-                cachedReadTokens = prev.cachedReadTokens,
-                cachedWriteTokens = prev.cachedWriteTokens
-            ))
+            sessionTokenUsageRef.set(
+                Usage(
+                    inputTokens = prev.inputTokens + (output.tokenUsage.promptTokens ?: 0).toLong(),
+                    outputTokens = prev.outputTokens + (output.tokenUsage.completionTokens ?: 0).toLong(),
+                    totalTokens = prev.totalTokens + (output.tokenUsage.totalTokens ?: 0).toLong(),
+                    thoughtTokens = prev.thoughtTokens,
+                    cachedReadTokens = prev.cachedReadTokens,
+                    cachedWriteTokens = prev.cachedWriteTokens
+                )
+            )
         }
         if (output.chunk != null) {
-            responseBuilder.append(output.chunk)
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentMessageChunk(ContentBlock.Text(output.chunk))
@@ -434,7 +555,6 @@ class AgiAgentSession(
 
 
     }
-
 
 
 }
@@ -550,11 +670,7 @@ class AgiAgent : AgentSupport {
     }
 
     override suspend fun setProvider(
-        id: String,
-        apiType: LlmProtocol,
-        baseUrl: String,
-        headers: Map<String, String>?,
-        _meta: JsonElement?
+        id: String, apiType: LlmProtocol, baseUrl: String, headers: Map<String, String>?, _meta: JsonElement?
     ): SetProvidersResponse {
         logger.info { "Set provider: $id, type: $apiType, baseUrl: $baseUrl" }
         ProviderConfigManager.setProvider(id, baseUrl, headers)
@@ -575,8 +691,8 @@ class AgiAgent : AgentSupport {
         val cwd = sessionParameters.cwd
         val sessionIdStr = "session-${System.currentTimeMillis()}"
         val newSessionId = SessionId(sessionIdStr)
-        val runnableConfig = RunnableConfig.builder().threadId(sessionIdStr)
-            .addStateUpdate(emptyMap<String, Any>()).build()
+        val runnableConfig =
+            RunnableConfig.builder().threadId(sessionIdStr).addStateUpdate(emptyMap<String, Any>()).build()
         sessionsRunnableConfig[sessionIdStr] = runnableConfig
         val session = AgiAgentSession(newSessionId, cwd, sessionParameters.mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session
