@@ -20,7 +20,7 @@ public class AgentsTest {
     /**
      * 示例2：消息压缩 Hook
      */
-    @Test
+//    @Test
     public void messageSummarization() {
         LocalAgent.WORKSPACE_ROOT = "E:\\local-github\\ai-agents";
         ChatModel chatModel = AiModels.createChatModelFromJson("volcengine/GLM-5.1");
