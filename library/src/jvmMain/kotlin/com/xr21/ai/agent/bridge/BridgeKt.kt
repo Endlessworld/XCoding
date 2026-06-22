@@ -17,6 +17,7 @@ package com.xr21.ai.agent.bridge
 
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.model.*
+import com.fasterxml.jackson.core.type.TypeReference
 import com.xr21.ai.agent.tui.ChatMessage
 import com.xr21.ai.agent.tui.MessageRole
 import com.xr21.ai.agent.utils.Json
@@ -44,6 +45,7 @@ object BridgeKt {
      * - 连续同类型 chunk（message 或 thought）→ 合并文本到同一事件
      */
     @JvmStatic
+    @UnstableApi
     fun addEventToMessages(messages: MutableList<ChatMessage>, event: SessionUpdate) {
         when (event) {
             is SessionUpdate.UserMessageChunk -> {
@@ -115,28 +117,30 @@ object BridgeKt {
     }
 
     /** 合并连续同类型 chunk；不同类型则追加新事件 */
+    @UnstableApi
     private fun mergeOrAppendChunk(events: MutableList<SessionUpdate>, newEvent: SessionUpdate) {
         if (events.isEmpty()) {
             events.add(newEvent)
             return
         }
-        val last = events.last()
-        when {
-            last is SessionUpdate.UserMessageChunk && newEvent is SessionUpdate.UserMessageChunk -> {
+        when (val last = events.last()) {
+            is SessionUpdate.UserMessageChunk if newEvent is SessionUpdate.UserMessageChunk -> {
                 val lastText = (last.content as? ContentBlock.Text)?.text ?: ""
                 val newText = (newEvent.content as? ContentBlock.Text)?.text ?: ""
                 events[events.size - 1] = SessionUpdate.UserMessageChunk(
                     ContentBlock.Text(lastText + newText), newEvent.messageId
                 )
             }
-            last is SessionUpdate.AgentMessageChunk && newEvent is SessionUpdate.AgentMessageChunk -> {
+
+            is SessionUpdate.AgentMessageChunk if newEvent is SessionUpdate.AgentMessageChunk -> {
                 val lastText = (last.content as? ContentBlock.Text)?.text ?: ""
                 val newText = (newEvent.content as? ContentBlock.Text)?.text ?: ""
                 events[events.size - 1] = SessionUpdate.AgentMessageChunk(
                     ContentBlock.Text(lastText + newText), newEvent.messageId
                 )
             }
-            last is SessionUpdate.AgentThoughtChunk && newEvent is SessionUpdate.AgentThoughtChunk -> {
+
+            is SessionUpdate.AgentThoughtChunk if newEvent is SessionUpdate.AgentThoughtChunk -> {
                 val lastText = (last.content as? ContentBlock.Text)?.text ?: ""
                 val newText = (newEvent.content as? ContentBlock.Text)?.text ?: ""
                 events[events.size - 1] = SessionUpdate.AgentThoughtChunk(
@@ -293,8 +297,9 @@ object BridgeKt {
     fun build(toolName: String, arguments: String?): List<ToolCallContent> {
         if (arguments.isNullOrBlank()) return emptyList()
         return try {
-            val args = Json.to(arguments, Map::class.java) as? Map<String, Any?>
-                ?: return fallback(arguments)
+            val args = Json.jsonMapper { jsonMapper ->
+                jsonMapper.readValue(arguments, object : TypeReference<MutableMap<String, Any?>>() {})
+            } ?: return fallback(arguments)
             when (toolName) {
                 "edit_file" -> buildEditFileDiff(args, arguments)
                 "write_file" -> buildWriteFileDiff(args, arguments)

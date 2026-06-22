@@ -18,9 +18,13 @@ package com.xr21.ai.agent.utils;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import lombok.SneakyThrows;
+
+import java.util.function.Function;
 
 /**
  *
@@ -40,37 +44,32 @@ public abstract class Json {
                 .build();
     }
 
+    public static <T> T jsonMapper(Function<JsonMapper,T> function) {
+        return  function.apply(jsonMapper);
+    }
 
+    @SneakyThrows(value = JsonProcessingException.class)
     public static <T> String toJson(T value) {
-        try {
-            return jsonMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+        return jsonMapper.writeValueAsString(value);
     }
 
+    @SneakyThrows(value = JsonProcessingException.class)
     public static <T> String toPrettyJson(T value) {
-        try {
-            return jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+        return jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
     }
 
+    @SneakyThrows(value = JsonProcessingException.class)
     public static <R> R to(String value, Class<R> clazz) {
-        try {
-            return jsonMapper.readValue(value, clazz);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+        return jsonMapper.readValue(value, clazz);
     }
 
+    @SneakyThrows(value = JsonProcessingException.class)
     public static <T, R> R to(T value, Class<R> clazz) {
-        try {
-            return jsonMapper.readValue(toJson(value), clazz);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+        return jsonMapper.readValue(toJson(value), clazz);
     }
 
+    @SneakyThrows(value = JsonProcessingException.class)
+    public static <T> T to(String value, TypeReference<T> valueTypeRef) {
+        return jsonMapper.readValue(value, valueTypeRef);
+    }
 }

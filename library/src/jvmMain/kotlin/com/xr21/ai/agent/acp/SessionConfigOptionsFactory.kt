@@ -29,9 +29,7 @@ object SessionConfigOptionsFactory {
      * 思考深度级别选项枚举。
      */
     enum class ThoughtLevel(
-        val valueId: String,
-        val label: String,
-        val description: String
+        val valueId: String, val label: String, val description: String
     ) {
         DISABLED("disabled", "Disabled", "关闭思考"),
         LOW("low", "Low", "轻度思考"),
@@ -43,6 +41,22 @@ object SessionConfigOptionsFactory {
             SessionConfigSelectOption(SessionConfigValueId(valueId), label, description)
     }
 
+    /**
+     * 思考深度级别选项枚举。
+     */
+    enum class AgentMode(
+        val valueId: String, val label: String, val description: String
+    ) {
+        PLAN("plan", "Plan", "L1 探索与规划：只读模式，仅允许代码搜索、文件读取和架构分析"),
+        ACCEPT_EDITS("accept_edits", "Accept", "L2 自动批准文件读写，Shell命令需人工确认"),
+        YOLO("yolo", "YOLO", "L3 全自动执行，跳过所有权限检查");
+
+        fun toSelectOption(): SessionConfigSelectOption =
+            SessionConfigSelectOption(SessionConfigValueId(valueId), label, description)
+
+        fun toSessionMode(): SessionMode = SessionMode(SessionModeId(valueId), label, description)
+    }
+
     fun create(clientInfo: ClientInfo?): List<SessionConfigOption> {
         val options = arrayListOf<SessionConfigOption>()
         options.add(
@@ -52,13 +66,12 @@ object SessionConfigOptionsFactory {
                 currentValue = ThoughtLevel.LOW.valueId,
                 description = "思考深度级别",
                 options = SessionConfigSelectOptions.Flat(
-                    ThoughtLevel.entries.map { it.toSelectOption() }
-                ),
+                    ThoughtLevel.entries.map { it.toSelectOption() }),
                 category = SessionConfigOptionCategory.THOUGHT_LEVEL
             )
         )
 
-        if (!isIntelliJ2026(clientInfo)) {
+        if (isIntelliJ2026(clientInfo)) {
             options.add(
                 SessionConfigOption.select(
                     id = "model",
@@ -68,12 +81,20 @@ object SessionConfigOptionsFactory {
                     options = SessionConfigSelectOptions.Flat(
                         AiModels.availableModels().map { model ->
                             SessionConfigSelectOption(
-                                SessionConfigValueId(model.modelId ?: ""),
-                                model.modelName ?: "",
-                                model.modelName ?: ""
+                                SessionConfigValueId(model.modelId ?: ""), model.modelName ?: "", model.modelName ?: ""
                             )
-                        }
-                    ),
+                        }),
+                    category = SessionConfigOptionCategory.MODEL
+                )
+            )
+            options.add(
+                SessionConfigOption.select(
+                    id = "mode",
+                    name = "mode",
+                    currentValue = "accept_edits",
+                    description = "model",
+                    options = SessionConfigSelectOptions.Flat(
+                        AgentMode.entries.map { it.toSelectOption() }),
                     category = SessionConfigOptionCategory.MODEL
                 )
             )

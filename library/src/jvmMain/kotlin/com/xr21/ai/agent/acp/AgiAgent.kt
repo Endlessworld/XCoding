@@ -27,6 +27,7 @@ import com.agentclientprotocol.model.*
 import com.alibaba.cloud.ai.graph.RunnableConfig
 import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
+import com.xr21.ai.agent.acp.SessionConfigOptionsFactory.AgentMode
 import com.xr21.ai.agent.agent.LocalAgent
 import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.config.AiModels
@@ -95,14 +96,10 @@ class AgiAgentSession(
         get() = SessionConfigOptionsFactory.create(clientInfo)
 
     override val availableModes: List<SessionMode>
-        get() = listOf(
-            SessionMode(SessionModeId("plan"), "Plan", "L1 探索与规划：只读模式，仅允许代码搜索、文件读取和架构分析"),
-            SessionMode(SessionModeId("accept_edits"), "Accept", "L2 日常开发：自动批准文件读写，Shell命令需人工确认"),
-            SessionMode(SessionModeId("yolo"), "YOLO", "L3 全自动执行，跳过所有权限检查"),
-        )
+        get() = AgentMode.entries.map { it.toSessionMode() }
 
     override val defaultMode: SessionModeId
-        get() = SessionModeId("plan")
+        get() = AgentMode.ACCEPT_EDITS.toSessionMode().id
 
     override suspend fun postInitialize() {
 //        currentCoroutineContext().client.notify(

@@ -15,7 +15,10 @@
  */
 package com.xr21.ai.agent.acp
 
-import com.agentclientprotocol.model.*
+import com.agentclientprotocol.annotations.UnstableApi
+import com.agentclientprotocol.model.LlmProtocol
+import com.agentclientprotocol.model.ProviderCurrentConfig
+import com.agentclientprotocol.model.ProviderInfo
 import com.xr21.ai.agent.config.ModelConfigLoader
 import com.xr21.ai.agent.model.Config
 import com.xr21.ai.agent.utils.Json
@@ -51,6 +54,7 @@ object ProviderConfigManager {
         }
     }
 
+    @UnstableApi
     fun listProviders(): List<ProviderInfo> {
         val providerConfigs = loadAllProviderConfigs()
         return providerConfigs.map { (id, baseUrl) ->
@@ -82,7 +86,7 @@ object ProviderConfigManager {
                 provider.providerId = id
                 config.providers.add(provider)
             }
-            provider!!.baseUrl = baseUrl
+            provider.baseUrl = baseUrl
             if (headers != null && headers.containsKey("Authorization")) {
                 provider.apiKey = headers["Authorization"]!!.removePrefix("Bearer ")
             }
