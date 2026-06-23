@@ -48,11 +48,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.apache.commons.collections4.CollectionUtils
 import org.apache.commons.lang3.StringUtils
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
-import org.springframework.util.CollectionUtils
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Sinks
 import java.util.concurrent.ConcurrentHashMap
@@ -158,8 +158,10 @@ class AgiAgentSession(
     ): Flow<Event> = flow {
         logger.info { "Processing prompt for session $sessionId" }
 
-        val cancelledFlag = AtomicBoolean(false)
-        runnableConfig.context().put("cancelled", cancelledFlag)
+        // Reset per-turn token usage at the start of each prompt
+        tokenUsageRef.set(Usage(0, 0, 0, 0, 0, 0))
+        startTime.set(System.currentTimeMillis())
+        val requestId = "request_${System.currentTimeMillis()}_$sessionId"
         try {
             val messages = content.toMutableList()
             // 检查第一个 ContentBlock 是否为命令（Text 类型且以 / 开头）
@@ -199,7 +201,6 @@ class AgiAgentSession(
                     )
                 )
             )
-            val requestId = "request_${System.currentTimeMillis()}_$sessionId"
             val executionThread = Thread.currentThread()
             runnableConfig.context().put("requestId", requestId)
             runnableConfig.context().put(SESSION_ID_CONTEXT_KEY, sessionId)
@@ -236,7 +237,6 @@ class AgiAgentSession(
                 if (cancellableRequest.cancelled || !currentCoroutineContext().isActive) break
                 emitOutput(output)
             }
-            activeRequests.remove(requestId)
             runnableConfig.context()["sessionTotalTokens"] = sessionTokenUsageRef.get().totalTokens
             runnableConfig.context().put("sessionCompletionTokens", sessionTokenUsageRef.get().outputTokens)
             val latency = System.currentTimeMillis() - startTime.get()
@@ -282,6 +282,8 @@ class AgiAgentSession(
                 )
             )
             emit(Event.PromptResponseEvent(PromptResponse(StopReason.REFUSAL)))
+        } finally {
+            activeRequests.remove(requestId)
         }
     }
 
@@ -319,7 +321,6 @@ class AgiAgentSession(
     private fun recursiveAgentFlux(
         agent: Agent, userMessage: UserMessage
     ): Flux<AgentOutput<Any>> {
-        startTime.set(System.currentTimeMillis())
         logger.info { "runnableConfig $runnableConfig" }
         // 清除上一次 HITL 审批残留的 HUMAN_FEEDBACK metadata，
         // 否则 GraphRunnerContext 会误判为 Resume 请求，直接跳到 __END__
@@ -465,14 +466,15 @@ class AgiAgentSession(
     private suspend fun FlowCollector<Event>.emitOutput(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
         if (output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
+            val prevTurn = tokenUsageRef.get()
             tokenUsageRef.set(
                 Usage(
-                    output.tokenUsage.promptTokens.toLong(),
-                    output.tokenUsage.completionTokens.toLong(),
-                    output.tokenUsage.totalTokens.toLong(),
-                    0,
-                    0,
-                    0
+                    inputTokens = prevTurn.inputTokens + (output.tokenUsage.promptTokens ?: 0).toLong(),
+                    outputTokens = prevTurn.outputTokens + (output.tokenUsage.completionTokens ?: 0).toLong(),
+                    totalTokens = prevTurn.totalTokens + (output.tokenUsage.totalTokens ?: 0).toLong(),
+                    thoughtTokens = prevTurn.thoughtTokens,
+                    cachedReadTokens = prevTurn.cachedReadTokens,
+                    cachedWriteTokens = prevTurn.cachedWriteTokens
                 )
             )
             val prev = sessionTokenUsageRef.get()
@@ -507,7 +509,7 @@ class AgiAgentSession(
         // Tool call requests (AssistantMessage with ToolCalls)
         if (output.message is AssistantMessage) {
             val message = output.message as AssistantMessage
-            if (!CollectionUtils.isEmpty(message.toolCalls)) {
+            if (CollectionUtils.isNotEmpty(message.toolCalls)) {
                 message.toolCalls.forEach { toolCall ->
                     val content = BridgeKt.build(toolCall.name(), toolCall.arguments())
                     logger.info { "output.toolCalls $content" }
@@ -529,7 +531,7 @@ class AgiAgentSession(
         // Tool execution results (ToolResponseMessage)
         if (output.message is ToolResponseMessage) {
             val message = output.message as ToolResponseMessage
-            if (!CollectionUtils.isEmpty(message.responses)) {
+            if (CollectionUtils.isNotEmpty(message.responses)) {
                 message.responses.forEach { response ->
                     val resultData = ToolsUtil.parseToolResult(response.responseData())
                     logger.info { "output.responses $resultData" }
@@ -605,8 +607,8 @@ class AgiAgent : AgentSupport {
         return sessionsRunnableConfig.map { (key, config) ->
             SessionInfo(
                 SessionId(key),
-                cwd = config.context().get("cwd") as String,
-                title = StringUtils.abbreviate(config.context().get("input") as String, 25)
+                cwd = config.context().get("cwd") as? String ?: "",
+                title = StringUtils.abbreviate((config.context().get("input") as? String) ?: "", 25)
             )
         }.asSequence()
     }
@@ -620,7 +622,7 @@ class AgiAgent : AgentSupport {
         val runnableConfig =
             RunnableConfig.builder().threadId(sessionIdStr).addStateUpdate(emptyMap<String, Any>()).build()
         sessionsRunnableConfig[sessionIdStr] = runnableConfig
-        if (mcpServers.isNotEmpty()) {
+        if (CollectionUtils.isNotEmpty(mcpServers)) {
             sessionMcpServers[sessionIdStr] = mcpServers
             logger.info { "Received ${mcpServers.size} MCP server(s) for session $sessionIdStr" }
         }
