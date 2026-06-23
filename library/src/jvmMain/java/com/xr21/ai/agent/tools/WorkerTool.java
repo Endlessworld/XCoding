@@ -84,7 +84,7 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
                         StringBuilder builder = new StringBuilder();
                         Flux<AgentOutput<Object>> flux = null;
                         try {
-                            flux = SinksUtil.sinksOutput(worker.stream(request.description));
+                            flux = worker.stream(request.description).map(SinksUtil.INSTANCE::buildContent);
                         } catch (GraphRunnerException e) {
                             return "Error executing worker task: " + e.getMessage();
                         }

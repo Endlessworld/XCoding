@@ -104,7 +104,7 @@ XAgent/
 │   │   │           ├── GitignoreUtil.java         # Gitignore 解析
 │   │   │           ├── Json.java                  # JSON 工具
 │   │   │           ├── PermissionSettings.java   # 权限设置
-│   │   │           ├── SinksUtil.java            # 流处理工具
+│   │   │           ├── SinksUtil.kt            # 流处理工具
 │   │   │           └── ToolsUtil.java            # MCP 工具加载
 │   │   └── jvmTest/                           # 测试代码
 │   ├── build.gradle.kts                       # 模块构建配置

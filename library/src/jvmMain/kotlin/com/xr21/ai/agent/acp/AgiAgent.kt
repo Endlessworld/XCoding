@@ -39,6 +39,7 @@ import com.xr21.ai.agent.utils.PermissionSettings
 import com.xr21.ai.agent.utils.SinksUtil
 import com.xr21.ai.agent.utils.ToolsUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -54,7 +55,6 @@ import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
 import reactor.core.publisher.Flux
-import reactor.core.publisher.Sinks
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -213,29 +213,28 @@ class AgiAgentSession(
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
             val recursiveFlux = recursiveAgentFlux(agent, userMessage)
-            val agentSink = Sinks.many().unicast().onBackpressureBuffer<AgentOutput<Any>>()
-            val disposable = recursiveFlux.subscribe({ output -> agentSink.tryEmitNext(output) }, { error ->
-                logger.error(error) { "Error in agent flux" }
-                agentSink.tryEmitError(error)
-            }, {
-                logger.info { "disposable dispose" }
-                agentSink.tryEmitComplete()
-            })
+            val channel = Channel<AgentOutput<Any>>(Channel.UNLIMITED)
+            // 直接将 Flux 消费为 Channel，无需中间 Sinks.Many 中转
+            val disposable = SinksUtil.fluxToChannel(recursiveFlux, channel)
             // Register cancellable request so cancel() can find and cancel it
             val cancellableRequest = CancellableRequest(
-                requestId, sessionId.value, executionThread, recursiveFlux
+                requestId, sessionId.value, executionThread, disposable, channel
             )
-            cancellableRequest.setFluxDisposable(disposable)
-            // 将 agentSink 注册到 CancellableRequest，以便 cancel() 时发送 complete 信号
-            // 从而立即终止 toIterable() 迭代器的阻塞等待
-            cancellableRequest.setAgentSink(agentSink)
             activeRequests[requestId] = cancellableRequest
-
-            val agentIterator = agentSink.asFlux().toIterable().iterator()
-            while (agentIterator.hasNext() && !disposable.isDisposed && !cancellableRequest.cancelled && currentCoroutineContext().isActive) {
-                val output = agentIterator.next()
-                if (cancellableRequest.cancelled || !currentCoroutineContext().isActive) break
-                emitOutput(output)
+            try {
+                while (!disposable.isDisposed && currentCoroutineContext().isActive && !cancellableRequest.cancelled) {
+                    val result = channel.receiveCatching()
+                    if (result.isClosed) {
+                        result.exceptionOrNull()?.let { throw it }
+                        break
+                    }
+                    val output = result.getOrNull() ?: break
+                    if (cancellableRequest.cancelled || !currentCoroutineContext().isActive) break
+                    emitOutput(output)
+                }
+            } finally {
+                disposable.dispose()
+                channel.close()
             }
             runnableConfig.context()["sessionTotalTokens"] = sessionTokenUsageRef.get().totalTokens
             runnableConfig.context().put("sessionCompletionTokens", sessionTokenUsageRef.get().outputTokens)
@@ -304,8 +303,8 @@ class AgiAgentSession(
         for (requestId in requestIdsToCancel) {
             val request = activeRequests[requestId]
             if (request != null) {
-                // 先 dispose 订阅（会级联取消 recursiveFlux），再发送 complete 信号给 agentSink
-                // 确保上游 Flux 先停止发射，再通知下游迭代器结束
+                // dispose 订阅会取消 recursiveFlux，同时 fluxToChannel 的 complete 回调会关闭 Channel
+                // 从而终止 prompt() 中的 channel.receiveCatching() 阻塞等待
                 request.cancel()
                 logger.info { "Cancelled  request : ${request.sessionId}" }
                 activeRequests.remove(requestId)
@@ -325,7 +324,7 @@ class AgiAgentSession(
         // 清除上一次 HITL 审批残留的 HUMAN_FEEDBACK metadata，
         // 否则 GraphRunnerContext 会误判为 Resume 请求，直接跳到 __END__
         runnableConfig.metadata().ifPresent { it.remove(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY) }
-        val initialFlux = SinksUtil.toFlux(agent, userMessage, runnableConfig)
+        val initialFlux = SinksUtil.agentToFlux(agent, userMessage, runnableConfig)
         return initialFlux.expand { output ->
 //            logger.info { "output" + Json.toJson(output) }
             if (output.interruptionMetadata != null) {
@@ -342,7 +341,7 @@ class AgiAgentSession(
                     logger.info { "All tool calls were rejected, ending flow" }
                     Flux.empty()
                 } else {
-                    SinksUtil.toFlux(agent, userMessage, runnableConfig)
+                    SinksUtil.agentToFlux(agent, userMessage, runnableConfig)
                 }
             } else {
                 Flux.empty()

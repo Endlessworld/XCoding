@@ -15,19 +15,17 @@
  */
 package com.xr21.ai.agent.entity;
 
-import com.xr21.ai.agent.tools.ShellTools;
+import kotlinx.coroutines.channels.Channel;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.Disposable;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Sinks;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 可取消的请求信息
+ * 可取消的请求信息。
+ *
+ * <p>在新架构中，prompt() 通过 {@code SinksUtil.fluxToChannel} 将 Flux 直接消费为
+ * {@link Channel}，CancellableRequest 持有该 Channel 和 Flux 的 {@link Disposable}，
+ * cancel() 时先关闭 Channel（终止 {@code receiveCatching()} 阻塞），再 dispose Flux 订阅，
+ * 最后中断执行线程作为兜底。</p>
  *
  * @author Endless
  */
@@ -35,147 +33,52 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CancellableRequest {
     public final String requestId;
     public final String sessionId;
-    final Thread executionThread;
-    final Flux<?> flux;
-    final List<String> activeToolCallIds;
-    final long startTime;
-    private final Map<String, ShellTools.ShellSession> activeShellSessions;
+    private final Thread executionThread;
+    private final Disposable fluxDisposable;
+    private final Channel<?> channel;
     private final Object lock = new Object();
     public volatile boolean cancelled;
-    private Disposable fluxDisposable;
-    private Sinks.Many<?> agentSink;
-    private final List<Sinks.Many<?>> recursiveSinks = new ArrayList<>();
 
-    public CancellableRequest(String requestId, String sessionId, Thread executionThread, Flux<?> flux) {
+    public CancellableRequest(String requestId, String sessionId, Thread executionThread,
+                              Disposable fluxDisposable, Channel<?> channel) {
         this.requestId = requestId;
         this.sessionId = sessionId;
         this.executionThread = executionThread;
-        this.flux = flux;
-        this.activeToolCallIds = new ArrayList<>();
-        this.activeShellSessions = new ConcurrentHashMap<>();
-        this.startTime = System.currentTimeMillis();
+        this.fluxDisposable = fluxDisposable;
+        this.channel = channel;
         this.cancelled = false;
-        this.fluxDisposable = null;
-    }
-
-    public void setFluxDisposable(Disposable disposable) {
-        this.fluxDisposable = disposable;
-    }
-
-    @SuppressWarnings("rawtypes")
-    public void setAgentSink(Sinks.Many sink) {
-        synchronized (lock) {
-            this.agentSink = sink;
-            log.info("[CancellableRequest] AgentSink registered for request: {}", requestId);
-        }
     }
 
     /**
-     * 注册一个递归 Sink（来自 expand() 内部创建的 Flux）。
-     * 取消时会向所有注册的递归 Sink 发送 complete 信号，
-     * 以终止 expand() 链中正在等待的递归 Flux。
+     * 取消请求：关闭 Channel → dispose Flux 订阅 → 中断执行线程。
+     * 线程安全，可重复调用。
      */
-    @SuppressWarnings("rawtypes")
-    public void addRecursiveSink(Sinks.Many sink) {
-        synchronized (lock) {
-            if (!cancelled) {
-                recursiveSinks.add(sink);
-                log.info("[CancellableRequest] Recursive sink registered for request: {}, total: {}", requestId, recursiveSinks.size());
-            } else {
-                // 请求已经取消，立即终止这个新创建的 Sink
-                log.info("[CancellableRequest] Request already cancelled, emitting complete to new recursive sink for request: {}", requestId);
-                sink.tryEmitComplete();
-            }
-        }
-    }
-
-    public void addShellSession(String shellId, ShellTools.ShellSession session) {
-        activeShellSessions.put(shellId, session);
-    }
-
-    public void removeShellSession(String shellId) {
-        activeShellSessions.remove(shellId);
-    }
-
     public void cancel() {
         synchronized (lock) {
             if (cancelled) {
-                return; // 已经取消过
+                return;
             }
 
             this.cancelled = true;
             log.info("[CancellableRequest] Cancelling request: {}", requestId);
 
-            // 1. 取消所有活跃的工具调用（特别是 shell 进程）
-            cancelActiveToolCalls();
+            // 1. 关闭 Channel，终止 prompt() 中的 receiveCatching() 阻塞
+            log.info("[CancellableRequest] Closing channel for request: {}", requestId);
+            channel.close(null);
 
-            // 2. 发送 complete 信号给所有递归 Sink，终止 expand() 链中的递归 Flux
-            for (Sinks.Many<?> recursiveSink : recursiveSinks) {
-                log.info("[CancellableRequest] Emitting complete signal to recursive sink for request: {}", requestId);
-                recursiveSink.tryEmitComplete();
-            }
-            recursiveSinks.clear();
-
-            // 3. 发送 complete 信号给 agentSink（如果存在）
-            if (agentSink != null) {
-                log.info("[CancellableRequest] Emitting complete signal to agentSink for request: {}", requestId);
-                agentSink.tryEmitComplete();
-            }
-
-            // 4. 取消 Flux 订阅
-            if (fluxDisposable != null && !fluxDisposable.isDisposed()) {
+            // 2. 取消 Flux 订阅，停止上游数据发射
+            if (!fluxDisposable.isDisposed()) {
                 log.info("[CancellableRequest] Disposing Flux subscription for request: {}", requestId);
                 fluxDisposable.dispose();
             }
 
-            // 5. 中断执行线程
+            // 3. 中断执行线程（兜底）
             if (executionThread != null && executionThread.isAlive()) {
                 log.info("[CancellableRequest] Interrupting execution thread for request: {}", requestId);
                 executionThread.interrupt();
             }
 
-            // 6. 清理资源
-            activeToolCallIds.clear();
-            activeShellSessions.clear();
-            recursiveSinks.clear();
-            if (agentSink != null) {
-                agentSink = null;
-            }
-
             log.info("[CancellableRequest] Request {} cancelled successfully", requestId);
-        }
-    }
-
-    private void cancelActiveToolCalls() {
-        // 取消所有活跃的 shell 会话
-        for (Map.Entry<String, ShellTools.ShellSession> entry : activeShellSessions.entrySet()) {
-            String shellId = entry.getKey();
-            ShellTools.ShellSession session = entry.getValue();
-            try {
-                log.info("[CancellableRequest] Killing shell session: {} for request: {}", shellId, requestId);
-                ShellTools.builder().build().killShell(shellId);
-            } catch (Exception e) {
-                log.warn("[CancellableRequest] Failed to kill shell session {}: {}", shellId, e.getMessage());
-            }
-        }
-        activeShellSessions.clear();
-    }
-
-    public void addToolCall(String toolCallId) {
-        synchronized (activeToolCallIds) {
-            activeToolCallIds.add(toolCallId);
-        }
-    }
-
-    public void removeToolCall(String toolCallId) {
-        synchronized (activeToolCallIds) {
-            activeToolCallIds.remove(toolCallId);
-        }
-    }
-
-    List<String> getActiveToolCalls() {
-        synchronized (activeToolCallIds) {
-            return new ArrayList<>(activeToolCallIds);
         }
     }
 }

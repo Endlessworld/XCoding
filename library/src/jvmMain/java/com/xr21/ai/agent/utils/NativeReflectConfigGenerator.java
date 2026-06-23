@@ -126,7 +126,6 @@ public class NativeReflectConfigGenerator {
             "com.xr21.ai.agent.utils.PermissionSettings$PermissionAction",
             "com.xr21.ai.agent.utils.PermissionSettings$Settings",
             "com.xr21.ai.agent.utils.PermissionSettings$Settings$Permissions",
-            "com.xr21.ai.agent.utils.SinksUtil",
             "com.xr21.ai.agent.utils.ToolsUtil",
             "com.xr21.ai.agent.utils.ToolsUtil$ToolResultData",
             // Spring AI 类
