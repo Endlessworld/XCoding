@@ -79,6 +79,8 @@
 | AI_OPEN_ROUTER_API_KEY | OpenRouter API密钥 |
 | AI_CUCLOUD_BASE_URL | 其他云服务API地址 |
 | AI_CUCLOUD_API_KEY | 其他云服务API密钥 |
+| AI_XIAOMI_API_KEY | 小米API密钥 |
+| AI_SILICONFLOW_API_KEY | SiliconFlow API密钥 |
 
 ### Windows设置环境变量
 ```powershell

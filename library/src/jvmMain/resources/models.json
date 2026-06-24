@@ -3,32 +3,32 @@
     {
       "providerId": "volcengine",
       "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
-      "apiKey": "your-volcengine-api-key-here"
+      "apiKey": "${AI_VOLC_API_KEY}"
     },
     {
       "providerId": "deepseek",
       "baseUrl": "https://api.deepseek.com",
-      "apiKey": "your-deepseek-api-key-here"
+      "apiKey": "${AI_DEEPSEEK_API_KEY}"
     },
     {
       "providerId": "xiaomi",
       "baseUrl": "https://api.xiaomimimo.com",
-      "apiKey": "your-xiaomi-api-key-here"
+      "apiKey": "${AI_XIAOMI_API_KEY}"
     },
     {
       "providerId": "openrouter",
       "baseUrl": "https://openrouter.ai/api",
-      "apiKey": "your-openrouter-api-key-here"
+      "apiKey": "${AI_OPEN_ROUTER_API_KEY}"
     },
     {
       "providerId": "siliconflow",
       "baseUrl": "https://api.siliconflow.cn",
-      "apiKey": "your-siliconflow-api-key-here"
+      "apiKey": "${AI_SILICONFLOW_API_KEY}"
     },
     {
       "providerId": "cucloud",
       "baseUrl": "https://aigw-gzgy2.cucloud.cn:8443",
-      "apiKey": "your-cucloud-api-key-here"
+      "apiKey": "${AI_CUCLOUD_API_KEY}"
     }
   ],
   "models": [
@@ -97,6 +97,3 @@
     }
   ]
 }
-
-
- 
