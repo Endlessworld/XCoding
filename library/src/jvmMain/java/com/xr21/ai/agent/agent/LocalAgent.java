@@ -40,7 +40,6 @@ import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.interceptors.WorkerInterceptor;
-import com.xr21.ai.agent.tools.ContextCacheTool;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.WebTool;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
@@ -98,7 +97,7 @@ public class LocalAgent {
      * 文件系统保存器实例，用于持久化智能体状态
      */
     public static final FileSystemSaver FILE_SYSTEM_SAVER = FileSystemSaver.builder().targetFolder(FILE_SYSTEM_SAVER_FOLDER).stateSerializer(new SpringAIJacksonStateSerializer(OverAllState::new)).build();
-    private static final Path FILE_SYSTEM_SKILL_DIR = Path.of(System.getProperty("user.home"), ".agi_working", "skills");
+
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一个编码智能体 XAgent
             通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
@@ -325,19 +324,18 @@ public class LocalAgent {
             Map<String, ToolConfig> approvalOn = Map.of("Bash", ToolConfig.builder().description(description).build());
             HumanInTheLoopHook humanInTheLoopHook = HumanInTheLoopHook.builder().approvalOn(approvalOn).build();
             hooks.add(humanInTheLoopHook);
-            log.info("{} mode: Bash commands require human approval",currentMode);
+            log.info("{} mode: Bash commands require human approval", currentMode);
         } else {
             log.info("YOLO mode: all operations auto-approved");
         }
         hooks.add(SkillsAgentHook.builder()
                 .skillRegistry(FileSystemSkillRegistry.builder()
-                        .userSkillsDirectory(FILE_SYSTEM_SKILL_DIR.toAbsolutePath().toString())
-                        .projectSkillsDirectory(WORKSPACE_ROOT + File.pathSeparator + ".skills")
+                        .userSkillsDirectory(Path.of(System.getProperty("user.home"), ".agents", "skills").toAbsolutePath().toString())
+                        .projectSkillsDirectory(Path.of(WORKSPACE_ROOT, ".agents", "skills").toAbsolutePath().toString())
                         .autoLoad(true)
                         .build())
                 .autoReload(true)
                 .build());
-
         hooks.add(SummarizationHook.builder()
                 .model(chatModel)
                 .maxTokensBeforeSummary(256 * 1024)

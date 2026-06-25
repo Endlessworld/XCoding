@@ -191,18 +191,18 @@ public class SmartEditTool {
         switch (edit.mode) {
             case "search_replace" -> {
                 if (edit.searchText == null || edit.searchText.isEmpty()) {
-                    return "Edit at index " + index + ": search_replace requires non-empty searchText";
+                    return "Edit at index " + index + ": in search_replace mode requires non-empty searchText";
                 }
                 if (edit.replaceText == null) {
-                    return "Edit at index " + index + ": search_replace requires replaceText";
+                    return "Edit at index " + index + ": in search_replace mode requires replaceText";
                 }
             }
             case "insert_at_line" -> {
                 if (edit.line == null || edit.line < 1) {
-                    return "Edit at index " + index + ": insert_at_line requires line >= 1";
+                    return "Edit at index " + index + ": in insert_at_line mode requires line >= 1";
                 }
                 if (edit.newContent == null) {
-                    return "Edit at index " + index + ": insert_at_line requires newContent";
+                    return "Edit at index " + index + ": in insert_at_line mode requires newContent";
                 }
             }
             default -> {
