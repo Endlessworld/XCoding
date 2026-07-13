@@ -29,7 +29,6 @@ import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory.AgentMode
 import com.xr21.ai.agent.agent.LocalAgent
-import com.xr21.ai.agent.auth.AuthFlow
 import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.config.AiModels
 import com.xr21.ai.agent.entity.AgentOutput
@@ -154,11 +153,11 @@ class AgiAgentSession(
         _meta: JsonElement?,
     ): Flow<Event> = flow {
         logger.info { "Processing prompt for session $sessionId" }
-        val authorized = AuthFlow.ensureAuthorized(currentCoroutineContext().client)
-        if (!authorized) {
+//        val authorized = AuthFlow.ensureAuthorized(currentCoroutineContext().client)
+//        if (!authorized) {
             logger.warn { "Auth: 用户未授权，会话仍可继续但可能受限" }
 //            throw JsonRpcException(JsonRpcErrorCode.AUTH_REQUIRED.code, "请授权登录后使用")
-        }
+//        }
         // Reset per-turn token usage at the start of each prompt
         tokenUsageRef.set(Usage(0, 0, 0, 0, 0, 0))
         startTime.set(System.currentTimeMillis())
