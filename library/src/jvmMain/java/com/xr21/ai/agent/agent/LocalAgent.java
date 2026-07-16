@@ -170,7 +170,7 @@ public class LocalAgent {
      * @throws RuntimeException         如果智能体创建失败
      * @throws IllegalArgumentException 如果参数无效
      */
-    public static Agent createAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
+    public static ReactAgent createAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
         try {
             if (!StringUtils.isNotBlank(cwd)) {
                 String tempDir = System.getProperty("java.io.tmpdir");
@@ -178,6 +178,7 @@ public class LocalAgent {
                 cwd = tempDir + File.separator + "cwd_" + System.currentTimeMillis();
                 log.error("create agent with cwd tmpdir: {} ", cwd);
             }
+            WORKSPACE_ROOT = cwd;
             return buildAgent(cwd, mcpServers, runnableConfig);
         } catch (Exception e) {
             log.error("Failed to create agent with cwd: {}, mcpServers: {}", cwd, mcpServers != null ? mcpServers.size() : 0, e);
@@ -265,22 +266,18 @@ public class LocalAgent {
      * @throws IllegalArgumentException 如果参数无效
      * @throws RuntimeException         如果组件初始化失败
      */
-    public static Agent buildAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
+    public static ReactAgent buildAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
         if (cwd == null || cwd.trim().isEmpty()) {
             throw new IllegalArgumentException("Workspace directory (cwd) cannot be null or empty");
         }
         log.info("Building LocalAgent for workspace: {}", cwd);
         log.info("Building LocalAgent for context: {}", runnableConfig.context());
-        WORKSPACE_ROOT = cwd;
+
         ChatModel chatModel = getChatModel(runnableConfig);
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
         List<Hook> hooks = getHooks(runnableConfig, chatModel);
         // 使用 PromptTemplate 渲染指令
-        Locale locale = Locale.getDefault();
-        String displayName = locale.getDisplayLanguage();
-        var instruction = PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", cwd, "osName", System.getProperty("os.name").toLowerCase(),
-                "language", displayName,
-                "lineSeparator", System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n"))).build().render();
+        var instruction = getInstruction(WORKSPACE_ROOT);
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
         String thoughtLevel = SessionConfigOptionsFactory.ThoughtLevel.LOW.getValueId();
         if (runnableConfig.context().get("thought_level") instanceof String level) {
@@ -311,6 +308,14 @@ public class LocalAgent {
                 .build();
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());
         return agent;
+    }
+
+    public static String getInstruction(String workspace) {
+        Locale locale = Locale.getDefault();
+        String displayName = locale.getDisplayLanguage();
+        return PromptTemplate.builder().template(SYSTEM_PROMPT_TEMPLATE).variables(Map.of("cwd", workspace, "osName", System.getProperty("os.name").toLowerCase(),
+                "language", displayName,
+                "lineSeparator", System.lineSeparator().replace("\r", "\\r").replace("\n", "\\n"))).build().render();
     }
 
     @NotNull

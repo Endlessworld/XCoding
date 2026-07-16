@@ -83,7 +83,7 @@ const val SESSION_ID_CONTEXT_KEY = "sessionId"
  */
 class AgiAgentSession(
     override val sessionId: SessionId,
-    private val cwd: String,
+    private var cwd: String,
     private val mcpServers: List<McpServer>?,
     private var runnableConfig: RunnableConfig,
     private val clientInfo: ClientInfo? = null
@@ -99,7 +99,7 @@ class AgiAgentSession(
         get() = AgentMode.entries.map { it.toSessionMode() }
 
     override val defaultMode: SessionModeId
-        get() = AgentMode.ACCEPT_EDITS.toSessionMode().id
+        get() = AgentMode.YOLO.toSessionMode().id
 
     override suspend fun postInitialize() {
         val clientOps = currentCoroutineContext().client
@@ -193,11 +193,17 @@ class AgiAgentSession(
                     }
                 }
             }
+            if (_meta is JsonObject) {
+                val cwdValue = _meta["cwd"]
+                if (cwdValue is JsonPrimitive && cwdValue.isString && cwdValue.content.isNotBlank()) {
+                    cwd = cwdValue.content
+                }
+            }
             val userMessage = UserMessageBuilder.buildUserMessage(messages)
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(
-                        ContentBlock.Text("✨Processing request✨ \r\n<br/>")
+                        ContentBlock.Text("✨✨✨\r\n<br/>")
                     )
                 )
             )
@@ -211,7 +217,10 @@ class AgiAgentSession(
             runnableConfig.context().putIfAbsent("isFirstMessage", AtomicBoolean(true))
             // Store client session operations in context so tools running on non-coroutine threads can use it
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
+            runnableConfig.context().putIfAbsent("mode", defaultMode.value)
+            runnableConfig.context().putIfAbsent("thought_level",  SessionConfigOptionsFactory.ThoughtLevel.LOW.valueId)
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
+            agent.setSystemPrompt(LocalAgent.getInstruction(cwd))
             val recursiveFlux = recursiveAgentFlux(agent, userMessage)
             val channel = Channel<AgentOutput<Any>>(Channel.UNLIMITED)
             // 直接将 Flux 消费为 Channel，无需中间 Sinks.Many 中转
@@ -506,6 +515,8 @@ class AgiAgentSession(
         }
 
         // Tool call requests (AssistantMessage with ToolCalls)
+        // Per ACP protocol: emit ToolCall ("tool_call") on first creation,
+        // then ToolCallUpdate ("tool_call_update") for status updates.
         if (output.message is AssistantMessage) {
             val message = output.message as AssistantMessage
             if (CollectionUtils.isNotEmpty(message.toolCalls)) {
@@ -514,11 +525,11 @@ class AgiAgentSession(
                     logger.info { "output.toolCalls $content" }
                     emit(
                         Event.SessionUpdateEvent(
-                            SessionUpdate.ToolCallUpdate(
+                            SessionUpdate.ToolCall(
                                 toolCallId = ToolCallId(toolCall.id()),
                                 title = toolCall.name(),
                                 kind = ToolKindFind.find(toolCall.name()) as ToolKind?,
-                                status = ToolCallStatus.IN_PROGRESS,
+                                status = ToolCallStatus.PENDING,
                                 content = content
                             )
                         )
