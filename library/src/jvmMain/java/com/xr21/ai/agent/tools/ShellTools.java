@@ -93,8 +93,13 @@ public class ShellTools {
         - 不要用换行来分隔命令（引号字符串中换行是可以的）
         - 如果一定要是用Bash写入或读取文件 务必在任何读取或写入文件的命令中指定编码为UTF-8,且写入文件只能使用无BOM UTF-8 其它一切编码或者BOM头都将损坏文件导致无法编译
         <如果当前是Windows系统>
+            禁止使用PowerShell脚本
+            禁止使用PowerShell脚本
+            禁止使用PowerShell脚本
             先看当前环境是否存在 GNU coreutils 如果存在优先使用GNU coreutils
-            否则使用PowerShell的替代GNU coreutils完成对应功能
+            C:\\Program Files\\coreutils\\coreutils.exe
+            灵活组合使用C:\\Program Files\\coreutils\\bin中的各种coreutils工具
+            否则使用cmd替代GNU coreutils完成对应功能
         </如果当前是Windows系统>
 		# Committing changes with git
 		只有在用户请求时才创建提交。如果不清楚，先问清楚。当用户要求你创建新的 git 提交时，请仔细遵循以下步骤：
