@@ -24,7 +24,9 @@ import com.agentclientprotocol.common.ClientSessionOperations
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.common.SessionCreationParameters
 import com.agentclientprotocol.model.*
+import com.alibaba.cloud.ai.graph.RunnableConfig
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory.AgentMode
+import com.xr21.ai.agent.agent.HarnessCodingAgent
 import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.channel.AcpChannel
 import com.xr21.ai.agent.channel.AcpEventMapper
@@ -37,6 +39,8 @@ import io.agentscope.core.event.ModelCallEndEvent
 import io.agentscope.core.event.RequireUserConfirmEvent
 import io.agentscope.core.message.Msg
 import io.agentscope.core.message.MsgRole
+import io.agentscope.harness.agent.gateway.ChannelManager
+import io.agentscope.harness.agent.gateway.HarnessGateway
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -181,9 +185,10 @@ class AgiHarnessAgentSession(
                 .textContent(userMessage.text)
                 .build()
 
-            // 3. Build extra map (replaces RunnableConfig.context())
+            // 3. Build extra map — agentId is used to resolve the per-session HarnessAgent
+            // registered via registerAgent(sessionIdStr, harnessAgent) in createSession().
             val extra = mutableMapOf(
-                "agentId" to "harness-coding-agent",
+                "agentId" to sessionId.value,
                 "cwd" to cwd,
                 SESSION_ID_CONTEXT_KEY to sessionId.value,
                 "requestId" to requestId,
@@ -197,12 +202,10 @@ class AgiHarnessAgentSession(
 
             // 4. Send via AcpChannel → Gateway.runStream() → Flux<AgentEvent>
             val eventFlux = acpChannel.sendStream(sessionId.value, listOf(msg), extra)
-
             // 5. Consume events via Channel bridge (Reactor → Coroutine)
             val acpEventChannel = kotlinx.coroutines.channels.Channel<Event>(kotlinx.coroutines.channels.Channel.UNLIMITED)
             var hasPermissionRequired = false
             val pendingConfirmTools = mutableListOf<RequireUserConfirmEvent>()
-
             val disposable = eventFlux.subscribe(
                 { agentEvent ->
                     // Track token usage from ModelCallEndEvent
@@ -246,7 +249,17 @@ class AgiHarnessAgentSession(
                     }
                 },
                 { error ->
+                    error.printStackTrace()
                     logger.error(error) { "Agent stream error" }
+                    val errorMsg = error.message ?: error.javaClass.name ?: "Unknown error"
+                    acpEventChannel.trySend(
+                        Event.SessionUpdateEvent(
+                            SessionUpdate.AgentMessageChunk(
+                                content = ContentBlock.Text(errorMsg),
+                                messageId = null
+                            )
+                        )
+                    )
                     acpEventChannel.close(error)
                 },
                 {
@@ -260,7 +273,10 @@ class AgiHarnessAgentSession(
                 while (!disposable.isDisposed && currentCoroutineContext().isActive) {
                     val result = acpEventChannel.receiveCatching()
                     if (result.isClosed) {
-                        result.exceptionOrNull()?.let { throw it }
+                        val cause = result.exceptionOrNull()
+                        if (cause != null) {
+                            throw cause
+                        }
                         break
                     }
                     val acpEvent = result.getOrNull() ?: break
@@ -304,9 +320,11 @@ class AgiHarnessAgentSession(
             emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN, null, finalUsage)))
 
         } catch (e: Exception) {
+            e.printStackTrace()
             logger.error(e) { "Error processing prompt" }
+            val errorDetail = if (e.message != null) e.message!! else "${e.javaClass.name}: (no message)"
             emit(Event.SessionUpdateEvent(
-                SessionUpdate.AgentMessageChunk(ContentBlock.Text("\nError: ${e.message}"))
+                SessionUpdate.AgentMessageChunk(ContentBlock.Text("\nError: $errorDetail"))
             ))
             emit(Event.PromptResponseEvent(PromptResponse(StopReason.REFUSAL)))
         }
@@ -432,6 +450,16 @@ class AgiHarnessAgent(
 
     private val sessions = ConcurrentHashMap<String, AgiHarnessAgentSession>()
     private var lastClientInfo: ClientInfo? = null
+    private val harnessGateway: HarnessGateway
+    private val channelManager: ChannelManager = ChannelManager()
+
+    init {
+        channelManager.register(acpChannel)
+        harnessGateway = HarnessGateway.create(channelManager)
+        channelManager.initAll(harnessGateway)
+        channelManager.startAll()
+        logger.info { "AgiHarnessAgent: Gateway initialized with AcpChannel" }
+    }
 
     override suspend fun initialize(clientInfo: ClientInfo): AgentInfo {
         logger.info { "Initializing AgiHarnessAgent with protocol version ${Json.toJson(clientInfo)}" }
@@ -477,6 +505,16 @@ class AgiHarnessAgent(
         val sessionIdStr = "session-${System.currentTimeMillis()}"
         val sessionId = SessionId(sessionIdStr)
         val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
+        val mcpServers = sessionParameters.mcpServers
+
+        // Build a HarnessAgent for this session and bind as main agent
+        val runnableConfig = RunnableConfig.builder()
+            .threadId(sessionIdStr)
+            .addStateUpdate(emptyMap<String, Any>())
+            .build()
+        val harnessAgent = HarnessCodingAgent.createAgent(cwd, mcpServers, runnableConfig)
+        harnessGateway.registerAgent(sessionIdStr, harnessAgent)
+        logger.info { "Registered HarnessAgent for session $sessionIdStr" }
 
         // Register outbound callback for proactive messages
         acpChannel.registerOutboundSession(sessionIdStr) { msgs ->
@@ -498,9 +536,20 @@ class AgiHarnessAgent(
             logger.info { "Loaded existing session: $sessionId" }
             return existing
         }
+        val sessionIdStr = sessionId.toString()
         val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
+        val mcpServers = sessionParameters.mcpServers
+
+        val runnableConfig = RunnableConfig.builder()
+            .threadId(sessionIdStr)
+            .addStateUpdate(emptyMap<String, Any>())
+            .build()
+        val harnessAgent = HarnessCodingAgent.createAgent(cwd, mcpServers, runnableConfig)
+        harnessGateway.registerAgent(sessionIdStr, harnessAgent)
+        logger.info { "Registered HarnessAgent for loaded session $sessionIdStr" }
+
         val session = AgiHarnessAgentSession(sessionId, cwd, acpChannel, lastClientInfo)
-        sessions[sessionId.toString()] = session
+        sessions[sessionIdStr] = session
         return session
     }
 
@@ -539,8 +588,18 @@ class AgiHarnessAgent(
     ): AgentSession {
         logger.info { "Fork session: $sessionId" }
         val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
+        val mcpServers = sessionParameters.mcpServers
         val sessionIdStr = "session-${System.currentTimeMillis()}"
         val newSessionId = SessionId(sessionIdStr)
+
+        val runnableConfig = RunnableConfig.builder()
+            .threadId(sessionIdStr)
+            .addStateUpdate(emptyMap<String, Any>())
+            .build()
+        val harnessAgent = HarnessCodingAgent.createAgent(cwd, mcpServers, runnableConfig)
+        harnessGateway.registerAgent(sessionIdStr, harnessAgent)
+        logger.info { "Registered HarnessAgent for forked session $sessionIdStr" }
+
         val session = AgiHarnessAgentSession(newSessionId, cwd, acpChannel, lastClientInfo)
         sessions[sessionIdStr] = session
         return session
@@ -552,9 +611,20 @@ class AgiHarnessAgent(
         logger.info { "Resume session: $sessionId" }
         val existing = sessions[sessionId.toString()]
         if (existing != null) return existing
+        val sessionIdStr = sessionId.toString()
         val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
+        val mcpServers = sessionParameters.mcpServers
+
+        val runnableConfig = RunnableConfig.builder()
+            .threadId(sessionIdStr)
+            .addStateUpdate(emptyMap<String, Any>())
+            .build()
+        val harnessAgent = HarnessCodingAgent.createAgent(cwd, mcpServers, runnableConfig)
+        harnessGateway.registerAgent(sessionIdStr, harnessAgent)
+        logger.info { "Registered HarnessAgent for resumed session $sessionIdStr" }
+
         val session = AgiHarnessAgentSession(sessionId, cwd, acpChannel, lastClientInfo)
-        sessions[sessionId.toString()] = session
+        sessions[sessionIdStr] = session
         return session
     }
 

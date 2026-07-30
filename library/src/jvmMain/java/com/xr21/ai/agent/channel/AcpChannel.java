@@ -69,6 +69,16 @@ public class AcpChannel implements Channel {
     /** Logical channel identifier used in MsgContext and OutboundAddress. */
     public static final String CHANNEL_ID = "acp";
 
+    /**
+     * Sentinel used in place of {@code null} outbound address to avoid
+     * {@code ConcurrentHashMap.put(null)} NPE in {@code RuntimeContext.Builder.put()}.
+     * {@link io.agentscope.harness.agent.gateway.HarnessGateway#runStream} puts the
+     * outbound address into the runtime context builder which stores values in a
+     * ConcurrentHashMap — null values are rejected with NPE.
+     */
+    private static final OutboundAddress NO_OUTBOUND =
+            OutboundAddress.direct("none", "none");
+
     private final ChannelConfig config;
     private final ConcurrentHashMap<String, Consumer<List<Msg>>> outboundSessions =
             new ConcurrentHashMap<>();
@@ -173,10 +183,10 @@ public class AcpChannel implements Channel {
         );
 
         log.debug("AcpChannel.sendStream: sessionId={}, extra={}", sessionId, extraMap);
-        return g.runStream(ctx, messages, null)
+        return g.runStream(ctx, messages, NO_OUTBOUND)
                 .doOnError(err -> log.error(
                         "AcpChannel stream error for session {}: {}",
-                        sessionId, err.getMessage()));
+                        sessionId, err.getMessage(), err));
     }
 
     /**
@@ -198,7 +208,7 @@ public class AcpChannel implements Channel {
         MsgContext ctx = new MsgContext(
                 CHANNEL_ID, null, sessionId, null, null, extraMap, null);
 
-        return g.run(ctx, messages, null);
+        return g.run(ctx, messages, NO_OUTBOUND);
     }
 
     // =================================================================

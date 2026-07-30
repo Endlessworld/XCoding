@@ -18,6 +18,7 @@ package com.xr21.ai.agent;
 import com.xr21.ai.agent.acp.AgiAgent;
 import com.xr21.ai.agent.acp.AcpAgentLauncher;
 import com.xr21.ai.agent.acp.AgiHarnessAgent;
+import com.xr21.ai.agent.acp.AgiHarnessAgentKt;
 import com.xr21.ai.agent.channel.AcpChannel;
 
 /**
@@ -118,7 +119,7 @@ public class AgentApplication {
             AcpAgentLauncher.launchWebSocketServer(new AgiAgent(), "0.0.0.0", port);
         } else {
             // 默认：ACP 标准 I/O 模式
-            AcpAgentLauncher.launchStdioAgent(new AgiAgent());
+            AcpAgentLauncher.launchStdioAgent(new AgiHarnessAgent(new AcpChannel()));
         }
     }
 

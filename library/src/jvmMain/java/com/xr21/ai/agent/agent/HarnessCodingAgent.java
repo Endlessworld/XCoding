@@ -274,7 +274,7 @@ public class HarnessCodingAgent {
                 .baseUrl(config.getBaseUrl())
                 .apiKey(config.getApiKey())
                 .generateOptions(GenerateOptions.builder().temperature(config.getTemperature()).build())
-                .modelName(config.getModelName())
+                .modelName(config.getModelId())
                 .build();
     }
 

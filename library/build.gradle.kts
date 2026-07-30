@@ -118,6 +118,10 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
 }
 
+tasks.withType<Test> {
+    jvmArgs("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}
+
 tasks.register<JavaExec>("runAcpAgent") {
     group = "application"
     description = "Runs AcpLocalAgent with ACP protocol support"
@@ -136,6 +140,17 @@ tasks.register<JavaExec>("runAsyncAgentClient") {
     mainClass.set("com.xr21.ai.agent.AsyncAgentClient")
     classpath = sourceSets.main.get().runtimeClasspath
     workingDir = projectDir
+}
+
+tasks.register<JavaExec>("runHarnessDemo") {
+    group = "application"
+    description = "Runs AgiHarnessAgentConsoleDemo - ACP client debug console"
+    dependsOn("compileTestKotlin")
+    mainClass.set("com.xr21.ai.agent.acp.AgiHarnessAgentConsoleDemoKt")
+    classpath = sourceSets.test.get().runtimeClasspath
+    workingDir = projectDir
+    standardInput = System.`in`
+    jvmArgs("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
 
 mavenPublishing {
