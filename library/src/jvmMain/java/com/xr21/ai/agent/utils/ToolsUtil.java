@@ -15,15 +15,12 @@
  */
 package com.xr21.ai.agent.utils;
 
-import com.agentclientprotocol.model.ContentBlock;
-import com.agentclientprotocol.model.EnvVariable;
-import com.agentclientprotocol.model.McpServer;
-import com.agentclientprotocol.model.ToolCallContent;
-import com.agentclientprotocol.model.ToolCallLocation;
+import com.agentclientprotocol.model.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
+import io.agentscope.core.tool.mcp.McpSyncClientWrapper;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
@@ -83,11 +80,45 @@ public class ToolsUtil {
         return mcpTools;
     }
 
+    public static List<McpSyncClientWrapper> getMcpToolsWrapper(List<McpServer> mcpServers) {
+        List<McpSyncClientWrapper> mcpTools = new ArrayList<>();
+
+        for (McpServer server : mcpServers) {
+            try {
+                if (server instanceof McpServer.Stdio stdio) {
+                    McpSyncClientWrapper tools = getMcpToolsWrapperFromStdio(stdio);
+                    mcpTools.add(tools);
+                    log.info("Loaded {} tools from STDIO MCP server: {}", tools.listTools().block().stream().count(), stdio.getName());
+                } else if (server instanceof McpServer.Http http) {
+                    McpSyncClientWrapper tools = getMcpToolsWrapperFromHttp(http);
+                    mcpTools.add(tools);
+                    log.info("Loaded {} tools from HTTP MCP server: {}", tools.listTools().block().stream().count(), http.getName());
+                } else if (server instanceof McpServer.Sse sse) {
+                    McpSyncClientWrapper tools = getMcpToolsWrapperFromSse(sse);
+                    mcpTools.add(tools);
+                    log.info("Loaded {} tools from SSE MCP server: {}", tools.listTools().block().stream().count(), sse.getName());
+                } else {
+                    log.warn("Unknown MCP server type: {}", server.getClass().getName());
+                }
+            } catch (Exception e) {
+                log.error("Failed to load MCP server {}: {}", server, e.getMessage(), e);
+            }
+        }
+
+        return mcpTools;
+    }
+
+
 
     /**
      * 从 STDIO MCP 服务器获取工具
      */
     private static List<ToolCallback> getMcpToolsFromStdio(McpServer.Stdio stdio) {
+        McpSyncClient mcpClient = getSyncClient(stdio);
+        return McpToolUtils.getToolCallbacksFromSyncClients(mcpClient);
+    }
+
+    private static McpSyncClient getSyncClient(McpServer.Stdio stdio) {
         ServerParameters.Builder builder = ServerParameters.builder(stdio.getCommand());
         for (EnvVariable envVariable : stdio.getEnv()) {
             builder.addEnvVar(envVariable.getName(), envVariable.getValue());
@@ -102,29 +133,61 @@ public class ToolsUtil {
         ServerParameters serverParameters = builder.build();
         StdioClientTransport transport = new StdioClientTransport(serverParameters, McpJsonMapper.getDefault());
         // Native Image 中进程启动和 stdio 通信可能较慢，增加初始化超时时间
-        McpSyncClient mcpClient = McpClient.sync(transport)
+        return McpClient.sync(transport)
                 .initializationTimeout(Duration.ofSeconds(3))
                 .requestTimeout(Duration.ofSeconds(3))
                 .build();
-        return McpToolUtils.getToolCallbacksFromSyncClients(mcpClient);
     }
 
     /**
      * 从 HTTP MCP 服务器获取工具 (Streamable HTTP transport)
      */
     private static List<ToolCallback> getMcpToolsFromHttp(McpServer.Http http) {
-        HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport.builder(http.getUrl()).connectTimeout(Duration.ofSeconds(30)).build();
-        McpSyncClient mcpClient = McpClient.sync(transport).build();
+        McpSyncClient mcpClient = getSyncClient(http);
         return McpToolUtils.getToolCallbacksFromSyncClients(mcpClient);
+    }
+
+    private static McpSyncClient getSyncClient(McpServer.Http http) {
+        HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport.builder(http.getUrl()).connectTimeout(Duration.ofSeconds(30)).build();
+        return McpClient.sync(transport).build();
     }
 
     /**
      * 从 SSE MCP 服务器获取工具 (HTTP with SSE transport)
      */
     private static List<ToolCallback> getMcpToolsFromSse(McpServer.Sse sse) {
+        McpSyncClient mcpClient = getSyncClient(sse);
+        return McpToolUtils.getToolCallbacksFromSyncClients(mcpClient);
+    }
+
+    /**
+     * 从 SSE MCP 服务器获取工具 (HTTP with SSE transport)
+     */
+    private static McpSyncClientWrapper getMcpToolsWrapperFromSse(McpServer.Sse sse) {
+        McpSyncClient mcpClient = getSyncClient(sse);
+        return new McpSyncClientWrapper("sse", mcpClient);
+    }
+
+    /**
+     * 从 STDIO MCP 服务器获取工具
+     */
+    private static McpSyncClientWrapper getMcpToolsWrapperFromStdio(McpServer.Stdio stdio) {
+        McpSyncClient mcpClient = getSyncClient(stdio);
+        return new McpSyncClientWrapper("stdio", mcpClient);
+    }
+
+    /**
+     * 从 HTTP MCP 服务器获取工具 (Streamable HTTP transport)
+     */
+    private static McpSyncClientWrapper getMcpToolsWrapperFromHttp(McpServer.Http http) {
+        McpSyncClient mcpClient = getSyncClient(http);
+        return new McpSyncClientWrapper("http", mcpClient);
+    }
+
+    private static McpSyncClient getSyncClient(McpServer.Sse sse) {
         HttpClientSseClientTransport transport = HttpClientSseClientTransport.builder(sse.getUrl()).connectTimeout(Duration.ofSeconds(30)).build();
         McpSyncClient mcpClient = McpClient.sync(transport).build();
-        return McpToolUtils.getToolCallbacksFromSyncClients(mcpClient);
+        return mcpClient;
     }
 
     /**
@@ -202,7 +265,7 @@ public class ToolsUtil {
                             if (contentObj instanceof Map) {
                                 Map<String, Object> contentMap = (Map<String, Object>) contentObj;
                                 String text = contentMap.get("text") != null ? String.valueOf(contentMap.get("text")) : "";
-                                result.toolCallContents.add(new ToolCallContent.Content(new ContentBlock.Text(text,null,null)));
+                                result.toolCallContents.add(new ToolCallContent.Content(new ContentBlock.Text(text, null, null)));
                             }
                         }
                     }

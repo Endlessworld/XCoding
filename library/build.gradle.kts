@@ -46,7 +46,9 @@ dependencies {
     // Spring AI
     implementation(libs.spring.ai.openai)
     implementation(libs.spring.ai.mcp.client)
-
+    implementation("io.agentscope:agentscope-core:2.0.0")
+    implementation("io.agentscope:agentscope-harness:2.0.0")
+    implementation("io.agentscope:agentscope-extensions-model-openai:2.0.0")
     // Reactor (required by Spring AI)
     implementation(libs.reactor.core)
 
@@ -85,10 +87,10 @@ dependencies {
     // Jsoup - HTML parsing (used by WebSearchTool for DuckDuckGo search)
     implementation(libs.jsoup)
     // Mordant TUI
-    implementation(libs.mordant)
-    implementation(libs.mordant.coroutines)
-    implementation(libs.mordant.markdown)
-    implementation(libs.mordant.jvm.jna)
+//    implementation(libs.mordant)
+//    implementation(libs.mordant.coroutines)
+//    implementation(libs.mordant.markdown)
+//    implementation(libs.mordant.jvm.jna)
 
     // Tamboui TUI (all modules)
     implementation("dev.tamboui:tamboui-tui:0.4.0-SNAPSHOT")
@@ -109,7 +111,7 @@ dependencies {
     implementation("dev.tamboui:tamboui-tfx-tui:0.4.0-SNAPSHOT")
     implementation("dev.tamboui:tamboui-tfx-toolkit:0.4.0-SNAPSHOT")
 //    implementation("dev.tamboui:tamboui-demos:0.4.0-SNAPSHOT")
-    implementation("dev.tamboui:tamboui-benchmarks:0.4.0-SNAPSHOT")
+//    implementation("dev.tamboui:tamboui-benchmarks:0.4.0-SNAPSHOT")
     implementation("net.java.dev.jna:jna:5.14.0")
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
