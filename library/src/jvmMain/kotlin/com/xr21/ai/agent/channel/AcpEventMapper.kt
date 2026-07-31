@@ -6,6 +6,7 @@ import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.common.Event
 import com.agentclientprotocol.model.*
 import com.agentclientprotocol.model.SessionUpdate.ToolCallUpdate
+import com.xr21.ai.agent.tools.ToolKindFind
 import io.agentscope.core.event.*
 import io.agentscope.core.message.GenerateReason
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -70,7 +71,7 @@ object AcpEventMapper {
                         SessionUpdate.ToolCall(
                             toolCallId = ToolCallId(toolId),
                             title = toolName,
-                            kind = null, // caller can enrich via ToolKindFind
+                            kind = ToolKindFind.find(toolName) as ToolKind?,
                             status = ToolCallStatus.PENDING,
                             content = emptyList()
                         )
@@ -90,8 +91,9 @@ object AcpEventMapper {
                     Event.SessionUpdateEvent(
                         ToolCallUpdate(
                             toolCallId = ToolCallId(event.toolCallId ?: ""),
-                            title = event.toolCallName,
-                            status = ToolCallStatus.COMPLETED,
+                            title = event.toolCallName ?: "unknown",
+                            kind = ToolKindFind.find(event.toolCallName ?: "") as ToolKind?,
+                            status = ToolCallStatus.IN_PROGRESS,
                             content = listOf(
                                 ToolCallContent.Content(ContentBlock.Text(event.delta ?: ""))
                             )
@@ -106,11 +108,11 @@ object AcpEventMapper {
                     Event.SessionUpdateEvent(
                         ToolCallUpdate(
                             toolCallId = ToolCallId(event.toolCallId ?: ""),
-                            title = event.toolCallName,
-                            status = ToolCallStatus.COMPLETED,
+                            title = event.toolCallName ?: "unknown",
+                            kind = ToolKindFind.find(event.toolCallName ?: "") as ToolKind?,
+                            status = ToolCallStatus.IN_PROGRESS,
                             content = listOf(
-                                ToolCallContent.Content(ContentBlock.Text((event.data?.toString() ?: byteArrayOf()) as String))
-
+                                ToolCallContent.Content(ContentBlock.Text(event.data?.toString() ?: ""))
                             )
                         )
                     )
@@ -128,7 +130,8 @@ object AcpEventMapper {
                     Event.SessionUpdateEvent(
                         ToolCallUpdate(
                             toolCallId = ToolCallId(event.toolCallId ?: ""),
-                            title = event.toolCallName,
+                            title = event.toolCallName ?: "unknown",
+                            kind = ToolKindFind.find(event.toolCallName ?: "") as ToolKind?,
                             status = status
                         )
                     )
@@ -176,14 +179,15 @@ object AcpEventMapper {
                 // HITL: ACP layer must intercept this and call requestPermissions().
                 // The mapper emits ToolCallUpdate with PENDING status for each tool.
                 event.toolCalls?.map { toolUse ->
+                    val toolName = toolUse.name ?: "unknown"
                     Event.SessionUpdateEvent(
                         SessionUpdate.ToolCall(
                             toolCallId = ToolCallId(toolUse.id ?: ""),
-                            title = toolUse.name ?: "unknown",
-                            kind = null,
+                            title = toolName,
+                            kind = ToolKindFind.find(toolName) as ToolKind?,
                             status = ToolCallStatus.PENDING,
                             content = listOf(
-                                ToolCallContent.Content(ContentBlock.Text(toolUse.input.toString() ?: "{}"))
+                                ToolCallContent.Content(ContentBlock.Text(toolUse.input?.toString() ?: "{}"))
                             )
                         )
                     )

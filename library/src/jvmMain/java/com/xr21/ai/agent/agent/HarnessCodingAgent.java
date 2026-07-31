@@ -18,6 +18,7 @@ package com.xr21.ai.agent.agent;
 import com.agentclientprotocol.model.McpServer;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.xr21.ai.agent.config.ModelConfigLoader;
+import com.xr21.ai.agent.entity.AgentScopeToolAdapter;
 import com.xr21.ai.agent.model.Config.ModelConfig;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.WebTool;
@@ -25,14 +26,15 @@ import com.xr21.ai.agent.utils.ToolsUtil;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
+import io.agentscope.core.skill.repository.FileSystemSkillRepository;
 import io.agentscope.core.state.JsonFileAgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.mcp.McpSyncClientWrapper;
+import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import io.agentscope.harness.agent.HarnessAgent;
 import io.agentscope.harness.agent.filesystem.spec.LocalFilesystemSpec;
 import io.agentscope.harness.agent.memory.compaction.CompactionConfig;
 import io.agentscope.harness.agent.workspace.LocalFsMode;
-import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -73,60 +75,60 @@ public class HarnessCodingAgent {
     public static String WORKSPACE_ROOT = DEFAULT_WORKSPACE_ROOT;
 
     private static final String SYSTEM_PROMPT_TEMPLATE = """
-            你是一个编码智能体 XAgent
-            通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
-            The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
-            当前系统：{osName}
-            当前系统换行符：{lineSeparator}
-            当前系统语言:{language}
-            您只能执行当前系统平台默认存在的命令
-            请使用当前系统语言:{language}回复用户
-            - 使用批量编辑 一次修改多处进行高效修改
-            - 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
-            <编码指南>
-            ## 1.写代码前先思考
-                **别假设。不要掩饰困惑。表面权衡。**
-                在实施之前：
-                - 明确陈述你的假设。如果不确定，可以问。
-                - 如果存在多种解读，就提出来——不要默默选择。
-                - 如果存在更简单的方法，请说明。必要时反驳。
-                - 如果有什么不清楚的，就停。说出什么让人困惑。问吧。
-            ## 2.简洁优先
-                **解决问题的最低代码。没有任何推测性内容。**
-                - 没有超出要求的特征。
-                - 一次性代码不进行抽象。
-                - 没有“灵活性”或“可配置性”，除非是被要求的。
-                - 不处理不可能的错误处理。
-                - 如果你写了200行，可能有50行能解决问题，就重写。
-                - 遵循极致的高内聚 低耦合原则
-                问问自己：“高级工程师会说这太复杂了吗？”如果是，那就简化。
-            ## 3.原子更改遵循最小改动
-                **只触碰你必须触碰的。只收拾你自己的烂摊子。**
-                编辑现有代码时：
-                - 不要“改进”相邻的代码、注释或格式。
-                - 不要重构没坏掉的东西。
-                - 要符合现有风格，即使你会用不同的方式。
-                - 如果你发现了无关的死代码，要提及——不要删除。
-                当你的更改产生孤儿时：
-                    - 移除你的更改导致未使用的导入/变量/函数。
-                    - 除非被要求，不要删除已有的死代码。
-                测试：每一行更改的线条都应直接追踪到用户的请求。
-            ## 4.目标驱动执行
-            **定义成功标准。循环直到确认。**
-            将任务转化为可验证的目标：
-            - "添加验证"→"为无效输入写测试，然后使其通过"
-            - "修复漏洞"→"编写一个复现该漏洞的测试，然后使其通过"
-            - "重构X"→"确保测试在之前和之后通过"
-            对于多步骤任务，请提出简要计划：
-            ```
-            1. [步骤] → 验证：[检查]
-            2. [步骤] → 验证：[检查]
-            3. [步骤] → 验证：[检查]
-            ```
-            **这些指南有效条件是：**
-                差异中不必要的更改减少，因过度复杂而减少重写，澄清问题应在实施前而非错误之后。
-           </编码指南>
-           """;
+             你是一个编码智能体 XAgent
+             通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
+             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
+             当前系统：{osName}
+             当前系统换行符：{lineSeparator}
+             当前系统语言:{language}
+             您只能执行当前系统平台默认存在的命令
+             请使用当前系统语言:{language}回复用户
+             - 使用批量编辑 一次修改多处进行高效修改
+             - 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+             <编码指南>
+             ## 1.写代码前先思考
+                 **别假设。不要掩饰困惑。表面权衡。**
+                 在实施之前：
+                 - 明确陈述你的假设。如果不确定，可以问。
+                 - 如果存在多种解读，就提出来——不要默默选择。
+                 - 如果存在更简单的方法，请说明。必要时反驳。
+                 - 如果有什么不清楚的，就停。说出什么让人困惑。问吧。
+             ## 2.简洁优先
+                 **解决问题的最低代码。没有任何推测性内容。**
+                 - 没有超出要求的特征。
+                 - 一次性代码不进行抽象。
+                 - 没有“灵活性”或“可配置性”，除非是被要求的。
+                 - 不处理不可能的错误处理。
+                 - 如果你写了200行，可能有50行能解决问题，就重写。
+                 - 遵循极致的高内聚 低耦合原则
+                 问问自己：“高级工程师会说这太复杂了吗？”如果是，那就简化。
+             ## 3.原子更改遵循最小改动
+                 **只触碰你必须触碰的。只收拾你自己的烂摊子。**
+                 编辑现有代码时：
+                 - 不要“改进”相邻的代码、注释或格式。
+                 - 不要重构没坏掉的东西。
+                 - 要符合现有风格，即使你会用不同的方式。
+                 - 如果你发现了无关的死代码，要提及——不要删除。
+                 当你的更改产生孤儿时：
+                     - 移除你的更改导致未使用的导入/变量/函数。
+                     - 除非被要求，不要删除已有的死代码。
+                 测试：每一行更改的线条都应直接追踪到用户的请求。
+             ## 4.目标驱动执行
+             **定义成功标准。循环直到确认。**
+             将任务转化为可验证的目标：
+             - "添加验证"→"为无效输入写测试，然后使其通过"
+             - "修复漏洞"→"编写一个复现该漏洞的测试，然后使其通过"
+             - "重构X"→"确保测试在之前和之后通过"
+             对于多步骤任务，请提出简要计划：
+             ```
+             1. [步骤] → 验证：[检查]
+             2. [步骤] → 验证：[检查]
+             3. [步骤] → 验证：[检查]
+             ```
+             **这些指南有效条件是：**
+                 差异中不必要的更改减少，因过度复杂而减少重写，澄清问题应在实施前而非错误之后。
+            </编码指南>
+            """;
 
     /**
      * 默认状态存储目录
@@ -161,6 +163,7 @@ public class HarnessCodingAgent {
             WORKSPACE_ROOT = cwd;
             return buildAgent(cwd, mcpServers, runnableConfig);
         } catch (Exception e) {
+            System.err.println(e);
             log.error("Failed to create agent with cwd: {}, mcpServers: {}", cwd, mcpServers != null ? mcpServers.size() : 0, e);
             throw new RuntimeException("Failed to create HarnessCodingAgent", e);
         }
@@ -194,41 +197,49 @@ public class HarnessCodingAgent {
         // 3. 配置 LocalFilesystemSpec（本地文件系统 + Shell）
         boolean readOnly = isReadOnly(runnableConfig);
         LocalFsMode fsMode = readOnly ? LocalFsMode.ROOTED : LocalFsMode.ROOTED;
+        Path path = Path.of(cwd);
         LocalFilesystemSpec fsSpec = new LocalFilesystemSpec()
-                .project(Path.of(cwd))
+                .project(path)
                 .mode(fsMode)
                 .executeTimeoutSeconds(300)
                 .inheritEnv(true);
-
         // 4. 渲染系统提示词
-        String instruction = getInstruction(WORKSPACE_ROOT);
-
+        String instruction = getInstruction(cwd);
         // 5. 配置 MCP 工具
         // 将 ACP 协议的 MCP 服务器转换为 AgentScope MCP 客户端并注册到 Toolkit
         configureMcpTools(toolkit, mcpServers);
-
         // 6. 构建 HarnessAgent
-        HarnessAgent agent = HarnessAgent.builder()
-                .name("agent")
-                .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
-                .model(model)
-                .toolkit(toolkit)
-                .workspace(Path.of(cwd))
-                .filesystem(fsSpec)
-                .sysPrompt(instruction)
-                .agentId("harness-coding-agent")
-                .stateStore(AGENT_STATE_STORE)
-                .compaction(CompactionConfig.builder()
-                        .triggerMessages(50)
-                        .model(model)
-                        .build())
-                .enableTaskList()
-                .enablePendingToolRecovery(true)
-                .maxIters(50)
-                .build();
+        try (var userSkills = new FileSystemSkillRepository(Path.of(System.getProperty("user.home"), ".agents", "skills"));
+             var projectSkills = new FileSystemSkillRepository(Path.of(cwd, ".agents", "skills"))
+        ) {
+            HarnessAgent agent = HarnessAgent.builder()
+                    .name("agent")
+                    .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
+                    .model(model)
+                    .toolkit(toolkit)
+                    .workspace(path)
+                    .filesystem(fsSpec)
 
-        log.info("HarnessAgent built successfully");
-        return agent;
+                    .skillsEnabled(true)
+                    .skillRepository(userSkills)
+                    .skillRepository(projectSkills)
+//                    .disableFilesystemTools()
+//                    .disableShellTool()
+                    .sysPrompt(instruction)
+                    .agentId("harness-coding-agent")
+                    .stateStore(AGENT_STATE_STORE)
+                    .compaction(CompactionConfig.builder()
+                            .triggerMessages(100)
+                            .keepTokensMax(128 * 1024)
+                            .model(model)
+                            .build())
+                    .enableTaskList()
+                    .enablePendingToolRecovery(true)
+                    .maxIters(1000)
+                    .build();
+            log.info("HarnessAgent built successfully");
+            return agent;
+        }
     }
 
     /**
@@ -307,7 +318,7 @@ public class HarnessCodingAgent {
         }
         var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
-
+        tools.stream().map(AgentScopeToolAdapter::new).forEach(toolkit::registerAgentTool);
     }
 
     /**
