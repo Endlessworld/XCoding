@@ -203,8 +203,13 @@ class AgiAgentSession(
             emit(
                 Event.SessionUpdateEvent(
                     SessionUpdate.AgentThoughtChunk(
-                        ContentBlock.Text("✨✨✨\r\n<br/>")
+                        ContentBlock.Text("✨✨✨")
                     )
+                )
+            )
+            emit(
+                Event.SessionUpdateEvent(
+                    SessionUpdate.UsageUpdate(sessionTokenUsageRef.get().inputTokens / 100, 1024 * 1024, Cost(calculateCost(tokenUsageRef.get()), "CNY"))
                 )
             )
             val executionThread = Thread.currentThread()
@@ -261,7 +266,7 @@ class AgiAgentSession(
             )
             emit(
                 Event.SessionUpdateEvent(
-                    SessionUpdate.UsageUpdate(tokens, 0, Cost(0.0, "CNY"))
+                    SessionUpdate.UsageUpdate(sessionTokenUsageRef.get().inputTokens / 100, 1024 * 1024, Cost(calculateCost(tokenUsageRef.get()), "CNY"))
                 )
             )
             logger.info { "events END_TURN" }
@@ -467,6 +472,20 @@ class AgiAgentSession(
     }
 
     /**
+     * 按档位A价格计算费用（元/百万 tokens）：输入-缓存命中 0.02、输入-缓存未命中 1、输出 2。
+     * 缓存命中输入取 cachedReadTokens，未命中输入 = inputTokens - cachedReadTokens。
+     */
+    private fun calculateCost(usage: Usage): Double {
+        val cachedInput = (usage.cachedReadTokens ?: 0L).coerceAtLeast(0L)
+        val inputTokens = usage.inputTokens ?: 0L
+        val outputTokens = usage.outputTokens ?: 0L
+        val freshInput = (inputTokens - cachedInput).coerceAtLeast(0L)
+        return cachedInput / 1_000_000.0 * 0.02 +
+                freshInput / 1_000_000.0 * 1 +
+                outputTokens / 1_000_000.0 * 2
+    }
+
+    /**
      * Emit ACP events for a single AgentOutput.
      * Called from coroutine flow body, safe to use emit().
      * Unified output processing - replaces old processAgentOutput (SyncPromptContext mode).
@@ -474,6 +493,10 @@ class AgiAgentSession(
     private suspend fun FlowCollector<Event>.emitOutput(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
         if (output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
+            // Publish the live input-token count of the latest model call so the
+            // SummarizationHook can decide compaction from real provider-reported usage
+            // instead of a rough character estimate.
+            runnableConfig.context().put("lastInputTokens", output.tokenUsage.promptTokens ?: 0)
             val prevTurn = tokenUsageRef.get()
             tokenUsageRef.set(
                 Usage(
@@ -528,13 +551,18 @@ class AgiAgentSession(
                             SessionUpdate.ToolCall(
                                 toolCallId = ToolCallId(toolCall.id()),
                                 title = getTitle(toolCall),
-                                kind = ToolKindFind.find(toolCall.name()) as ToolKind?,
+                                kind = ToolKindFind.find(toolCall.name()),
                                 status = ToolCallStatus.PENDING,
                                 content = content
                             )
                         )
                     )
                 }
+                emit(
+                    Event.SessionUpdateEvent(
+                        SessionUpdate.UsageUpdate(sessionTokenUsageRef.get().inputTokens / 100, 1024 * 1024, Cost(calculateCost(tokenUsageRef.get()), "CNY"))
+                    )
+                )
             }
         }
 
