@@ -24,7 +24,7 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import kotlin.coroutines.jvm.internal.RunSuspendKt;
+import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
@@ -33,9 +33,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_STATE_FOR_UPDATE_CONTEXT_KEY;
 import static com.xr21.ai.agent.acp.AgiAgentKt.CLIENT_SESSION_CONTEXT_KEY;
 import static com.xr21.ai.agent.acp.AgiAgentKt.SESSION_ID_CONTEXT_KEY;
-import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_STATE_FOR_UPDATE_CONTEXT_KEY;
 
 /**
  * ACP-compatible Tool for writing and managing todos in the agent workflow.
@@ -132,7 +132,7 @@ public class AcpWriteTodosTool {
         try {
             if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
                 if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
-                    RunSuspendKt.runSuspend((completion) -> {
+                    SuspendKt.runSuspend((completion) -> {
                         SessionUpdate notification = new SessionUpdate.PlanUpdate(planEntrys, null);
                         clientSessionOperations.notify(notification, null, completion);
                         if (config.context().get(SESSION_ID_CONTEXT_KEY) instanceof String sessionId) {

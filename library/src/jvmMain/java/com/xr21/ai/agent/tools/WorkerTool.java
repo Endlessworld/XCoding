@@ -26,7 +26,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.utils.SinksUtil;
-import kotlin.coroutines.jvm.internal.RunSuspendKt;
+import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -80,7 +80,7 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
             // Return the worker's response
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
                 if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
-                    RunSuspendKt.runSuspend((completion) -> {
+                    SuspendKt.runSuspend((completion) -> {
                         StringBuilder builder = new StringBuilder();
                         Flux<AgentOutput<Object>> flux = null;
                         try {

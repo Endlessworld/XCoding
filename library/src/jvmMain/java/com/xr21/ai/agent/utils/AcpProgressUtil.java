@@ -20,7 +20,6 @@ import com.agentclientprotocol.model.ContentBlock;
 import com.agentclientprotocol.model.SessionUpdate;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.xr21.ai.agent.bridge.BridgeKt;
-import kotlin.coroutines.jvm.internal.RunSuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 
@@ -61,7 +60,7 @@ public class AcpProgressUtil {
     public static void sendProgress(RunnableConfig config, String message) {
         try {
             if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations client) {
-                RunSuspendKt.runSuspend((completion) -> {
+                SuspendKt.runSuspend((completion) -> {
                     SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(message, null, null));
                     client.notify(notification, null, completion);
                     if (config.context().get(SESSION_ID_CONTEXT_KEY) instanceof String sessionId) {
