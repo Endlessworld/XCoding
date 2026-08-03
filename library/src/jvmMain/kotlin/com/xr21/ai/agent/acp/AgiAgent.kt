@@ -518,16 +518,24 @@ class AgiAgentSession(
         // Per ACP protocol: emit ToolCall ("tool_call") on first creation,
         // then ToolCallUpdate ("tool_call_update") for status updates.
         if (output.message is AssistantMessage) {
-            val message = output.message as AssistantMessage
+            val message = output.message
             if (CollectionUtils.isNotEmpty(message.toolCalls)) {
                 message.toolCalls.forEach { toolCall ->
                     val content = BridgeKt.build(toolCall.name(), toolCall.arguments())
+                    val argsJson = runCatching {
+                        kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
+                    }.getOrNull()
+                    val title = if (argsJson is JsonObject) {
+                        val titleElem = argsJson["title"]
+                        if (titleElem is JsonPrimitive && titleElem.content.isNotBlank()) titleElem.content
+                        else toolCall.name()
+                    } else toolCall.name()
                     logger.info { "output.toolCalls $content" }
                     emit(
                         Event.SessionUpdateEvent(
                             SessionUpdate.ToolCall(
                                 toolCallId = ToolCallId(toolCall.id()),
-                                title = toolCall.name(),
+                                title = title,
                                 kind = ToolKindFind.find(toolCall.name()) as ToolKind?,
                                 status = ToolCallStatus.PENDING,
                                 content = content

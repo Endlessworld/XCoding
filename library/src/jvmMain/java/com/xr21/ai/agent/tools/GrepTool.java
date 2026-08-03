@@ -93,7 +93,6 @@ public class GrepTool {
     ) { // @formatter:on
         try {
             sendProgress(toolContext, "🔍 Searching for pattern: \"" + pattern + "\"...<br/>");
-
             Path searchPath = path != null ? Paths.get(path) : Paths.get(WORKSPACE_ROOT);
             List<String> matches = Collections.synchronizedList(new ArrayList<>());
             List<ToolCallLocation> locations = Collections.synchronizedList(new ArrayList<>());
@@ -122,6 +121,7 @@ public class GrepTool {
                     long scanned = fileCounter.incrementAndGet();
                     // Report progress at intervals
                     if (scanned % PROGRESS_INTERVAL == 0) {
+
                         sendProgress(toolContext, "  Progress: " + scanned
                                 + " files, " + matchCounter.get() + " matches found<br/>");
                     }

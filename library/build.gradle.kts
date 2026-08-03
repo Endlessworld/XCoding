@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.zip.ZipFile
 
 plugins {
@@ -18,6 +19,19 @@ java {
 
 kotlin {
     jvmToolchain(17)
+}
+
+// ==================== 反射参数名支持 ====================
+// 确保编译时写入方法参数名，使反射能获取真实参数名而非 arg0/arg1
+// Java 使用 -parameters，Kotlin 使用 -java-parameters（等价）
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-parameters")
+}
+
+tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions {
+        freeCompilerArgs.add("-java-parameters")
+    }
 }
 
 sourceSets {

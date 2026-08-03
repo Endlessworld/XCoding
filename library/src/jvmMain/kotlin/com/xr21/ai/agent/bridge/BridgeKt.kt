@@ -17,12 +17,16 @@ package com.xr21.ai.agent.bridge
 
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.model.*
+import com.agentclientprotocol.model.SessionUpdate.ToolCallUpdate
 import com.fasterxml.jackson.core.type.TypeReference
+import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.tui.ChatMessage
 import com.xr21.ai.agent.tui.MessageRole
 import com.xr21.ai.agent.utils.Json
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonElement
+import org.springframework.ai.chat.messages.AssistantMessage
+
 /**
  * ACP 事件聚合/查询桥接。
  *
@@ -294,6 +298,19 @@ object BridgeKt {
             _meta = _meta
         )
     }
+
+    @JvmStatic
+    fun buildToolCallUpdate(toolCall: AssistantMessage.ToolCall, arguments: String?): ToolCallUpdate {
+       return ToolCallUpdate(
+           ToolCallId(toolCall.id()),
+           toolCall.name(),
+            ToolKindFind.find(toolCall.name()),
+            ToolCallStatus.PENDING,
+            build(toolCall.name(), arguments)
+        )
+    }
+
+    @JvmStatic
     fun build(toolName: String, arguments: String?): List<ToolCallContent> {
         if (arguments.isNullOrBlank()) return emptyList()
         return try {

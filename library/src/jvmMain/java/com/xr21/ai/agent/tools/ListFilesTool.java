@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static com.alibaba.cloud.ai.graph.agent.tools.ToolContextConstants.AGENT_CONFIG_CONTEXT_KEY;
 import static com.xr21.ai.agent.agent.LocalAgent.DEFAULT_WORKSPACE_ROOT;
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 
@@ -69,11 +70,10 @@ public class ListFilesTool {
                                              Boolean workspaceOnly,
                                          ToolContext context) { // @formatter:on
         log.info("ls files context {}", context.getContext());
-        if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
+        if (context.getContext().get(AGENT_CONFIG_CONTEXT_KEY) instanceof RunnableConfig config) {
             log.info("config context {}", config.context());
             log.info("config context PromptRequest {}", config.context().get("PromptRequest"));
             log.info("config context SyncPromptContext {}", config.context().get("SyncPromptContext"));
-
         }
 
         // workspaceOnly 默认 true：仅允许列出工作目录内的文件

@@ -100,7 +100,7 @@ public class SmartEditTool {
 
         if (edits.size() > 50) {
             return ToolResult.builder()
-                    .error("Too many edits in one call. Maximum is 20, got: " + edits.size())
+                    .error("Too many edits in one call. Maximum is 50, got: " + edits.size())
                     .build();
         }
 
@@ -128,11 +128,13 @@ public class SmartEditTool {
             String filePath = entry.getKey();
             List<IndexedEdit> fileEdits = entry.getValue();
 
-            // Sort edits by line number in reverse order (to avoid offset issues)
+            // Sort edits by effective line in ascending order, then apply a cumulative line offset.
+            // search_replace has unknown line (treated as 0, executed first) and is content-based,
+            // so its lineDelta is folded into the offset, keeping downstream insert_at_line accurate.
             fileEdits.sort((a, b) -> {
                 int lineA = getEffectiveLine(a.edit);
                 int lineB = getEffectiveLine(b.edit);
-                return Integer.compare(lineB, lineA);
+                return Integer.compare(lineA, lineB);
             });
 
             // Read file

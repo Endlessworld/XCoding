@@ -26,6 +26,7 @@ import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.*;
 import java.nio.charset.Charset;
@@ -189,6 +190,7 @@ public class ShellTools {
 		- 如有需要，带 -u 标志推送至远程
 		""")
 	public Map<String, Object> bash(
+            @ToolParam(description = "he command to execute")
 			@JsonProperty(value = "command", required = true)
 					@JsonPropertyDescription("The command to execute")
 					String command,
@@ -198,12 +200,12 @@ public class ShellTools {
 			@JsonProperty(value = "mode")
 					@JsonPropertyDescription("Execution mode: 'once' (default) runs a single command in a temporary shell and returns when it finishes or times out. 'interactive' starts a persistent background shell that stays alive so you can send multiple commands via ShellInput and keep state (env vars, working directory) across commands. Use 'interactive' when you need to run several sequential commands in the same shell.")
 					String mode,
-			@JsonProperty(value = "description")
-					@JsonPropertyDescription("Clear, concise description of what this command does in 5-10 words, in active voice. Examples:\nInput: ls\nOutput: List files in current directory\n\nInput: git status\nOutput: Show working tree status\n\nInput: npm install\nOutput: Install package dependencies\n\nInput: mkdir foo\nOutput: Create directory 'foo'")
-					String description,
-				@JsonProperty(value = "cwd")
-						@JsonPropertyDescription("Optional absolute working directory to run the command in. Defaults to the JVM's current working directory. Pass this when you need to run git/npm/mvn/build commands inside a specific project folder.")
-						String cwd,
+            @ToolParam(description = "Clear, concise description of what this command does in 5-10 words, in active voice. Examples:\nInput: ls\nOutput: List files in current directory\n\nInput: git status\nOutput: Show working tree status\n\nInput: npm install\nOutput: Install package dependencies\n\nInput: mkdir foo\nOutput: Create directory 'foo'")
+			        @JsonProperty(value = "title")
+                    String title,
+		    @JsonProperty(value = "cwd")
+					@JsonPropertyDescription("Optional absolute working directory to run the command in. Defaults to the JVM's current working directory. Pass this when you need to run git/npm/mvn/build commands inside a specific project folder.")
+				 String cwd,
 			ToolContext context) { // @formatter:on
 
         // Generate unique shell ID for all executions
@@ -684,7 +686,7 @@ public class ShellTools {
                         appendLine(stderr, stderrDropped, stderrAppended, line);
                         if (clientSessionOperations != null) {
                             String finalLine = line + "\n";
-                             SuspendKt.runSuspend((completion) -> {
+                            SuspendKt.runSuspend((completion) -> {
                                 clientSessionOperations.notify(BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(finalLine, null, null)), null, completion);
                                 return null;
                             });

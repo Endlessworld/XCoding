@@ -15,7 +15,6 @@
  */
 package com.xr21.ai.agent.tools;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.apache.commons.lang3.StringUtils;

@@ -129,6 +129,10 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
         @JsonPropertyDescription("The type of worker to use for this task")
         public String workerType;
 
+        @JsonProperty(value = "title")
+        @JsonPropertyDescription("concise description of what this command does in 5-10 words, in active voice")
+        String title;
+
         public WorkerRequest() {
         }
 
