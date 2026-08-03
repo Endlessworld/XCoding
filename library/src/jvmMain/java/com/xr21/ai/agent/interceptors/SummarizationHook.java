@@ -99,12 +99,11 @@ public class SummarizationHook extends MessagesModelHook {
             </instructions>
             <messages>
             待交接的对话历史:
-            %s
+            {messages}
             </messages>""";
 
     private static final String SUMMARY_PREFIX = "## Previous conversation summary:";
     private static final int DEFAULT_MESSAGES_TO_KEEP = 20;
-    private static final int SEARCH_RANGE_FOR_TOOL_PAIRS = 5;
     private static final boolean DEFAULT_KEEP_FIRST_USER_MESSAGE = true;
 
     private final ChatModel model;
@@ -134,7 +133,7 @@ public class SummarizationHook extends MessagesModelHook {
         if (maxTokensBeforeSummary == null) {
             return new AgentCommand(previousMessages);
         }
-        int totalTokens = tokenCounter.countTokens(previousMessages);
+        int totalTokens = resolveTotalTokens(previousMessages, config);
 
         if (totalTokens < maxTokensBeforeSummary) {
             return new AgentCommand(previousMessages);
@@ -142,6 +141,7 @@ public class SummarizationHook extends MessagesModelHook {
 
         log.info("Token count {} exceeds threshold {}, triggering summarization", totalTokens, maxTokensBeforeSummary);
         AcpProgressUtil.sendProgress(config, "Token count %s exceeds threshold %s, triggering summarization".formatted(totalTokens, maxTokensBeforeSummary));
+
         int cutoffIndex = findSafeCutoff(previousMessages);
 
         if (cutoffIndex <= 0) {
@@ -169,14 +169,16 @@ public class SummarizationHook extends MessagesModelHook {
         }
 
         String summary = createSummary(toSummarize);
-        AcpProgressUtil.sendProgress(config, "Summarized messages: %s".formatted(summary));
         List<Message> recentMessages = new ArrayList<>();
         for (int i = cutoffIndex; i < previousMessages.size(); i++) {
             recentMessages.add(previousMessages.get(i));
         }
         List<Message> newMessages = new ArrayList<>();
+
         Optional<Message> firstSystemMessage = previousMessages.stream().filter(message -> message instanceof SystemMessage).findFirst();
-        SystemMessage summaryMessage = new SystemMessage(firstSystemMessage.map(Message::getText).orElse("\n") + summaryPrefix + "\n" + summary);
+        String systemText = firstSystemMessage.map(Message::getText).orElse("");
+        SystemMessage summaryMessage = new SystemMessage(
+                systemText + (systemText.isEmpty() || systemText.endsWith("\n") ? "" : "\n") + summaryPrefix + "\n" + summary);
         if (firstUserMessage != null) {
             newMessages.add(firstUserMessage);
         }
@@ -191,6 +193,19 @@ public class SummarizationHook extends MessagesModelHook {
             AcpProgressUtil.sendProgress(config, "Summarized %s messages, keeping %s recent messages".formatted(toSummarize.size(), recentMessages.size()));
         }
         return new AgentCommand(newMessages, UpdatePolicy.REPLACE);
+    }
+
+    /**
+     * Resolves the current input token count, preferring the live value reported by the last
+     * model call (written into the RunnableConfig context by AgiAgentSession) and falling back
+     * to the approximate counter when no live value is available.
+     */
+    private int resolveTotalTokens(List<Message> previousMessages, RunnableConfig config) {
+        Object live = config.context().get("lastInputTokens");
+        if (live instanceof Number n && n.longValue() > 0) {
+            return n.intValue();
+        }
+        return tokenCounter.countTokens(previousMessages);
     }
 
     /**
@@ -217,70 +232,42 @@ public class SummarizationHook extends MessagesModelHook {
     }
 
     /**
-     * Check if cutting at index would separate AI/Tool message pairs.
+     * Check if cutting at {@code cutoffIndex} would separate any AI message from its
+     * corresponding tool responses.
+     *
+     * <p>Collects every tool-response ID that appears at/after the cutoff, then checks every
+     * AI message before the cutoff: if any of its tool calls resolves to a response after the
+     * cutoff, the pair would be split and the cutoff is unsafe. This scans the full history
+     * (no bounded search window) so long-distance AI/tool pairs are never missed.
      */
     private boolean isSafeCutoffPoint(List<Message> messages, int cutoffIndex) {
         if (cutoffIndex >= messages.size()) {
             return true;
         }
 
-        int searchStart = Math.max(0, cutoffIndex - SEARCH_RANGE_FOR_TOOL_PAIRS);
-        int searchEnd = Math.min(messages.size(), cutoffIndex + SEARCH_RANGE_FOR_TOOL_PAIRS);
-
-        for (int i = searchStart; i < searchEnd; i++) {
-            if (!hasToolCalls(messages.get(i))) {
-                continue;
-            }
-
-            AssistantMessage aiMessage = (AssistantMessage) messages.get(i);
-            Set<String> toolCallIds = extractToolCallIds(aiMessage);
-            if (cutoffSeparatesToolPair(messages, i, cutoffIndex, toolCallIds)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Check if message is an AI message with tool calls.
-     */
-    private boolean hasToolCalls(Message message) {
-        return message instanceof AssistantMessage assistantMessage && !assistantMessage.getToolCalls().isEmpty();
-    }
-
-    /**
-     * Extract tool call IDs from an AI message.
-     */
-    private Set<String> extractToolCallIds(AssistantMessage aiMessage) {
-        Set<String> toolCallIds = new HashSet<>();
-        for (AssistantMessage.ToolCall toolCall : aiMessage.getToolCalls()) {
-            String callId = toolCall.id();
-            toolCallIds.add(callId);
-        }
-        return toolCallIds;
-    }
-
-    /**
-     * Check if cutoff separates an AI message from its corresponding tool messages.
-     */
-    private boolean cutoffSeparatesToolPair(List<Message> messages, int aiMessageIndex, int cutoffIndex, Set<String> toolCallIds) {
-        for (int j = aiMessageIndex + 1; j < messages.size(); j++) {
-            Message message = messages.get(j);
+        Set<String> toolResponseIdsAfterCutoff = new HashSet<>();
+        for (int i = cutoffIndex; i < messages.size(); i++) {
+            Message message = messages.get(i);
             if (message instanceof ToolResponseMessage toolResponseMessage) {
-                // Check if any response in this ToolResponseMessage matches our tool call IDs
                 for (ToolResponseMessage.ToolResponse response : toolResponseMessage.getResponses()) {
-                    if (toolCallIds.contains(response.id())) {
-                        boolean aiBeforeCutoff = aiMessageIndex < cutoffIndex;
-                        boolean toolBeforeCutoff = j < cutoffIndex;
-                        if (aiBeforeCutoff != toolBeforeCutoff) {
-                            return true;
-                        }
-                    }
+                    toolResponseIdsAfterCutoff.add(response.id());
                 }
             }
         }
-        return false;
+
+        for (int i = 0; i < cutoffIndex; i++) {
+            Message message = messages.get(i);
+            if (!(message instanceof AssistantMessage assistantMessage)
+                    || assistantMessage.getToolCalls().isEmpty()) {
+                continue;
+            }
+            for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
+                if (toolResponseIdsAfterCutoff.contains(toolCall.id())) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private String createSummary(List<Message> messages) {
@@ -296,19 +283,24 @@ public class SummarizationHook extends MessagesModelHook {
                     messageText.append("tool_call: ").append("\n id: ").append(response.id()).append("\n").append(response.name())
                             .append("responseData :").append(response.responseData()).append("\n");
                 }
-
             }
         }
         try {
-            String prompt = String.format(summaryPrompt, messageText.toString().replaceAll("\\{", "").replaceAll("}", ""));
-            log.debug("create summary prompt ：{}", prompt);
-            log.debug("create summary model default options ：{}", model.getDefaultOptions());
-            var response = ChatClient.builder(model).defaultSystem(DEFAULT_SUMMARY_PROMPT).build().prompt().user(prompt).call().content();
-            System.out.println("response "+response);
-            log.debug("Summary generation success ：{}", response);
+            // The template already carries the full instruction set (role/instructions), so it is
+            // used as the entire user prompt — no duplicate system prompt is needed. The
+            // {messages} placeholder is replaced directly to avoid String.format pitfalls
+            // (literal '%' in content) and to stop the previous brace-stripping that corrupted
+            // JSON/code fragments inside tool responses.
+            String history = messageText.toString();
+            String prompt = summaryPrompt.contains("{messages}")
+                    ? summaryPrompt.replace("{messages}", history)
+                    : summaryPrompt + "\n\n" + history;
+            log.debug("create summary prompt: {}", prompt);
+            var response = ChatClient.builder(model).build().prompt().user(prompt).call().content();
+            log.debug("Summary generation success: {}", response);
             return response;
         } catch (Exception e) {
-            log.error("Failed to create summary ", e);
+            log.error("Failed to create summary", e);
             return "Summary generation failed: " + e.getMessage();
         }
     }

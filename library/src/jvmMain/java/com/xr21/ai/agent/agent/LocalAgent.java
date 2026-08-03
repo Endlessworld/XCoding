@@ -26,7 +26,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.hook.skills.SkillsAgentHook;
-import com.alibaba.cloud.ai.graph.agent.hook.summarization.SummarizationHook;
+import com.xr21.ai.agent.interceptors.SummarizationHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.modelretry.ModelRetryInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
@@ -345,7 +345,7 @@ public class LocalAgent {
                 .build());
         hooks.add(SummarizationHook.builder()
                 .model(chatModel)
-                .maxTokensBeforeSummary(256 * 1024)
+                .maxTokensBeforeSummary(128 * 1024)
                 .messagesToKeep(10)
                 .keepFirstUserMessage(true)
                 .build());
