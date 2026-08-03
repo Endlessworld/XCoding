@@ -45,6 +45,7 @@ public class WriteFileTool {
                 - 如果文件包含多级目录将自动创建所有父级目录,所以无需创建父级目录可直接写入文件
                 - 内容参数必须是字符串
                 - 文件内容严格限制500字符以内，未完成的部分使用smart_edit工具的insert_at_line模式继续添加
+                - workspaceOnly参数控制是否仅允许写入工作目录内的文件，默认true。设为false可写入工作目录之外的文件
             """;
 
     // @formatter:off
@@ -55,7 +56,10 @@ public class WriteFileTool {
             String filePath,
             @JsonProperty(value = "content", required = true)
             @JsonPropertyDescription("The content to write to the file, must be a string. Maximum 500 characters")
-            String content
+            String content,
+            @JsonProperty(value = "workspaceOnly")
+            @JsonPropertyDescription("Whether to only write files within the workspace directory, default is true. Set to false to write files outside the workspace")
+            Boolean workspaceOnly
     ) { // @formatter:on
         // Validate request parameters
         if (filePath == null || filePath.isBlank()) {
@@ -74,8 +78,11 @@ public class WriteFileTool {
             Path workspacePath = Paths.get(WORKSPACE_ROOT_NORMALIZED);
             String absolutePath = path.toAbsolutePath().toString();
 
-            // Security: Validate that the path is within workspace
-            if (!path.startsWith(workspacePath)) {
+            // workspaceOnly 默认 true：仅允许写入工作目录内的文件
+            boolean restrictToWorkspace = workspaceOnly == null || workspaceOnly;
+
+            // Security: Validate that the path is within workspace (仅当 workspaceOnly=true 时校验)
+            if (restrictToWorkspace && !path.startsWith(workspacePath)) {
                 return ToolResult.builder()
                         .error(String.format(
                                 "Security violation: Path '%s' is outside the workspace root '%s'",

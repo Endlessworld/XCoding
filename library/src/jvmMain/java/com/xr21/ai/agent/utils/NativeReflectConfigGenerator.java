@@ -109,6 +109,7 @@ public class NativeReflectConfigGenerator {
             "com.xr21.ai.agent.tools.ShellTools",
             "com.xr21.ai.agent.tools.ShellTools$ShellSession",
             "com.xr21.ai.agent.tools.ShellTools$Builder",
+            "com.xr21.ai.agent.tools.SleepTool",
             "com.xr21.ai.agent.tools.ToolKindFind",
             "com.xr21.ai.agent.tools.WebSearchTool",
             "com.xr21.ai.agent.tools.WebSearchTool$Params",
