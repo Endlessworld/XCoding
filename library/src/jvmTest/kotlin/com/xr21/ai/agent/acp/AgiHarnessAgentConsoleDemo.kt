@@ -250,18 +250,24 @@ private suspend fun handleModelCommand(session: ClientSession, parts: List<Strin
     println("${Color.GREEN}ok${Color.RESET} 已切换到模型: ${Color.CYAN}${match.modelId}${Color.RESET}")
 }
 
-/** 发送 prompt 并实时显示事件流 */
+/** Send the prompt and display the event stream in real time. */
 private suspend fun sendPrompt(session: ClientSession, text: String) {
+    // Print a blank line to separate sessions
     println()
+    // Send the request and obtain the event stream
     val flow = session.prompt(content = listOf(ContentBlock.Text(text)))
+    // Flag whether thought content has been printed
     var hasThought = false
+    // Flag whether reply content has been printed
     var hasMessage = false
 
+    // Process the event stream one by one, printing errors on exception
     try {
         flow.collect { event ->
             when (event) {
                 is Event.SessionUpdateEvent -> {
                     when (val update = event.update) {
+                            // Handle incremental chunks of thought content
                         is SessionUpdate.AgentThoughtChunk -> {
                             val t = (update.content as? ContentBlock.Text)?.text ?: ""
                             if (t.isNotBlank()) {
@@ -274,6 +280,7 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                             }
                         }
 
+                        // Handle incremental chunks of reply content
                         is SessionUpdate.AgentMessageChunk -> {
                             val t = (update.content as? ContentBlock.Text)?.text ?: ""
                             if (t.isNotBlank()) {
@@ -287,6 +294,7 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                             }
                         }
 
+                        // Handle tool call events, printing the tool name and arguments
                         is SessionUpdate.ToolCall -> {
                             println()
                             println("  ${Color.YELLOW}tool: ${update.title}${Color.RESET}PENDING${Color.RESET}  (${update.rawInput}) ${Color.RED}")
@@ -299,6 +307,7 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                             }
                         }
 
+                        // Handle token usage updates
                         is SessionUpdate.UsageUpdate -> {
                             println()
                             println("  ${Color.DIM}token: ${update.used}${Color.RESET}")
@@ -308,6 +317,7 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                     }
                 }
 
+                // Handle the end-of-response, printing stop reason and usage
                 is Event.PromptResponseEvent -> {
                     val reason = event.response.stopReason
                     println()

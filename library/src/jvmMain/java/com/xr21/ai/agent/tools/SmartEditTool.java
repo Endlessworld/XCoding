@@ -79,7 +79,7 @@ public class SmartEditTool {
 
         【Usage:】
         ============
-        - 小范围精确修改使用 search_replace
+        - 小范围精确修改使用 search_replace（根据不含前导空白的唯一文本
         - 新增内容使用 insert_at_line
         - 编辑前先使用 read_file 查看文件内容（带行号）
         - 批量编辑同一文件时，按从后到前的顺序排列可避免行号偏移问题
