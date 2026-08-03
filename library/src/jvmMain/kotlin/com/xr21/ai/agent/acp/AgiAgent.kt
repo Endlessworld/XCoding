@@ -155,7 +155,7 @@ class AgiAgentSession(
         logger.info { "Processing prompt for session $sessionId" }
 //        val authorized = AuthFlow.ensureAuthorized(currentCoroutineContext().client)
 //        if (!authorized) {
-            logger.warn { "Auth: 用户未授权，会话仍可继续但可能受限" }
+        logger.warn { "Auth: 用户未授权，会话仍可继续但可能受限" }
 //            throw JsonRpcException(JsonRpcErrorCode.AUTH_REQUIRED.code, "请授权登录后使用")
 //        }
         // Reset per-turn token usage at the start of each prompt
@@ -218,7 +218,7 @@ class AgiAgentSession(
             // Store client session operations in context so tools running on non-coroutine threads can use it
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
             runnableConfig.context().putIfAbsent("mode", defaultMode.value)
-            runnableConfig.context().putIfAbsent("thought_level",  SessionConfigOptionsFactory.ThoughtLevel.LOW.valueId)
+            runnableConfig.context().putIfAbsent("thought_level", SessionConfigOptionsFactory.ThoughtLevel.LOW.valueId)
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
             agent.setSystemPrompt(LocalAgent.getInstruction(cwd))
             val recursiveFlux = recursiveAgentFlux(agent, userMessage)
@@ -341,7 +341,7 @@ class AgiAgentSession(
                 val approvalMetadata = processHumanIntervention(output.interruptionMetadata)
                 val toolFeedbacks = approvalMetadata.toolFeedbacks()
                 logger.info { "Resuming agent flow with approval metadata $toolFeedbacks" }
-                runnableConfig =  RunnableConfig.builder(runnableConfig)
+                runnableConfig = RunnableConfig.builder(runnableConfig)
                     .addMetadata(RunnableConfig.HUMAN_FEEDBACK_METADATA_KEY, approvalMetadata)
                     .build();
                 val allRejected = approvalMetadata.toolFeedbacks()
@@ -522,20 +522,12 @@ class AgiAgentSession(
             if (CollectionUtils.isNotEmpty(message.toolCalls)) {
                 message.toolCalls.forEach { toolCall ->
                     val content = BridgeKt.build(toolCall.name(), toolCall.arguments())
-                    val argsJson = runCatching {
-                        kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
-                    }.getOrNull()
-                    val title = if (argsJson is JsonObject) {
-                        val titleElem = argsJson["title"]
-                        if (titleElem is JsonPrimitive && titleElem.content.isNotBlank()) titleElem.content
-                        else toolCall.name()
-                    } else toolCall.name()
                     logger.info { "output.toolCalls $content" }
                     emit(
                         Event.SessionUpdateEvent(
                             SessionUpdate.ToolCall(
                                 toolCallId = ToolCallId(toolCall.id()),
-                                title = title,
+                                title = getTitle(toolCall),
                                 kind = ToolKindFind.find(toolCall.name()) as ToolKind?,
                                 status = ToolCallStatus.PENDING,
                                 content = content
@@ -553,24 +545,63 @@ class AgiAgentSession(
                 message.responses.forEach { response ->
                     val resultData = ToolsUtil.parseToolResult(response.responseData())
                     logger.info { "output.responses $resultData" }
-                    emit(
-                        Event.SessionUpdateEvent(
-                            SessionUpdate.ToolCallUpdate(
-                                toolCallId = ToolCallId(response.id()),
-                                title = response.name(),
-                                kind = ToolKindFind.find(response.name()),
-                                status = if (resultData.success) ToolCallStatus.COMPLETED
-                                else ToolCallStatus.FAILED,
-                                content = resultData.toolCallContents,
-                                locations = resultData.locations,
+                    if (response.name.equals("BashOutput") || response.name.equals("ShellSessions")) {
+                        var title = response.responseData();
+                        emit(
+                            Event.SessionUpdateEvent(
+                                SessionUpdate.ToolCallUpdate(
+                                    toolCallId = ToolCallId(response.id()),
+                                    title = Json.toPrettyJson(title),
+                                    kind = ToolKindFind.find(response.name()),
+                                    status = if (resultData.success) ToolCallStatus.COMPLETED
+                                    else ToolCallStatus.FAILED,
+                                    content = resultData.toolCallContents,
+                                    locations = resultData.locations,
+                                )
                             )
                         )
-                    )
+                    }else{
+                        emit(
+                            Event.SessionUpdateEvent(
+                                SessionUpdate.ToolCallUpdate(
+                                    toolCallId = ToolCallId(response.id()),
+                                    kind = ToolKindFind.find(response.name()),
+                                    status = if (resultData.success) ToolCallStatus.COMPLETED
+                                    else ToolCallStatus.FAILED,
+                                    content = resultData.toolCallContents,
+                                    locations = resultData.locations,
+                                )
+                            )
+                        )
+                    }
                 }
             }
         }
 
 
+    }
+
+    private fun getTitle(toolCall: AssistantMessage.ToolCall): String {
+        val argsJson = runCatching {
+            kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
+        }.getOrNull()
+        val title = if (argsJson is JsonObject) {
+            val titleElem = argsJson["title"]
+            if (titleElem is JsonPrimitive && titleElem.content.isNotBlank()) titleElem.content
+            else toolCall.name()
+        } else toolCall.name()
+        val commandElem = (argsJson as? JsonObject)?.get("command")
+        val command = if (commandElem is JsonPrimitive && commandElem.isString && commandElem.content.isNotBlank()) {
+            commandElem.content
+        } else ""
+        if(title !=null && command.isNotBlank()){
+            return "$title $command"
+        }
+        val inputElem = (argsJson as? JsonObject)?.get("input")
+        val input = if (inputElem is JsonPrimitive && inputElem.isString && inputElem.content.isNotBlank()) {
+            inputElem.content
+        } else ""
+        return input
     }
 
 
