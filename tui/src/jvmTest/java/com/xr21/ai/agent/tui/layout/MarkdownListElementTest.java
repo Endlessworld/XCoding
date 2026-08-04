@@ -4,8 +4,8 @@
 package com.xr21.ai.agent.tui.layout;
 
 import com.agentclientprotocol.model.SessionUpdate;
-import com.xr21.ai.agent.tui.ChatMessage;
-import com.xr21.ai.agent.tui.MessageRole;
+import com.xr21.ai.agent.model.ChatMessage;
+import com.xr21.ai.agent.model.MessageRole;
 import com.xr21.ai.agent.tui.Session;
 import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.buffer.Buffer;

@@ -3,6 +3,8 @@
  */
 package com.xr21.ai.agent.tui;
 
+import com.xr21.ai.agent.model.ChatMessage;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;

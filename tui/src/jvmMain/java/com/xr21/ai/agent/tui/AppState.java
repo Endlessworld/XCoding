@@ -17,6 +17,8 @@ package com.xr21.ai.agent.tui;
 
 import com.agentclientprotocol.model.AvailableCommand;
 import com.agentclientprotocol.model.SessionUpdate;
+import com.xr21.ai.agent.model.ChatMessage;
+import com.xr21.ai.agent.model.MessageRole;
 import com.xr21.ai.agent.tui.acp.ConnectionState;
 import dev.tamboui.widgets.input.TextAreaState;
 

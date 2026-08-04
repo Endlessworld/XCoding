@@ -11,7 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import com.xr21.ai.agent.tui.AppState;
-import com.xr21.ai.agent.tui.ChatMessage;
+import com.xr21.ai.agent.model.ChatMessage;
 import com.xr21.ai.agent.tui.PanelType;
 import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.toolkit.element.Element;

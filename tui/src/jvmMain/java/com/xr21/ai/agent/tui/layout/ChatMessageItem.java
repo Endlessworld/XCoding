@@ -11,8 +11,8 @@ import java.util.function.Consumer;
 
 import com.agentclientprotocol.model.SessionUpdate;
 import com.xr21.ai.agent.bridge.BridgeKt;
-import com.xr21.ai.agent.tui.ChatMessage;
-import com.xr21.ai.agent.tui.MessageRole;
+import com.xr21.ai.agent.model.ChatMessage;
+import com.xr21.ai.agent.model.MessageRole;
 import com.xr21.ai.agent.tui.TuiTheme;
 import dev.tamboui.layout.Rect;
 import dev.tamboui.style.Color;

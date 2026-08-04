@@ -20,8 +20,8 @@ import com.agentclientprotocol.model.*
 import com.agentclientprotocol.model.SessionUpdate.ToolCallUpdate
 import com.fasterxml.jackson.core.type.TypeReference
 import com.xr21.ai.agent.tools.ToolKindFind
-import com.xr21.ai.agent.tui.ChatMessage
-import com.xr21.ai.agent.tui.MessageRole
+import com.xr21.ai.agent.model.ChatMessage
+import com.xr21.ai.agent.model.MessageRole
 import com.xr21.ai.agent.utils.Json
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonElement
