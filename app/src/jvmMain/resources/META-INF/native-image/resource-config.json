@@ -1,0 +1,23 @@
+{
+  "resources" : {
+    "includes" : [ {
+      "pattern" : "\\Qlogback-native-simple.xml\\E"
+    }, {
+      "pattern" : "\\Qlogback-native.xml\\E"
+    }, {
+      "pattern" : "\\Qlogback.xml\\E"
+    }, {
+      "pattern" : "\\QMETA-INF/tui.kotlin_module\\E"
+    }, {
+      "pattern" : "\\Qthemes/tui-dark.css\\E"
+    }, {
+      "pattern" : "\\Qthemes/tui-light.css\\E"
+    }, {
+      "pattern" : "\\QMETA-INF/library.kotlin_module\\E"
+    }, {
+      "pattern" : "\\Qmodels.json\\E"
+    } ],
+    "excludes" : []
+  },
+  "bundles" : []
+}

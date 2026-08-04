@@ -1,4 +1,2 @@
 Manifest-Version: 1.0
-Main-Class: com.xr21.ai.agent.AgentApplication
-Multi-Release: true
 

@@ -155,6 +155,16 @@ tasks.register("generateInitAtRunTime") {
 
 // ==================== GraalVM Native Build Configuration ====================
 graalvmNative {
+    // 禁用 GraalVM reachability metadata repository（Windows 修复）：
+    // 插件 0.10.2 为其生成的 --exclude-config 参数使用 Pattern.quote() 产生
+    // 未转义的单反斜杠 Windows 路径（\QE:\...\xxx.jar\E）写入 .args 文件，
+    // native-image 解析 .args 时把 \ 当作转义序列，路径被破坏后作为正则编译触发
+    // PatternSyntaxException (Illegal/unsupported escape sequence) 导致构建失败。
+    // 禁用后依赖内嵌的 META-INF/native-image 配置由 native-image 自动发现加载。
+    metadataRepository {
+        enabled.set(false)
+    }
+
     binaries {
         named("main") {
             imageName.set("XAgent")
@@ -186,10 +196,12 @@ graalvmNative {
             println("Configuration file directory: ${project.projectDir}/src/jvmMain/resources/META-INF/native-image")
         }
     }
-    binaries.all {
-        resources.autodetect()
-    }
-    toolchainDetection.set(false)
+    // resources.autodetect() 已在 Windows 上禁用：
+    // 插件 0.10.2 生成的 --exclude-config 使用未转义的单反斜杠 Windows 路径写入 .args 文件，
+    // native-image 解析 .args 时将 \ 当作转义字符，导致路径损坏并触发
+    // PatternSyntaxException (Illegal/unsupported escape sequence) 构建失败。
+    // 资源包含规则已固化到 src/jvmMain/resources/META-INF/native-image/resource-config.json。
+    // binaries.all { resources.autodetect() }
 }
 
 // 在 nativeCompile 任务前确保 generateInitAtRunTime 已执行
