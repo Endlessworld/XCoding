@@ -1,0 +1,18 @@
+# 统一文本文件换行符为 LF（Git 存储与检出均使用 LF）
+# 从而避免 Windows/CI 之间的 CRLF 冲突，也无需手动 perl 二次转换
+
+# 文本文件：自动规范化，检出为 LF
+* text=auto eol=lf
+
+# Windows 批处理脚本必须保持 CRLF 才能正确运行
+*.bat text eol=crlf
+
+# 二进制文件：不做任何换行符处理
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary
