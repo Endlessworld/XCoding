@@ -47,15 +47,15 @@ jobs:
       run: ./gradlew test
       
     - name: Build fat JAR
-      run: ./gradlew :library:fatJar
+      run: ./gradlew :app:fatJar
       
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
         name: build-artifacts
         path: |
-          library/build/libs/*.jar
-          library/build/distributions/*
+          app/build/libs/*.jar
+          app/build/distributions/*
         retention-days: 30
 
   # Linux 原生编译
@@ -101,13 +101,13 @@ jobs:
         sudo apt-get install -y build-essential libssl-dev
         
     - name: Build native executable
-      run: ./gradlew :library:nativeCompile
+      run: ./gradlew :app:nativeCompile
       
     - name: Upload Linux native artifact
       uses: actions/upload-artifact@v4
       with:
         name: native-linux
-        path: library/build/native/nativeCompile/XAgent
+        path: app/build/native/nativeCompile/XAgent
         retention-days: 30
 
   # macOS 原生编译
@@ -148,13 +148,13 @@ jobs:
       run: chmod +x gradlew
       
     - name: Build native executable
-      run: ./gradlew :library:nativeCompile
+      run: ./gradlew :app:nativeCompile
       
     - name: Upload macOS native artifact
       uses: actions/upload-artifact@v4
       with:
         name: native-macos
-        path: library/build/native/nativeCompile/XAgent
+        path: app/build/native/nativeCompile/XAgent
         retention-days: 30
 
   # Windows 原生编译
@@ -192,13 +192,13 @@ jobs:
           ${{ runner.os }}-gradle-native-
           
     - name: Build native executable
-      run: ./gradlew.bat :library:nativeCompile
+      run: ./gradlew.bat :app:nativeCompile
       
     - name: Upload Windows native artifact
       uses: actions/upload-artifact@v4
       with:
         name: native-windows
-        path: library/build/native/nativeCompile/XAgent.exe
+        path: app/build/native/nativeCompile/XAgent.exe
         retention-days: 30
 
   # 发布构建

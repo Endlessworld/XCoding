@@ -67,19 +67,19 @@ jobs:
         sudo apt-get install -y build-essential libssl-dev
         
     - name: Build native executable
-      run: ./gradlew :library:nativeCompile -x test
+      run: ./gradlew :app:nativeCompile -x test
       timeout-minutes: 60
       
     - name: Verify native executable (Linux)
       run: |
-        ls -la library/build/native/nativeCompile/
-        file library/build/native/nativeCompile/XAgent*
+        ls -la app/build/native/nativeCompile/
+        file app/build/native/nativeCompile/XAgent*
         
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: native-linux
-        path: library/build/native/nativeCompile/XAgent*
+        path: app/build/native/nativeCompile/XAgent*
         if-no-files-found: error
 
   native-macos:
@@ -119,19 +119,19 @@ jobs:
       run: chmod +x gradlew
       
     - name: Build native executable
-      run: ./gradlew :library:nativeCompile -x test
+      run: ./gradlew :app:nativeCompile -x test
       timeout-minutes: 60
       
     - name: Verify native executable (macOS)
       run: |
-        ls -la library/build/native/nativeCompile/
-        file library/build/native/nativeCompile/XAgent*
+        ls -la app/build/native/nativeCompile/
+        file app/build/native/nativeCompile/XAgent*
         
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: native-macos
-        path: library/build/native/nativeCompile/XAgent*
+        path: app/build/native/nativeCompile/XAgent*
         if-no-files-found: error
 
   native-windows:
@@ -171,16 +171,16 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
       
     - name: Build native executable
-      run: ./gradlew.bat :library:nativeCompile -x test
+      run: ./gradlew.bat :app:nativeCompile -x test
       timeout-minutes: 60
       
     - name: Verify native executable (Windows)
       run: |
-        dir library\build\native\nativeCompile\
+        dir app\build\native\nativeCompile\
         
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: native-windows
-        path: library/build/native/nativeCompile/XAgent*
+        path: app/build/native/nativeCompile/XAgent*
         if-no-files-found: error

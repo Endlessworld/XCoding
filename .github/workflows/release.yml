@@ -92,9 +92,9 @@ jobs:
       shell: bash
       run: |
         if [[ "$RUNNER_OS" == "Windows" ]]; then
-          ./gradlew.bat :library:nativeCompile --no-daemon
+          ./gradlew.bat :app:nativeCompile --no-daemon
         else
-          ./gradlew :library:nativeCompile --no-daemon
+          ./gradlew :app:nativeCompile --no-daemon
         fi
         
     - name: Upload native artifact
@@ -102,7 +102,7 @@ jobs:
       with:
         name: native-${{ matrix.os }}
         path: |
-          library/build/native/nativeCompile/XAgent*
+          app/build/native/nativeCompile/XAgent*
         retention-days: 1
 
   # 构建 JAR
@@ -128,13 +128,13 @@ jobs:
       run: chmod +x gradlew
       
     - name: Build fat JAR
-      run: ./gradlew :library:fatJar --no-daemon
+      run: ./gradlew :app:fatJar --no-daemon
       
     - name: Upload JAR artifact
       uses: actions/upload-artifact@v4
       with:
         name: jar-artifact
-        path: library/build/libs/*.jar
+        path: app/build/libs/*.jar
         retention-days: 1
 
   # 创建发布

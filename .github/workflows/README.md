@@ -127,4 +127,4 @@
 3. 设置平台特定的依赖和构建参数
 
 ### 修改构建参数
-在 `library/build.gradle.kts` 中的 `graalvmNative` 配置块修改构建参数。
+在 `app/build.gradle.kts` 中的 `graalvmNative` 配置块修改构建参数。

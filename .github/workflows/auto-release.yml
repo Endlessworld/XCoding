@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'library/build.gradle.kts'
+      - 'app/build.gradle.kts'
   workflow_dispatch:
 
 env:
@@ -28,15 +28,15 @@ jobs:
         id: detect
         run: |
           # 获取当前 commit 的 version
-          CURRENT_VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' library/build.gradle.kts)
+          CURRENT_VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' app/build.gradle.kts)
           echo "Current version: $CURRENT_VERSION"
 
           # 获取上一个 commit 的 version
-          git checkout HEAD~1 -- library/build.gradle.kts 2>/dev/null || true
-          PREV_VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' library/build.gradle.kts 2>/dev/null || echo "")
+          git checkout HEAD~1 -- app/build.gradle.kts 2>/dev/null || true
+          PREV_VERSION=$(grep -oP 'version\s*=\s*"\K[^"]+' app/build.gradle.kts 2>/dev/null || echo "")
 
           # 恢复当前版本文件
-          git checkout HEAD -- library/build.gradle.kts
+          git checkout HEAD -- app/build.gradle.kts
           echo "Previous version: $PREV_VERSION"
 
           if [ "$CURRENT_VERSION" != "$PREV_VERSION" ]; then
@@ -73,13 +73,13 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build fat JAR
-        run: ./gradlew :library:fatJar --no-daemon
+        run: ./gradlew :app:fatJar --no-daemon
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: jar-artifact
-          path: library/build/libs/*.jar
+          path: app/build/libs/*.jar
           retention-days: 7
 
   # 创建 GitHub Release
@@ -109,7 +109,7 @@ jobs:
           body: |
             ## XAgent v${{ needs.check-version.outputs.new_version }}
 
-            自动发布 - 检测到 `library/build.gradle.kts` 中版本号变更为 **${{ needs.check-version.outputs.new_version }}**。
+            自动发布 - 检测到 `app/build.gradle.kts` 中版本号变更为 **${{ needs.check-version.outputs.new_version }}**。
 
             ### 下载
 
