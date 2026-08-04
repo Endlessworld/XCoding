@@ -355,7 +355,7 @@ public class LocalAgent {
                 .build());
         hooks.add(SummarizationHook.builder()
                 .model(chatModel)
-                .maxTokensBeforeSummary(128 * 1024)
+                .maxTokensBeforeSummary(64 * 1024)
                 .messagesToKeep(10)
                 .keepFirstUserMessage(true)
                 .build());
