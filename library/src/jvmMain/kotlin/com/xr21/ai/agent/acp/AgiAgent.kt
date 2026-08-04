@@ -29,6 +29,7 @@ import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory.AgentMode
 import com.xr21.ai.agent.agent.LocalAgent
+import com.xr21.ai.agent.agent.LocalAgent.FILE_SYSTEM_SAVER_FOLDER
 import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.config.AiModels
 import com.xr21.ai.agent.entity.AgentOutput
@@ -50,11 +51,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.apache.commons.collections4.CollectionUtils
-import org.apache.commons.lang3.StringUtils
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
 import reactor.core.publisher.Flux
+import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -65,7 +66,6 @@ private val logger = KotlinLogging.logger {}
 
 /** Session-level MCP server cache */
 private val sessionMcpServers = ConcurrentHashMap<String, List<McpServer>>()
-private val sessionsRunnableConfig = ConcurrentHashMap<String, RunnableConfig>()
 private val activeRequests = ConcurrentHashMap<String, CancellableRequest>()
 
 /**
@@ -304,7 +304,6 @@ class AgiAgentSession(
     override suspend fun close(_meta: JsonElement?): CloseSessionResponse {
         logger.info { "Closing session: $sessionId" }
         cancel()
-        sessionsRunnableConfig.remove(sessionId.toString())
         sessionMcpServers.remove(sessionId.toString())
         return CloseSessionResponse()
     }
@@ -681,13 +680,23 @@ class AgiAgent : AgentSupport {
     override suspend fun listSessions(
         cwd: String?, additionalDirectories: List<String>?, _meta: JsonElement?
     ): Sequence<SessionInfo> {
-        return sessionsRunnableConfig.map { (key, config) ->
-            SessionInfo(
-                SessionId(key),
-                cwd = config.context().get("cwd") as? String ?: "",
-                title = StringUtils.abbreviate((config.context().get("input") as? String) ?: "", 25)
-            )
-        }.asSequence()
+        if (!Files.isDirectory(FILE_SYSTEM_SAVER_FOLDER)) return emptySequence()
+        val stream = Files.list(FILE_SYSTEM_SAVER_FOLDER)
+        try {
+            return stream.map { it.fileName.toString() }
+                .filter { it.startsWith("thread-") && it.endsWith(".saver") }
+                .map { it.removePrefix("thread-").removeSuffix(".saver") }
+                .map { sessionIdStr ->
+                    SessionInfo(
+                        SessionId(sessionIdStr),
+                        cwd = cwd ?: ""
+                    )
+                }
+                .toList()
+                .asSequence()
+        } finally {
+            stream.close()
+        }
     }
 
     override suspend fun createSession(sessionParameters: SessionCreationParameters): AgentSession {
@@ -698,7 +707,6 @@ class AgiAgent : AgentSupport {
         val mcpServers = sessionParameters.mcpServers
         val runnableConfig =
             RunnableConfig.builder().threadId(sessionIdStr).addStateUpdate(emptyMap<String, Any>()).build()
-        sessionsRunnableConfig[sessionIdStr] = runnableConfig
         if (CollectionUtils.isNotEmpty(mcpServers)) {
             sessionMcpServers[sessionIdStr] = mcpServers
             logger.info { "Received ${mcpServers.size} MCP server(s) for session $sessionIdStr" }
@@ -718,12 +726,10 @@ class AgiAgent : AgentSupport {
             logger.info { "Loaded existing session: $sessionId" }
             return existing
         }
-
         val cwd = sessionParameters.cwd
-        val sessionIdStr = sessionId.toString()
-        val runnableConfig = sessionsRunnableConfig[sessionIdStr] ?: RunnableConfig.builder().threadId(sessionIdStr)
+        val sessionIdStr = sessionId.value
+        val runnableConfig = RunnableConfig.builder().threadId(sessionIdStr)
             .addStateUpdate(emptyMap<String, Any>()).build()
-
         val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session
         return session
@@ -770,7 +776,6 @@ class AgiAgent : AgentSupport {
         val newSessionId = SessionId(sessionIdStr)
         val runnableConfig =
             RunnableConfig.builder().threadId(sessionIdStr).addStateUpdate(emptyMap<String, Any>()).build()
-        sessionsRunnableConfig[sessionIdStr] = runnableConfig
         val session = AgiAgentSession(newSessionId, cwd, sessionParameters.mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session
         return session
@@ -787,7 +792,7 @@ class AgiAgent : AgentSupport {
         }
         val cwd = sessionParameters.cwd ?: System.getProperty("user.dir")
         val sessionIdStr = sessionId.toString()
-        val runnableConfig = sessionsRunnableConfig[sessionIdStr] ?: RunnableConfig.builder().threadId(sessionIdStr)
+        val runnableConfig = RunnableConfig.builder().threadId(sessionIdStr)
             .addStateUpdate(emptyMap<String, Any>()).build()
         val session = AgiAgentSession(sessionId, cwd, sessionParameters.mcpServers, runnableConfig, lastClientInfo)
         sessions[sessionIdStr] = session

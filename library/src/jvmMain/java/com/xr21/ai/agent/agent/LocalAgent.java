@@ -91,7 +91,7 @@ public class LocalAgent {
     /**
      * 文件系统保存器的存储目录路径
      */
-    private static final Path FILE_SYSTEM_SAVER_FOLDER = Path.of(System.getProperty("user.home"), ".agi_working", "SystemSaver");
+    public static final Path FILE_SYSTEM_SAVER_FOLDER = Path.of(System.getProperty("user.home"), ".agi_working", "SystemSaver");
     /**
      * 文件系统保存器实例，用于持久化智能体状态
      */
