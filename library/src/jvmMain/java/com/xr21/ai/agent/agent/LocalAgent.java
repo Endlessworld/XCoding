@@ -18,7 +18,6 @@ package com.xr21.ai.agent.agent;
 import com.agentclientprotocol.model.McpServer;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
-import com.alibaba.cloud.ai.graph.agent.Agent;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.file.LocalFilesystemBackend;
 import com.alibaba.cloud.ai.graph.agent.extension.interceptor.LargeResultEvictionInterceptor;
@@ -26,9 +25,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.HumanInTheLoopHook;
 import com.alibaba.cloud.ai.graph.agent.hook.hip.ToolConfig;
 import com.alibaba.cloud.ai.graph.agent.hook.skills.SkillsAgentHook;
-import com.xr21.ai.agent.interceptors.SummarizationHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
-import com.alibaba.cloud.ai.graph.agent.interceptor.modelretry.ModelRetryInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
@@ -36,10 +33,7 @@ import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonS
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory;
 import com.xr21.ai.agent.config.AiModels;
-import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
-import com.xr21.ai.agent.interceptors.ContextEditingInterceptor;
-import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
-import com.xr21.ai.agent.interceptors.WorkerInterceptor;
+import com.xr21.ai.agent.interceptors.*;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.SleepTool;
 import com.xr21.ai.agent.tools.WebTool;
@@ -57,8 +51,12 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.lang.NonNull;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.io.File;
+import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -236,11 +234,23 @@ public class LocalAgent {
                 .includeGeneralPurpose(true)  // 同时包含通用Worker
                 .build();
         ModelRetryInterceptor retryInterceptor = ModelRetryInterceptor.builder()
-                .maxAttempts(3)
-                .initialDelay(1000)
-                .maxDelay(10000)
-                .retryableExceptionPredicate((e) -> true)
-                .backoffMultiplier(2.0)
+                .maxAttempts(3)              // 总尝试次数 3（即最多重试 2 次）
+                .initialDelay(200)           // 首次重试延迟 200ms
+                .maxDelay(4000)              // 最大延迟 4s
+                .retryableExceptionPredicate((e) -> {
+                    // 5xx + 网络/连接异常 + 限流（429）才值得重试
+                    if (e instanceof RestClientResponseException restClientException) {
+                        var status = restClientException.getStatusCode();
+                        return status.is5xxServerError() || status.value() == 429;
+                    }
+                    if (e instanceof WebClientResponseException webClientException) {
+                        var status = webClientException.getStatusCode();
+                        return status.is5xxServerError() || status.value() == 429;
+                    }
+                    // 连接超时、IO 异常等暂时性网络错误也应重试
+                    return e instanceof IOException;
+                })
+                .backoffMultiplier(2.0)      // 指数退避倍数
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
 //        interceptors.add(contextEditingInterceptor);
@@ -248,7 +258,7 @@ public class LocalAgent {
         interceptors.add(toolRetryInterceptor);
         interceptors.add(filesystemInterceptor);
         interceptors.add(workerInterceptor);
-//        interceptors.add(retryInterceptor);
+        interceptors.add(retryInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
         log.info("Agent mode: {}, filesystem readOnly: {}", currentMode, readOnly);
