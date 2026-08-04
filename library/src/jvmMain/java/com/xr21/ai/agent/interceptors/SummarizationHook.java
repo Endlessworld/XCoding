@@ -66,6 +66,9 @@ public class SummarizationHook extends MessagesModelHook {
             使其仅凭这份摘要就能准确知道:用户最初要做什么、当前进展如何、
             还剩什么未完成、下一步应该从哪里继续。
             </primary_objective>
+            <input>
+            需要被摘要的完整对话历史(即上方各条 user / assistant / tool,不包括system消息)
+            </input>
             <instructions>
             请按以下结构组织输出:
             1. 【用户原始目标】一句话概括用户最初提出的核心需求与期望结果。
@@ -96,11 +99,7 @@ public class SummarizationHook extends MessagesModelHook {
             - 对 Tool 调用输入输出中的关键数据要保留摘要(不要保留完整堆栈/日志)。
             - 删除寒暄、重复内容、失败尝试、错误堆栈等无助于推进任务的噪音。
             - 使用结构化、简洁的中文,仅输出交接文档本体,不要附加"以下是摘要"等额外说明。
-            </instructions>
-            <messages>
-            待交接的对话历史:
-            {messages}
-            </messages>""";
+            </instructions>""";
 
     private static final String SUMMARY_PREFIX = "## Previous conversation summary:";
     private static final int DEFAULT_MESSAGES_TO_KEEP = 20;
@@ -160,28 +159,39 @@ public class SummarizationHook extends MessagesModelHook {
             }
         }
 
+        // 定位系统提示词：它将在压缩后保持队首且内容不变，构成最稳定的缓存前缀。
+        Optional<Message> firstSystemMessage = previousMessages.stream()
+                .filter(message -> message instanceof SystemMessage)
+                .findFirst();
+
         List<Message> toSummarize = new ArrayList<>();
         for (int i = 0; i < cutoffIndex; i++) {
             Message msg = previousMessages.get(i);
-            if (msg != firstUserMessage) {
+            // 系统提示词与首个用户消息无需摘要，直接保留。
+            if (msg != firstUserMessage && msg != firstSystemMessage.orElse(null)) {
                 toSummarize.add(msg);
             }
         }
 
-        String summary = createSummary(toSummarize);
+        // 摘要生成直接复用原始 previousMessages 作为消息前缀（缓存友好），详见 createSummary。
+        String summary = createSummary(previousMessages);
         List<Message> recentMessages = new ArrayList<>();
         for (int i = cutoffIndex; i < previousMessages.size(); i++) {
             recentMessages.add(previousMessages.get(i));
         }
-        List<Message> newMessages = new ArrayList<>();
 
-        Optional<Message> firstSystemMessage = previousMessages.stream().filter(message -> message instanceof SystemMessage).findFirst();
-        String systemText = firstSystemMessage.map(Message::getText).orElse("");
-        SystemMessage summaryMessage = new SystemMessage(
-                systemText + (systemText.isEmpty() || systemText.endsWith("\n") ? "" : "\n") + summaryPrefix + "\n" + summary);
+        // 缓存前缀稳定性优化：DeepSeek 等提供商按“从消息开头开始的最长公共前缀”命中缓存，
+        // 一旦开头的内容或结构变化，整段输入都会退化为缓存未命中，导致成本飙升。
+        // 压缩后固定为 [系统提示词, 首个用户消息, 摘要, 最近消息]，
+        // 使系统提示词始终位于队首且内容与压缩前完全一致，压缩边界处仍能命中
+        // “系统提示词 + 首个用户消息”这段最昂贵、最稳定的前缀缓存。
+        List<Message> newMessages = new ArrayList<>();
+        firstSystemMessage.ifPresent(newMessages::add);
         if (firstUserMessage != null) {
             newMessages.add(firstUserMessage);
         }
+        // 摘要单独成条，不再并入系统提示词，避免每次压缩改写系统提示词从而击穿缓存前缀。
+        SystemMessage summaryMessage = new SystemMessage(summaryPrefix + "\n" + summary);
         newMessages.add(summaryMessage);
         newMessages.addAll(recentMessages);
 
@@ -274,29 +284,17 @@ public class SummarizationHook extends MessagesModelHook {
         if (messages.isEmpty()) {
             return "No previous conversation.";
         }
-        StringBuilder messageText = new StringBuilder();
-        for (Message msg : messages) {
-            String role = getRoleName(msg);
-            messageText.append("\n-----------\n").append(role).append(": ").append(msg.getText()).append("\n");
-            if (msg instanceof ToolResponseMessage tool) {
-                for (ToolResponseMessage.ToolResponse response : tool.getResponses()) {
-                    messageText.append("tool_call: ").append("\n id: ").append(response.id()).append("\n").append(response.name())
-                            .append("responseData :").append(response.responseData()).append("\n");
-                }
-            }
-        }
         try {
-            // The template already carries the full instruction set (role/instructions), so it is
-            // used as the entire user prompt — no duplicate system prompt is needed. The
-            // {messages} placeholder is replaced directly to avoid String.format pitfalls
-            // (literal '%' in content) and to stop the previous brace-stripping that corrupted
-            // JSON/code fragments inside tool responses.
-            String history = messageText.toString();
-            String prompt = summaryPrompt.contains("{messages}")
-                    ? summaryPrompt.replace("{messages}", history)
-                    : summaryPrompt + "\n\n" + history;
-            log.debug("create summary prompt: {}", prompt);
-            var response = ChatClient.builder(model).build().prompt().user(prompt).call().content();
+            // 缓存友好摘要生成：直接把原始 previousMessages 原样作为消息前缀发送（与主对话
+            // 最后一次请求逐字节一致 → 从开头到摘要处几乎整体命中缓存），再追加一条固定的
+            // 摘要指令 user 消息。只有追加的指令属于缓存未命中，从根本上避免“把历史要摘要
+            // 的消息与摘要提示词拼成一条新消息”导致前缀全失配、摘要调用价格飙升的问题。
+            var spec = ChatClient.builder(model).build().prompt();
+            spec.messages(messages);
+            // 历史已作为消息列表处于上下文中，指令仅作为追加的 user 消息发送。
+            spec.user(summaryPrompt);
+            log.debug("create summary instruction: {}", summaryPrompt);
+            var response = spec.call().content();
             log.debug("Summary generation success: {}", response);
             return response;
         } catch (Exception e) {
@@ -305,19 +303,6 @@ public class SummarizationHook extends MessagesModelHook {
         }
     }
 
-    private String getRoleName(Message message) {
-        if (message instanceof UserMessage) {
-            return "Human";
-        } else if (message instanceof AssistantMessage) {
-            return "Assistant";
-        } else if (message instanceof SystemMessage) {
-            return "System";
-        } else if (message instanceof ToolResponseMessage) {
-            return "Tool";
-        } else {
-            return "Unknown";
-        }
-    }
 
     @Override
     public String getName() {
