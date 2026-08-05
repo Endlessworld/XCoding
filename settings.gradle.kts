@@ -6,6 +6,9 @@ pluginManagement {
         gradlePluginPortal()
         maven("https://packages.jetbrains.team/maven/p/ki/simple/maven")
     }
+    plugins {
+        kotlin("plugin.lombok") version "2.2.20"
+    }
 }
 
 dependencyResolutionManagement {

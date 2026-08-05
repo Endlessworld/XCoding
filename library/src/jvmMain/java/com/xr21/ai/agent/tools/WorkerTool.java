@@ -25,9 +25,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.AgentOutput;
+import com.xr21.ai.agent.utils.AcpProgressUtil;
 import com.xr21.ai.agent.utils.SinksUtil;
 import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
@@ -76,31 +78,33 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
         ReactAgent worker = workers.get(request.workerType);
         // Invoke the worker with the task description
         log.info("Workers task" + request.description);
+        // 每次 worker 调用前清理上次的 msg 回传结果，避免跨调用串扰；
+        // 将主智能体下达的可选参数（成果物文件名、返回格式）作为上下文并入任务描述，
+        // 由 worker 自行决定如何输出、采用何种格式以及是否写入文件
+        String taskPrompt = buildWorkerContext(request);
         try {
-            // Return the worker's response
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
                 if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
                     SuspendKt.runSuspend((completion) -> {
                         StringBuilder builder = new StringBuilder();
                         Flux<AgentOutput<Object>> flux = null;
                         try {
-                            flux = worker.stream(request.description).map(SinksUtil.INSTANCE::buildContent);
+                            flux = worker.stream(taskPrompt).map(SinksUtil.INSTANCE::buildContent);
                         } catch (GraphRunnerException e) {
                             return "Error executing worker task: " + e.getMessage();
                         }
                         flux.doOnNext(output -> {
                             if (StringUtils.hasText(output.getChunk())) {
                                 builder.append(output.getChunk());
-                                SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(output.getChunk(), null, null));
-                                clientSessionOperations.notify(notification, null, completion);
+                                AcpProgressUtil.sendProgress(context, request.taskId, builder.toString());
                             }
                             if (StringUtils.hasText(output.getThink())) {
-                                SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(output.getThink(), null, null));
-                                clientSessionOperations.notify(notification, null, completion);
+                                builder.append(output.getThink());
+                                AcpProgressUtil.sendProgress(context, request.taskId, builder.toString());
                             }
                         }).doOnComplete(() -> {
                             log.info("Workers task complete");
-                            SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text("\n[Worker completed]", null, null));
+                            SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text("\n[Worker completed : " + request.title + "]", null, null));
                             clientSessionOperations.notify(notification, null, completion);
                         }).doOnError(e -> {
                             log.error("Workers task failed", e);
@@ -109,7 +113,10 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
                     });
                 }
             }
-            return worker.call(request.description).getText();
+            AssistantMessage workerOutput = worker.call(taskPrompt);
+            // 若 worker 通过 msg 工具显式回传了结果，则优先返回该结构化结果，
+            // 使主智能体可在 run_groovy_script 中解析结果并进行并行/分支编排
+            return workerOutput.getText();
         } catch (Exception e) {
             return "Error executing worker task: " + e.getMessage();
         }
@@ -117,9 +124,44 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
     }
 
     /**
+     * 将主智能体下达的可选参数（成果物文件名、返回格式）与任务描述合并为 worker 的上下文，
+     * 由 worker 智能体结合任务实际自行决定输出方式。fileName/resultType 仅作为期望提示，
+     * 不强制 worker 遵守。
+     */
+    private static String buildWorkerContext(WorkerRequest request) {
+        StringBuilder sb = new StringBuilder(request.description == null ? "" : request.description);
+        boolean hasFileName = StringUtils.hasText(request.fileName);
+        boolean hasResultType = StringUtils.hasText(request.resultType);
+        boolean taskId = StringUtils.hasText(request.taskId);
+        if (hasFileName || hasResultType) {
+            sb.append("\n\n## 任务上下文（主智能体期望，仅作参考，由你根据任务实际决定如何回传）");
+            if (hasFileName) {
+                sb.append("\n- 期望成果物文件路径: ").append(request.fileName);
+            }
+            if (hasFileName) {
+                sb.append("\n- 期望成果物文件路径: ").append(request.fileName);
+            }
+            if (hasResultType) {
+                sb.append("\n- 当前任务id: ").append(request.resultType);
+                sb.append("\n- 调用msg工具时透传该任务id: 以将结果返回给调用方");
+            }
+            sb.append("\n请结合任务实际自行决定：回传格式（text/boolean/json/file）、是否写入文件")
+                    .append("（如需写入，请在 msg 工具中指定 file_name 或 result_type=file）以及最终回传内容。");
+        }
+        return sb.toString();
+    }
+
+    /**
      * Request structure for the worker tool.
      */
     public static class WorkerRequest {
+
+        @JsonProperty(required = true, value = "task_id")
+        @JsonPropertyDescription("""
+                此工作程序调用的唯一任务ID，示例：task-001
+                用于在多个工作程序并发运行时，将此工作程序的实时进度路由到其自己的ACP SessionUpdate
+                """)
+        public String taskId;
 
         @JsonProperty(required = true)
         @JsonPropertyDescription("Detailed description of the task to be performed by the worker")
@@ -129,9 +171,17 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
         @JsonPropertyDescription("The type of worker to use for this task")
         public String workerType;
 
-        @JsonProperty(value = "title")
+        @JsonProperty(required = true, value = "title")
         @JsonPropertyDescription("concise description of what this command does in 5-10 words, in active voice")
         String title;
+
+        @JsonProperty(value = "file_name")
+        @JsonPropertyDescription("(可选) 期望 worker 写入成果物的目标文件路径。作为上下文提示下发给 worker，由 worker 自行决定是否写文件及写入位置")
+        String fileName;
+
+        @JsonProperty(required = true, value = "result_type")
+        @JsonPropertyDescription("(可选) 期望 worker 返回的结果格式：text(默认)/boolean/json/file。仅作为上下文提示下发给 worker，由 worker 自行决定实际回传格式")
+        String resultType;
 
         public WorkerRequest() {
         }

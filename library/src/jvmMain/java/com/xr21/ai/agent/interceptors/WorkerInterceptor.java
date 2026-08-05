@@ -18,8 +18,10 @@ package com.xr21.ai.agent.interceptors;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.agent.extension.interceptor.SubAgentSpec;
 import com.alibaba.cloud.ai.graph.agent.hook.Hook;
+import com.alibaba.cloud.ai.graph.agent.hook.returndirect.ReturnDirectModelHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.*;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
+import com.xr21.ai.agent.tools.MsgTool;
 import com.xr21.ai.agent.tools.WorkerTool;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -108,7 +110,11 @@ public class WorkerInterceptor extends ModelInterceptor {
             5. Clearly tell the worker whether you expect it to create content, perform analysis, or just do research
             6. If the worker description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
             7. When only the general-purpose worker is provided, you should use it for all tasks. It is great for isolating context and token usage, and completing specific, complex tasks, as it has all the same capabilities as the main agent.
-            
+            8. Optional params when dispatching a task (作为上下文提示下发给 worker，最终由 worker 自行决定如何输出、是否写文件)：
+               - file_name: 期望 worker 将执行成果写入的目标文件路径（可选）。仅作为上下文提示下发给 worker，由 worker 自行判断是否写文件；worker 若决定写文件，会在 msg 工具中指定 file_name 或 result_type=file。
+               - result_type: 期望 worker 返回的格式，可选 text(默认)/boolean/json/file（可选）。仅作为上下文提示下发给 worker，由 worker 自行决定实际回传格式。
+               - 每个 worker 完成后都会通过 msg 工具回传 JSON：{success, file_name,worker_type, result_type, content 或 filePath}，可在 run_groovy_script 中解析以进行并行/分支编排。
+               - 回传 JSON字段说明 success : worker执行是否完成期望目标,content : worker 执行成果内容，需要回传给主智能体的结果,
             ### Example usage of the general-purpose worker:
             
             <example_worker_descriptions>
@@ -195,13 +201,7 @@ public class WorkerInterceptor extends ModelInterceptor {
             assistant: Uses the Worker tool to launch with the research-analyst worker, providing detailed instructions about what research to conduct and what format the report should take
             </example>
             
-            <example>
-            user: "Hello"
-            <commentary>
-            Since the user is greeting, use the greeting-responder worker to respond with a friendly joke
-            </commentary>
-            assistant: "I'm going to use the Worker tool to launch with the greeting-responder worker"
-            </example>
+             
             """;
 
     private final List<ToolCallback> tools;
@@ -213,16 +213,6 @@ public class WorkerInterceptor extends ModelInterceptor {
         this.systemPrompt = builder.systemPrompt != null ? builder.systemPrompt : DEFAULT_SYSTEM_PROMPT;
         this.workers = new HashMap<>(builder.workers);
         this.includeGeneralPurpose = builder.includeGeneralPurpose;
-
-        // Add general-purpose worker if enabled
-        if (includeGeneralPurpose && builder.defaultModel != null) {
-            ReactAgent generalPurposeWorker = createGeneralPurposeWorker(
-                    builder.defaultModel,
-                    builder.defaultTools,
-                    builder.defaultInterceptors
-            );
-            this.workers.put("general-purpose", generalPurposeWorker);
-        }
 
         // Create worker tool using the factory method
         ToolCallback workerTool = WorkerTool.createWorkerToolCallback(
@@ -237,26 +227,16 @@ public class WorkerInterceptor extends ModelInterceptor {
         return new Builder();
     }
 
-    private ReactAgent createGeneralPurposeWorker(
-            ChatModel model,
-            List<ToolCallback> tools,
-            List<? extends Interceptor> interceptors) {
-
-        com.alibaba.cloud.ai.graph.agent.Builder builder = ReactAgent.builder()
-                .name("general-purpose")
-                .model(model)
-                .systemPrompt(DEFAULT_WORKER_PROMPT)
-                .saver(new MemorySaver());
-
-        if (tools != null && !tools.isEmpty()) {
-            builder.tools(tools);
+    /**
+     * 在 worker 工具列表基础上追加 msg 回传工具。
+     */
+    private static List<ToolCallback> withMsgTool(List<ToolCallback> tools) {
+        List<ToolCallback> allTools = new ArrayList<>();
+        if (tools != null) {
+            allTools.addAll(tools);
         }
-
-        if (interceptors != null && !interceptors.isEmpty()) {
-            builder.interceptors(interceptors);
-        }
-
-        return builder.build();
+        allTools.add(MsgTool.createMsgToolCallback());
+        return allTools;
     }
 
     private String buildWorkerToolDescription() {
@@ -397,9 +377,8 @@ public class WorkerInterceptor extends ModelInterceptor {
             }
 
             List<ToolCallback> tools = spec.getTools() != null ? spec.getTools() : defaultTools;
-            if (tools != null && !tools.isEmpty()) {
-                builder.tools(tools);
-            }
+            // 为 worker 注入专有的 msg 回传工具，使 worker 可将执行成果回传给主智能体
+            builder.tools(withMsgTool(tools));
 
             // Apply default interceptors first, then custom ones
             List<Interceptor> allInterceptors = new ArrayList<>();
@@ -417,13 +396,25 @@ public class WorkerInterceptor extends ModelInterceptor {
             if (defaultHooks != null) {
                 builder.hooks(defaultHooks);
             }
-
+            builder.hooks(new ReturnDirectModelHook());
             builder.enableLogging(spec.isEnableLoopingLog());
 
             return builder.build();
         }
 
         public WorkerInterceptor build() {
+            // Add the default general-purpose worker reusing the same creation path as custom
+            // workers, so it also receives ReturnDirectModelHook and default hooks/interceptors.
+            if (includeGeneralPurpose && defaultModel != null) {
+                SubAgentSpec generalPurposeSpec = SubAgentSpec.builder()
+                        .name("general-purpose")
+                        .description(DEFAULT_GENERAL_PURPOSE_DESCRIPTION)
+                        .systemPrompt(DEFAULT_WORKER_PROMPT)
+                        .model(defaultModel)
+                        .tools(defaultTools)
+                        .build();
+                this.workers.put("general-purpose", createWorkerFromSpec(generalPurposeSpec));
+            }
             return new WorkerInterceptor(this);
         }
     }

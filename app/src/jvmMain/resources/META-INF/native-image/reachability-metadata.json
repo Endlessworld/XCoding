@@ -1495,6 +1495,33 @@
       "allPublicFields": true
     },
     {
+      "type": "com.xr21.ai.agent.tools.MsgTool",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.xr21.ai.agent.tools.MsgTool$MsgRequest",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
+      "type": "com.xr21.ai.agent.tools.MsgTool$ResultType",
+      "allDeclaredConstructors": true,
+      "allPublicConstructors": true,
+      "allDeclaredMethods": true,
+      "allPublicMethods": true,
+      "allDeclaredFields": true,
+      "allPublicFields": true
+    },
+    {
       "type": "com.xr21.ai.agent.tools.WorkerTool$WorkerRequest",
       "allDeclaredConstructors": true,
       "allPublicConstructors": true,

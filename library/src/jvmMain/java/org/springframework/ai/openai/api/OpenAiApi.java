@@ -185,7 +185,6 @@ public class OpenAiApi {
             return chatCompletionEntity(chatRequest, new LinkedMultiValueMap<>());
         } catch (Throwable e) {
             log.error("chatCompletionEntity ", chatRequest);
-            log.error("chatRequest>>> ", Json.toJson(chatRequest));
             log.error("chatCompletionEntity failed",e);
             throw new RuntimeException(e);
         }
@@ -206,8 +205,7 @@ public class OpenAiApi {
         Assert.isTrue(!chatRequest.stream(), STREAM_FALSE_MESSAGE);
         Assert.notNull(additionalHttpHeader, ADDITIONAL_HEADERS_NULL_MESSAGE);
         try {
-            log.error("chatRequest>>> ", chatRequest);
-            log.error("chatRequest>>> ", Json.toJson(chatRequest));
+            log.info("chatRequest>>> {}", Json.toJson(chatRequest));
             // @formatter:off
             return this.restClient.post()
                     .uri(this.completionsPath)
@@ -220,7 +218,6 @@ public class OpenAiApi {
                     .toEntity(ChatCompletion.class);
             // @formatter:on
         } catch (Throwable e) {
-            log.error("chatRequest>>> ", Json.toJson(chatRequest));
             log.error("chatCompletionEntity failed", e);
             throw new RuntimeException(e);
         }

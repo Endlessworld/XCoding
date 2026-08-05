@@ -109,9 +109,10 @@ public class LocalAgent {
             请使用当前系统语言:{language}回复用户
             - 使用批量编辑 一次修改多处进行高效修改
             - 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+            - 灵活利用run_groovy_script工具进行并发工具调用/多步骤工具编排/worker编排/执行现有工具无法实现的操作
             <编码指南>
             ## 1.写代码前先思考
-                **别假设。不要掩饰困惑。表面权衡。** 
+                **别假设。不要掩饰困惑。表面权衡。**
                 在实施之前：
                 - 明确陈述你的假设。如果不确定，可以问。
                 - 如果存在多种解读，就提出来——不要默默选择。
@@ -187,7 +188,7 @@ public class LocalAgent {
         }
     }
 
-    private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers) {
+    private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers, List<ToolCallback> interceptorTools) {
         var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new SleepTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         log.debug("Loaded {} base tools", tools.size());
@@ -196,6 +197,11 @@ public class LocalAgent {
             List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
             tools.addAll(mcpTools);
             log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
+        }
+        // 将拦截器提供的文件系统工具（ls/read_file/write_file 等）与 write_todos 工具一并暴露给 Groovy 脚本绑定
+        if (interceptorTools != null && !interceptorTools.isEmpty()) {
+            tools.addAll(interceptorTools);
+            log.info("Added {} interceptor tools to Groovy script bindings", interceptorTools.size());
         }
         // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
         GroovyScriptTool groovyScriptTool = new GroovyScriptTool(tools);
@@ -226,16 +232,6 @@ public class LocalAgent {
         boolean readOnly = "plan".equalsIgnoreCase(currentMode);
         var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(readOnly).withDefaultSecurity().build();
         WorkerInterceptor workerInterceptor = WorkerInterceptor.builder().defaultModel(chatModel).defaultTools(filesystemInterceptor.getTools())
-//                .addWorker(WorkerSpec.builder()
-//                        .name("research-analyst")
-//                        .description("用于对复杂主题进行深入研究")
-//                        .systemPrompt("你是一名研究分析师，擅长收集、分析和综合信息...")
-//                        .build())
-//                .addWorker(WorkerSpec.builder()
-//                        .name("content-reviewer")
-//                        .description("用于审查创建的内容或文档")
-//                        .systemPrompt("你是一名内容审查员，检查代码和文档的质量...")
-//                        .build())
                 .includeGeneralPurpose(true)  // 同时包含通用Worker
                 .build();
         ModelRetryInterceptor retryInterceptor = ModelRetryInterceptor.builder()
@@ -292,6 +288,17 @@ public class LocalAgent {
 
         ChatModel chatModel = getChatModel(runnableConfig);
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
+        // 收集拦截器提供的文件系统工具与 write_todos 工具，供 Groovy 脚本绑定调用
+        List<ToolCallback> interceptorTools = new ArrayList<>();
+        for (Interceptor interceptor : interceptors) {
+            if (interceptor instanceof FilesystemInterceptor fs) {
+                interceptorTools.addAll(fs.getTools());
+            } else if (interceptor instanceof AcpTodoListInterceptor todo) {
+                interceptorTools.addAll(todo.getTools());
+            } else if (interceptor instanceof WorkerInterceptor worker) {
+                interceptorTools.addAll(worker.getTools());
+            }
+        }
         List<Hook> hooks = getHooks(runnableConfig, chatModel);
         // 使用 PromptTemplate 渲染指令
         var instruction = getInstruction(WORKSPACE_ROOT);
@@ -307,7 +314,7 @@ public class LocalAgent {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "enabled")));
             chatOptions.reasoningEffort(thoughtLevel);
         }
-        var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers);
+        var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers, interceptorTools);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
         var agent = ReactAgent.builder().name("agent")
                 .tools(tools)
@@ -360,8 +367,8 @@ public class LocalAgent {
                 .build());
         hooks.add(SummarizationHook.builder()
                 .model(chatModel)
-                .maxTokensBeforeSummary(64 * 1024)
-                .messagesToKeep(10)
+                .maxTokensBeforeSummary(128 * 1024)
+                .messagesToKeep(3)
                 .build());
 
         return hooks;

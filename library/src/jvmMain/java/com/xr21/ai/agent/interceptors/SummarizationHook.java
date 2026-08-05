@@ -174,7 +174,7 @@ public class SummarizationHook extends MessagesModelHook {
         String summary = summaryInput.isEmpty()
                 ? "No new conversation."
                 : createSummary(summaryInput);
-
+        AcpProgressUtil.sendProgress(config, summary);
         // 缓存前缀稳定性优化：DeepSeek 等提供商按“从消息开头开始的最长公共前缀”命中缓存。
         // 固定前缀从队首一直延伸到最后一个 System（含旧摘要），内容逐字节不变，
         // 每轮压缩后，队首到摘要边界这段最昂贵、最稳定的前缀仍能命中缓存。

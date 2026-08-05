@@ -567,7 +567,7 @@ class AgiAgentSession(
 
         // Tool execution results (ToolResponseMessage)
         if (output.message is ToolResponseMessage) {
-            val message = output.message as ToolResponseMessage
+            val message = output.message
             if (CollectionUtils.isNotEmpty(message.responses)) {
                 message.responses.forEach { response ->
                     val resultData = ToolsUtil.parseToolResult(response.responseData())
@@ -609,27 +609,32 @@ class AgiAgentSession(
     }
 
     private fun getTitle(toolCall: AssistantMessage.ToolCall): String {
-        val argsJson = runCatching {
+        val args = runCatching {
             kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
-        }.getOrNull()
-        val title = if (argsJson is JsonObject) {
-            val titleElem = argsJson["title"]
-            if (titleElem is JsonPrimitive && titleElem.content.isNotBlank()) titleElem.content
-            else toolCall.name()
-        } else toolCall.name()
-        val commandElem = (argsJson as? JsonObject)?.get("command")
-        val command = if (commandElem is JsonPrimitive && commandElem.isString && commandElem.content.isNotBlank()) {
-            commandElem.content
-        } else ""
-        if(title !=null && command.isNotBlank()){
-            return "$title $command"
-        }
-        val inputElem = (argsJson as? JsonObject)?.get("input")
-        val input = if (inputElem is JsonPrimitive && inputElem.isString && inputElem.content.isNotBlank()) {
-            inputElem.content
-        } else ""
-        return input
+        }.getOrNull() as? JsonObject
+
+        // 无法解析为 JSON 时，直接返回原始 arguments
+        if (args == null) return toolCall.arguments()
+
+        val title = args.string("title").ifBlank { toolCall.name() }
+        val command = args.string("command")
+        val script = args.string("script")
+        val input = args.string("input")
+
+        val suffix = listOf(command, script).filter { it.isNotBlank() }.joinToString(" ")
+
+        // arguments 中不包含任何特定字段时，返回 arguments 本身
+        if (suffix.isBlank() && input.isBlank()) return toolCall.arguments()
+
+        return if (suffix.isNotBlank()) "$title $suffix" else input
     }
+
+    private fun JsonObject.string(key: String): String =
+        (this[key] as? JsonPrimitive)
+            ?.takeIf { it.isString }
+            ?.content
+            ?.takeIf { it.isNotBlank() }
+            .orEmpty()
 
 
 }

@@ -43,6 +43,8 @@ public class ToolKindFind {
         NAME_TO_KIND.put("web_search", ToolKind.SEARCH);
         NAME_TO_KIND.put("web_fetch", ToolKind.FETCH);
         // EXECUTE tools
+        NAME_TO_KIND.put("run_groovy_script", ToolKind.EXECUTE);
+        NAME_TO_KIND.put("worker", ToolKind.EXECUTE);
         NAME_TO_KIND.put("Bash", ToolKind.EXECUTE);
         NAME_TO_KIND.put("BashOutput", ToolKind.EXECUTE);
         NAME_TO_KIND.put("KillShell", ToolKind.EXECUTE);

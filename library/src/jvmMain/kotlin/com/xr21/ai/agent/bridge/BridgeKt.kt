@@ -19,9 +19,9 @@ import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.model.*
 import com.agentclientprotocol.model.SessionUpdate.ToolCallUpdate
 import com.fasterxml.jackson.core.type.TypeReference
-import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.model.ChatMessage
 import com.xr21.ai.agent.model.MessageRole
+import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.utils.Json
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonElement
@@ -303,7 +303,7 @@ object BridgeKt {
     fun buildToolCallUpdate(toolCall: AssistantMessage.ToolCall, arguments: String?): ToolCallUpdate {
        return ToolCallUpdate(
            ToolCallId(toolCall.id()),
-           toolCall.name(),
+           arguments,
             ToolKindFind.find(toolCall.name()),
             ToolCallStatus.PENDING,
             build(toolCall.name(), arguments)
@@ -324,7 +324,7 @@ object BridgeKt {
                 else -> fallback(arguments)
             }
         } catch (e: Exception) {
-            logger.warn(e) { "Failed to build tool call content for $toolName" }
+//            logger.warn(e) { "Failed to build tool call content for $toolName" }
             fallback(arguments)
         }
     }

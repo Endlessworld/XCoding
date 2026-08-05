@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     kotlin("jvm")
     alias(libs.plugins.vanniktech.mavenPublish)
+    kotlin("plugin.lombok")
 }
 
 group = "com.xr21"
@@ -105,6 +106,7 @@ dependencies {
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
+    testImplementation(kotlin("test"))
 }
 
 mavenPublishing {
@@ -142,3 +144,9 @@ mavenPublishing {
 }
 
 
+repositories {
+    mavenCentral()
+}
+kotlinLombok {
+    lombokConfigurationFile(file("lombok.config"))
+}

@@ -61,6 +61,41 @@ public class AcpProgressUtil {
     }
 
     /**
+     * Send a real-time AgentThoughtChunk notification bound to the tool call whose
+     * arguments contain {@code taskId}. This allows concurrent workers to push their
+     * own progress to the corresponding ACP SessionUpdate without interfering with
+     * each other (unlike {@link #sendProgress(ToolContext, String)} which always
+     * targets the first tool call).
+     *
+     * @param toolContext the ToolContext from the tool method
+     * @param taskId      the worker task id, matched by containment within a tool call's arguments
+     * @param message     the progress message to send
+     */
+    public static void sendProgress(ToolContext toolContext, String taskId, String message) {
+        try {
+            if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
+                AssistantMessage assistantMessage = ToolContextHelper.getState(toolContext).map(state -> state.value("agent_output", AssistantMessage.class).orElse(null)).orElse(null);
+                AssistantMessage.ToolCall toolCall = null;
+                if (assistantMessage != null && assistantMessage.hasToolCalls() && taskId != null) {
+                    for (AssistantMessage.ToolCall tc : assistantMessage.getToolCalls()) {
+                        if (tc.arguments().contains(taskId)) {
+                            toolCall = tc;
+                            break;
+                        }
+                    }
+                }
+                if (toolCall != null) {
+                    sendProgress(config, message, toolCall);
+                } else {
+                    sendProgress(config, message);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not send ACP progress update: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Send a real-time AgentThoughtChunk notification to the ACP client.
      * This allows tools to stream progress updates as they execute.
      *
