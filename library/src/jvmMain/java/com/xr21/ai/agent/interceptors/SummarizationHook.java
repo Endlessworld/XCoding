@@ -188,6 +188,9 @@ public class SummarizationHook extends MessagesModelHook {
                 incrementalCount, recentMessages.size(), fixedPrefix.size());
         AcpProgressUtil.sendProgress(config, "Summarized %s incremental messages, keeping %s recent messages"
                 .formatted(incrementalCount, recentMessages.size()));
+        // 压缩后历史已大幅缩短，重置上次模型调用的 live token 数，避免下次 beforeModel
+        // 仍读到旧的、远超阈值的 lastInputTokens 而立即再次触发压缩（重复压缩循环）。
+        config.context().put("lastInputTokens",0);
         return new AgentCommand(newMessages, UpdatePolicy.REPLACE);
     }
 
@@ -198,6 +201,7 @@ public class SummarizationHook extends MessagesModelHook {
      */
     private int resolveTotalTokens(List<Message> previousMessages, RunnableConfig config) {
         Object live = config.context().get("lastInputTokens");
+        AcpProgressUtil.sendProgress(config, "lastInputTokens %s".formatted(live));
         if (live instanceof Number n && n.longValue() > 0) {
             return n.intValue();
         }

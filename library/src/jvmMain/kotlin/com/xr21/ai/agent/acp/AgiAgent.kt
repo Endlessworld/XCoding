@@ -35,10 +35,7 @@ import com.xr21.ai.agent.config.AiModels
 import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
 import com.xr21.ai.agent.tools.ToolKindFind
-import com.xr21.ai.agent.utils.Json
-import com.xr21.ai.agent.utils.PermissionSettings
-import com.xr21.ai.agent.utils.SinksUtil
-import com.xr21.ai.agent.utils.ToolsUtil
+import com.xr21.ai.agent.utils.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
@@ -572,7 +569,8 @@ class AgiAgentSession(
                 message.responses.forEach { response ->
                     val resultData = ToolsUtil.parseToolResult(response.responseData())
                     logger.info { "output.responses $resultData" }
-                    if (response.name.equals("BashOutput") || response.name.equals("ShellSessions")) {
+                    var kind = ToolKindFind.find(response.name())
+                    if (kind == ToolKind.EXECUTE) {
                         var title = response.responseData();
                         emit(
                             Event.SessionUpdateEvent(
