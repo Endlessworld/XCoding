@@ -99,6 +99,9 @@ dependencies {
 
     // Jsoup - HTML parsing (used by WebSearchTool for DuckDuckGo search)
     implementation(libs.jsoup)
+
+    // Groovy - Groovy script execution (GroovyScriptTool binds a `tools` object for MCP tool orchestration)
+    implementation("org.codehaus.groovy:groovy:3.0.25")
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")

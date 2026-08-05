@@ -34,6 +34,7 @@ import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegi
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.*;
+import com.xr21.ai.agent.tools.GroovyScriptTool;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.SleepTool;
 import com.xr21.ai.agent.tools.WebTool;
@@ -196,6 +197,10 @@ public class LocalAgent {
             tools.addAll(mcpTools);
             log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
         }
+        // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
+        GroovyScriptTool groovyScriptTool = new GroovyScriptTool(tools);
+        ToolCallback groovyCallback = MethodToolCallbackProvider.builder().toolObjects(groovyScriptTool).build().getToolCallbacks()[0];
+        tools.add(groovyCallback);
         return new StaticToolCallbackProvider(tools);
     }
 
