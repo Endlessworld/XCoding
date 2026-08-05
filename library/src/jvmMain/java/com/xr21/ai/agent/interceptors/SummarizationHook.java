@@ -31,6 +31,7 @@ import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Hook that summarizes conversation history when token limits are approached.
@@ -111,7 +112,6 @@ public class SummarizationHook extends MessagesModelHook {
     private final TokenCounter tokenCounter;
     private final String summaryPrompt;
     private final String summaryPrefix;
-    private final boolean keepFirstUserMessage;
 
     private SummarizationHook(Builder builder) {
         this.model = builder.model;
@@ -120,7 +120,6 @@ public class SummarizationHook extends MessagesModelHook {
         this.tokenCounter = builder.tokenCounter;
         this.summaryPrompt = builder.summaryPrompt;
         this.summaryPrefix = builder.summaryPrefix;
-        this.keepFirstUserMessage = builder.keepFirstUserMessage;
     }
 
     public static Builder builder() {
@@ -149,59 +148,46 @@ public class SummarizationHook extends MessagesModelHook {
             return new AgentCommand(previousMessages);
         }
 
-        UserMessage firstUserMessage = null;
-        if (keepFirstUserMessage) {
-            for (Message msg : previousMessages) {
-                if (msg instanceof UserMessage) {
-                    firstUserMessage = (UserMessage) msg;
-                    break;
-                }
+        // 定位最后一个 SystemMessage：首次为真实系统提示词，压缩后则为上一次注入的旧摘要。
+        // 多次压缩时，0..lastSystemIndex 内的内容在压缩后保持不变，构成稳定的缓存前缀。
+        int lastSystemIndex = -1;
+        for (int i = 0; i < previousMessages.size(); i++) {
+            if (previousMessages.get(i) instanceof SystemMessage) {
+                lastSystemIndex = i;
             }
         }
+        // 固定前缀 = 开头到最后一个 System（含旧摘要），内容不再变化，最省缓存。
+        List<Message> fixedPrefix = previousMessages.subList(0, lastSystemIndex + 1);
 
-        // 定位系统提示词：它将在压缩后保持队首且内容不变，构成最稳定的缓存前缀。
-        Optional<Message> firstSystemMessage = previousMessages.stream()
-                .filter(message -> message instanceof SystemMessage)
-                .findFirst();
-
-        List<Message> toSummarize = new ArrayList<>();
-        for (int i = 0; i < cutoffIndex; i++) {
-            Message msg = previousMessages.get(i);
-            // 系统提示词与首个用户消息无需摘要，直接保留。
-            if (msg != firstUserMessage && msg != firstSystemMessage.orElse(null)) {
-                toSummarize.add(msg);
-            }
-        }
-
-        // 摘要生成直接复用原始 previousMessages 作为消息前缀（缓存友好），详见 createSummary。
-        String summary = createSummary(previousMessages);
+        // 保留最近消息（不参与摘要）。
         List<Message> recentMessages = new ArrayList<>();
         for (int i = cutoffIndex; i < previousMessages.size(); i++) {
             recentMessages.add(previousMessages.get(i));
         }
 
-        // 缓存前缀稳定性优化：DeepSeek 等提供商按“从消息开头开始的最长公共前缀”命中缓存，
-        // 一旦开头的内容或结构变化，整段输入都会退化为缓存未命中，导致成本飙升。
-        // 压缩后固定为 [系统提示词, 首个用户消息, 摘要, 最近消息]，
-        // 使系统提示词始终位于队首且内容与压缩前完全一致，压缩边界处仍能命中
-        // “系统提示词 + 首个用户消息”这段最昂贵、最稳定的前缀缓存。
-        List<Message> newMessages = new ArrayList<>();
-        firstSystemMessage.ifPresent(newMessages::add);
-        if (firstUserMessage != null) {
-            newMessages.add(firstUserMessage);
-        }
-        // 摘要单独成条，不再并入系统提示词，避免每次压缩改写系统提示词从而击穿缓存前缀。
+        // 增量历史 = 最后一个 System 之后、截止点之前的部分，仅这部分需要浓缩成新摘要。
+        // 旧摘要原样保留在前缀中，避免多轮压缩时反复重摘要导致信息逐层丢失。
+        // 摘要调用的消息前缀必须从队首复用固定前缀（与主对话逐字节一致 → 命中缓存），
+        // 仅增量历史与追加的摘要指令属于新增（详见 createSummary）。
+        int summaryEnd = Math.min(cutoffIndex, previousMessages.size());
+        List<Message> summaryInput = previousMessages.stream().limit(summaryEnd).collect(Collectors.toList());
+        String summary = summaryInput.isEmpty()
+                ? "No new conversation."
+                : createSummary(summaryInput);
+
+        // 缓存前缀稳定性优化：DeepSeek 等提供商按“从消息开头开始的最长公共前缀”命中缓存。
+        // 固定前缀从队首一直延伸到最后一个 System（含旧摘要），内容逐字节不变，
+        // 每轮压缩后，队首到摘要边界这段最昂贵、最稳定的前缀仍能命中缓存。
+        // 重组：固定前缀 + 当前摘要 + 最近消息。
+        List<Message> newMessages = new ArrayList<>(fixedPrefix);
         SystemMessage summaryMessage = new SystemMessage(summaryPrefix + "\n" + summary);
         newMessages.add(summaryMessage);
         newMessages.addAll(recentMessages);
-
-        if (firstUserMessage != null) {
-            log.info("Summarized {} messages, keeping {} recent messages (First UserMessage preserved)", toSummarize.size(), recentMessages.size());
-            AcpProgressUtil.sendProgress(config, "Summarized %s messages, keeping %s recent messages (First UserMessage preserved)".formatted(toSummarize.size(), recentMessages.size()));
-        } else {
-            log.info("Summarized {} messages, keeping {} recent messages", toSummarize.size(), recentMessages.size());
-            AcpProgressUtil.sendProgress(config, "Summarized %s messages, keeping %s recent messages".formatted(toSummarize.size(), recentMessages.size()));
-        }
+        int incrementalCount = summaryEnd - lastSystemIndex - 1;
+        log.info("Summarized {} incremental messages, keeping {} recent messages (fixed prefix {} preserved)",
+                incrementalCount, recentMessages.size(), fixedPrefix.size());
+        AcpProgressUtil.sendProgress(config, "Summarized %s incremental messages, keeping %s recent messages"
+                .formatted(incrementalCount, recentMessages.size()));
         return new AgentCommand(newMessages, UpdatePolicy.REPLACE);
     }
 
@@ -285,10 +271,10 @@ public class SummarizationHook extends MessagesModelHook {
             return "No previous conversation.";
         }
         try {
-            // 缓存友好摘要生成：直接把原始 previousMessages 原样作为消息前缀发送（与主对话
-            // 最后一次请求逐字节一致 → 从开头到摘要处几乎整体命中缓存），再追加一条固定的
-            // 摘要指令 user 消息。只有追加的指令属于缓存未命中，从根本上避免“把历史要摘要
-            // 的消息与摘要提示词拼成一条新消息”导致前缀全失配、摘要调用价格飙升的问题。
+            // 缓存友好摘要生成：调用方传入的 messages = [固定前缀 + 增量历史]，其中固定前缀
+            // 与主对话逐字节一致 → 从开头到增量历史处几乎整体命中缓存），再追加一条固定的
+            // 摘要指令 user 消息。只有增量历史与追加的指令属于缓存未命中，从根本上避免
+            // “把历史要摘要的消息与摘要提示词拼成一条新消息”导致前缀全失配、摘要调用价格飙升。
             var spec = ChatClient.builder(model).build().prompt();
             spec.messages(messages);
             // 历史已作为消息列表处于上下文中，指令仅作为追加的 user 消息发送。
@@ -321,7 +307,6 @@ public class SummarizationHook extends MessagesModelHook {
         private TokenCounter tokenCounter = TokenCounter.approximateMsgCounter();
         private String summaryPrompt = DEFAULT_SUMMARY_PROMPT;
         private String summaryPrefix = SUMMARY_PREFIX;
-        private boolean keepFirstUserMessage = DEFAULT_KEEP_FIRST_USER_MESSAGE;
 
         public Builder model(ChatModel model) {
             this.model = model;
@@ -350,11 +335,6 @@ public class SummarizationHook extends MessagesModelHook {
 
         public Builder tokenCounter(TokenCounter counter) {
             this.tokenCounter = counter;
-            return this;
-        }
-
-        public Builder keepFirstUserMessage(boolean keep) {
-            this.keepFirstUserMessage = keep;
             return this;
         }
 

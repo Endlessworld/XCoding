@@ -357,7 +357,6 @@ public class LocalAgent {
                 .model(chatModel)
                 .maxTokensBeforeSummary(64 * 1024)
                 .messagesToKeep(10)
-                .keepFirstUserMessage(true)
                 .build());
 
         return hooks;
