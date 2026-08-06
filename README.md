@@ -147,30 +147,40 @@ JSON 配置形式的 AI 模型管理，支持：
 
 | 工具 | 描述 |
 |------|------|
-| `read_file` | 读取文件内容，支持分页 |
-| `write_file` | 创建/覆盖文件 |
-| `edit_file` | 精确字符串替换编辑 |
+| `read_file` | 读取文件内容，支持批量/分页/目录递归 |
+| `write_file` | 创建/覆盖文件（≤500 字符） |
+| `smart_edit` | 智能编辑（search_replace / insert_at_line，批量） |
 | `grep` | 文件内容搜索 |
 | `glob` | 文件模式匹配 |
-| `ls` | 列出目录内容 |
+| `ls` | 列出目录内容，过滤 .gitignore |
 
 ### 终端命令工具
 
 | 工具 | 描述 |
 |------|------|
-| `Bash` | 执行终端命令 |
+| `Bash` | 执行终端命令（once/interactive 模式） |
 | `BashOutput` | 获取后台命令输出 |
-| `KillShell` | 终止后台命令 |
+| `ShellInput` | 向交互式 shell 发送命令 |
+| `ShellSessions` | 列出所有活跃 shell 会话 |
+| `KillShell` | 终止后台命令/会话 |
+| `Sleep` | 休眠指定秒数后唤醒 |
 
-### 其他工具
+### 网络工具
 
 | 工具 | 描述 |
 |------|------|
-| `WebSearch` | 网络搜索 |
+| `web_search` | Bing 网络搜索（无需 API Key） |
 | `web_fetch` | 网页抓取，请求指定 URL 并返回清洗后的网页 innerText 内容（最大 1000 字符） |
-| `FeedBack` | 用户反馈收集 |
-| `contextCacheTool` | 上下文缓存读取 |
+
+### 上下文与编排工具
+
+| 工具 | 描述 |
+|------|------|
+| `contextCacheTool` | 上下文缓存读取（指针数据读取器） |
 | `write_todos` | ACP 任务管理 |
+| `run_groovy_script` | 执行 Groovy 脚本，编排多工具调用 |
+| `worker` | 启动短暂 Worker 处理隔离任务 |
+| `msg` | Worker 回传执行成果（text/boolean/json/file） |
 
 ## 快速开始
 

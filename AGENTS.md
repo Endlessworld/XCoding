@@ -40,32 +40,41 @@
 ### 文件操作工具
 | 工具名称 | 描述 | 使用场景 |
 |---------|------|-------|
-| `grep` | 文件内容搜索 | 查找特定代码模式、错误信息 |
+| `read_file` | 读取文件内容，支持批量/分页/目录递归 | 查看代码、日志、配置文件 |
+| `write_file` | 创建新文件（≤500 字符） | 创建新文件，配合 smart_edit 继续编写 |
+| `smart_edit` | 智能编辑（search_replace / insert_at_line 批量） | 修改代码、配置文件 |
+| `ls` | 列出目录内容，过滤 .gitignore | 探索项目结构 |
 | `glob` | 文件模式匹配 | 批量查找特定类型的文件 |
-| `edit_file` | 编辑文件内容 | 修改代码、配置文件 |
-| `write_file` | 创建文件 | 创建新文件 |
-| `read_file` | 读取文件内容 | 查看代码、日志、配置文件 |
-| `ls` | 列出目录内容 | 探索项目结构 |
+| `grep` | 文件内容搜索 | 查找特定代码模式、错误信息 |
 
 ### 终端命令工具
 | 工具名称 | 描述 | 使用场景 |
 |---------|------|---------|
-| `Bash` | 执行终端命令 | 运行构建命令、脚本、Git操作 |
+| `Bash` | 执行终端命令（once/interactive 模式） | 运行构建命令、脚本、Git 操作 |
 | `BashOutput` | 获取后台命令输出 | 监控长时间运行进程 |
-| `KillShell` | 终止后台命令 | 停止不需要的进程 |
+| `ShellInput` | 向交互式 shell 发送命令 | 与持久 shell 会话交互 |
+| `ShellSessions` | 列出所有活跃 shell 会话 | 查找 shell_id |
+| `KillShell` | 终止后台命令/会话 | 停止不需要的进程 |
+| `Sleep` | 休眠指定秒数后唤醒 | 等待长耗时任务（编译/下载） |
 
-### 上下文缓存工具
+### 上下文管理工具
 | 工具名称 | 描述 | 使用场景 |
 |---------|------|---------|
 | `contextCacheTool` | 指针数据读取器 | 重新获取超长工具调用参数/结果 |
+| `write_todos` | ACP 任务管理 | 复杂任务规划（ACP Plan 模式） |
 
-### 其他工具
+### 网络工具
 | 工具名称 | 描述 | 使用场景 |
 |---------|------|---------|
-| `WebSearch` | 网络搜索 | 查找文档、API 参考 |
-| `web_fetch` | 网页抓取 | 请求指定 URL 并返回清洗后的网页 innerText 内容（最大 1000 字符） |
-| `FeedBack` | 用户反馈收集 | 确认操作、获取输入 |
-| `write_todos` | ACP 任务管理 | 复杂任务规划（ACP Plan 模式） |
+| `web_search` | Bing 网络搜索（无需 API Key） | 查找文档、API 参考 |
+| `web_fetch` | 网页抓取，返回清洗后的 innerText（最大 1000 字符） | 获取网页正文内容 |
+
+### 编排与 Worker 工具
+| 工具名称 | 描述 | 使用场景 |
+|---------|------|---------|
+| `run_groovy_script` | 执行 Groovy 脚本，编排多工具调用 | 并发/分支编排、数据格式化 |
+| `worker` | 启动短暂 Worker 处理隔离任务 | 复杂多步骤独立任务 |
+| `msg` | Worker 回传执行成果（text/boolean/json/file） | Worker 完成任务后上报结果 |
 
 ## 📁 项目结构
 
@@ -118,9 +127,9 @@ ai-agents/
 #### 文件操作工具
 | 工具 | 描述 |
 |-----|------|
-| `ReadFileTool` | 读取文件内容，支持分页读取 |
-| `WriteFileTool` | 创建或覆盖文件内容 |
-| `EditFileTool` | 编辑文件内容（小步修改） |
+| `ReadFileTool` | 读取文件内容，支持批量读取、分页读取、目录递归 |
+| `WriteFileTool` | 创建或覆盖文件内容（≤500 字符） |
+| `SmartEditTool` | 智能文件编辑（search_replace / insert_at_line，批量） |
 | `GrepTool` | 文件内容搜索 |
 | `GlobTool` | 文件模式匹配 |
 | `ListFilesTool` | 列出目录内容 |
@@ -128,7 +137,7 @@ ai-agents/
 #### 终端命令工具
 | 工具 | 描述 |
 |-----|------|
-| `ShellTools` | 终端命令执行（包含 Bash、BashOutput、KillShell） |
+| `ShellTools` | 终端命令执行（Bash、BashOutput、ShellInput、ShellSessions、KillShell） |
 
 #### 上下文管理工具
 | 工具 | 描述 |
@@ -136,12 +145,18 @@ ai-agents/
 | `ContextCacheTool` | 指针数据读取器，用于重新获取超长工具调用参数/结果 |
 | `AcpWriteTodosTool` | ACP 任务管理，支持 Plan 模式 |
 
-#### 其他工具
+#### 网络工具
 | 工具 | 描述 |
 |-----|------|
-| `FeedBackTool` | 用户反馈收集 |
-| `WebSearchTool` | 网络搜索 |
-| `FetchWebTool` | 网页抓取，使用 Jsoup 请求 URL 并清洗 HTML 提取纯文本 |
+| `WebTool` | 网络搜索与网页抓取（web_search、web_fetch） |
+
+#### 编排与 Worker 工具
+| 工具 | 描述 |
+|-----|------|
+| `GroovyScriptTool` | Groovy 脚本执行，多工具编排 |
+| `WorkerTool` | 启动短暂 Worker 处理隔离任务 |
+| `MsgTool` | Worker 回传执行成果 |
+| `SleepTool` | 休眠/等待能力 |
 | `ToolKindFind` | 工具类型查找 |
 
 ### ⚙️ Utils 工具类
@@ -268,8 +283,10 @@ read_file("/path/to/file.java")
 // 搜索内容
 grep("TODO", "/src/main/java")
 
-// 编辑文件（小步修改）
-edit_file("/path/to/file.java", "old code", "new code")
+// 智能编辑（search_replace / insert_at_line）
+smart_edit([
+  {filePath: "/path/to/file.java", mode: "search_replace", searchText: "old code", replaceText: "new code"}
+])
 
 // 创建文件
 write_file("/path/to/newfile.txt", "content")
