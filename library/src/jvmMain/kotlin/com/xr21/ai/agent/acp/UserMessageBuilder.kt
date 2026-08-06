@@ -238,7 +238,11 @@ object UserMessageBuilder {
         try {
             logger.info("[AcpAgent] buildMediaFromContent {} {}", data, uri)
             // 解析 MIME 类型
-            var mimeType = MimeType.valueOf(URLConnection.guessContentTypeFromName(uri))
+            val contentType = URLConnection.guessContentTypeFromName(uri)
+            if (contentType == null) {
+                return Media.builder().mimeType(MimeType.valueOf("application/octet-stream")).data(uri).build()
+            }
+            val mimeType = MimeType.valueOf(contentType)
             val mediaBuilder = Media.builder().mimeType(mimeType)
             // 优先使用 Base64 数据
             if (StringUtils.hasText(data)) {
@@ -313,7 +317,7 @@ object UserMessageBuilder {
             } else {
                 // Binary file: add as Media
                 val uri = block.uri
-                val mimeType = MimeType.valueOf(URLConnection.guessContentTypeFromName(block.uri))
+                val mimeType = MimeType.valueOf(resolveMimeType(null, block.uri, "application/octet-stream"))
                 if (mimeType.getType().contains("image")) {
                     // 处理资源链接
                     val media = buildMediaFromContent(null, block.uri)

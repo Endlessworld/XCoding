@@ -45,7 +45,7 @@ public class SleepTool {
             """)
     public Map<String, Object> sleep(
             @JsonProperty(value = "seconds", required = true)
-            @JsonPropertyDescription("The number of seconds to sleep. Must be a positive integer, maximum 600 seconds (10 minutes)")
+            @JsonPropertyDescription("The number of seconds to sleep. Must be a positive integer, maximum 600 seconds (10 minutes) default 30s")
             Integer seconds) { // @formatter:on
 
         if (seconds == null || seconds <= 0) {

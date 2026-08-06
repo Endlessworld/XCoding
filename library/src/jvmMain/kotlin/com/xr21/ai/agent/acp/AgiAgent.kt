@@ -185,6 +185,21 @@ class AgiAgentSession(
                         emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN)))
                         return@flow
                     }
+                    if (firstText == "/exit ") {
+                        logger.info { "Exiting JVM by user command" }
+                        emit(
+                            Event.SessionUpdateEvent(
+                                SessionUpdate.AgentMessageChunk(
+                                    ContentBlock.Text("正在退出...")
+                                )
+                            )
+                        )
+                        emit(Event.PromptResponseEvent(PromptResponse(StopReason.END_TURN)))
+                        // 延迟一小段让事件发送完成后再正常退出 JVM
+                        kotlinx.coroutines.delay(200)
+                        System.exit(0)
+                        return@flow
+                    }
                     if (firstText == "/init ") {
                         messages[0] = ContentBlock.Text("扫描当前项目初始化AGENT.md文件")
                     }
