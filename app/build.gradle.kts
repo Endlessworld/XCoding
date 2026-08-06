@@ -11,12 +11,17 @@ version = "0.0.1"
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
 }
 
 // 反射参数名支持（与 :library 保持一致）
@@ -110,6 +115,21 @@ tasks.register("generateInitAtRunTime") {
         println("Scanning runtime classpath for third-party packages...")
 
         val thirdPartyPackages = mutableSetOf<String>()
+        // 这些库自带 META-INF/native-image 元数据（或必须 build-time 初始化，如 kotlin stdlib）。
+        // 若再强制 --initialize-at-run-time 整包，会与它们自身精确的 class-init 指令冲突，
+        // 导致 GraalVM 报 "Classes that should be initialized at run time got initialized during image building"。
+        val skipInitAtRunTime = setOf(
+            "io.netty",              // 自带 native-image.properties，冲突源头
+            "kotlin", "kotlinx", "org.jetbrains",   // kotlin stdlib 必须 build-time 初始化
+            "ch.qos", "org.slf4j",  // logback / slf4j
+            "org.springframework", "org.springframework.aop",
+            "okhttp3", "okio",      // okhttp 自带 native-image 配置
+            "io.projectreactor", "io.micrometer", "io.netty.resolver",
+            "org.jline", "org.aesh", // TUI 后端
+            "com.fasterxml",         // jackson
+            "org.objectweb",         // ASM
+            "org.apache"
+        )
 
         configurations.runtimeClasspath.get().forEach { file ->
             if (file.isFile && file.name.endsWith(".jar")) {
@@ -136,7 +156,14 @@ tasks.register("generateInitAtRunTime") {
                                 val parts = className.split('.')
                                 if (parts.size >= 2) "${parts[0]}.${parts[1]}" else parts[0]
                             }
-                            .forEach { rootPkg -> thirdPartyPackages.add(rootPkg) }
+                            .forEach { rootPkg ->
+                                // 前缀匹配：既要跳过黑名单根包本身，也要跳过其子包/包内直接类
+                                // （如 kotlin.DeprecationLevel、kotlin.collections、io.netty.channel 等），
+                                // 否则仍会生成 --initialize-at-run-time=kotlin.DeprecationLevel 触发 class-init 冲突。
+                                if (skipInitAtRunTime.none { rootPkg == it || rootPkg.startsWith("$it.") }) {
+                                    thirdPartyPackages.add(rootPkg)
+                                }
+                            }
                     }
                 } catch (e: Exception) {
                     println("  WARN: Cannot read ${file.name}: ${e.message}")
@@ -182,6 +209,17 @@ graalvmNative {
             buildArgs.add("-Dlogback.statusListener=ch.qos.logback.core.status.NopStatusListener")
             buildArgs.add("-Dlogback.console=disabled")
             buildArgs.add("-Dlogback.configurationFile=classpath:logback-native-simple.xml")
+            // 关键：上面的 -Dlogback.configurationFile 只写入最终镜像，对 native-image 构建进程本身无效。
+            // 构建进程是一个独立 JVM，编译期执行 netty 静态初始化（AbstractChannel 等 build-time 类）会触发
+            // logback Logger 创建，此时 logback 读取的是 classpath 默认的 logback.xml（带 RollingFileAppender），
+            // 于是实例化文件 appender → 打开文件 → 报 FileDescriptor in image heap。
+            // 必须额外用 -J 前缀把系统属性传给 native-image 构建进程，使其加载纯控制台的配置。
+            buildArgs.add("-J-Dlogback.configurationFile=" +
+                layout.projectDirectory.file("src/jvmMain/resources/logback-native-simple.xml").asFile.absolutePath.replace('\\', '/'))
+            // GraalVM for JDK 24 默认 run-time 初始化类；logback/slf4j 的静态 Logger 若在镜像构建期被初始化
+            // 会把 Logger 对象写入镜像堆并报 UnsupportedFeatureException。按 GraalVM 官方建议固定为 build-time。
+            buildArgs.add("--initialize-at-build-time=ch.qos.logback,org.slf4j,org.xml.sax.helpers.LocatorImpl")
+            buildArgs.add("--trace-object-instantiation=java.io.FileDescriptor")
             buildArgs.add("-H:ConfigurationFileDirectories=${project.projectDir}/src/jvmMain/resources/META-INF/native-image")
             val initArgsProvider = provider {
                 val scriptFile = layout.buildDirectory.file("init-at-run-time.args").get().asFile
@@ -192,6 +230,16 @@ graalvmNative {
                 }
             }
             buildArgs.addAll(initArgsProvider.get())
+            // 自动化修复循环生成的参数（由 tools/native-fix-loop.py 写入，逐条追加，去重）
+            val autoFixArgsProvider = provider {
+                val f = layout.buildDirectory.file("auto-init-at-build-time.args").get().asFile
+                if (f.exists()) {
+                    f.readLines().filter { it.isNotBlank() && !it.trimStart().startsWith("#") }
+                } else {
+                    emptyList()
+                }
+            }
+            buildArgs.addAll(autoFixArgsProvider.get())
 
             println("Configuration file directory: ${project.projectDir}/src/jvmMain/resources/META-INF/native-image")
         }

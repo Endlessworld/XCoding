@@ -20,7 +20,7 @@ on:
 
 env:
   GRAALVM_VERSION: '24.0.2'
-  JAVA_VERSION: '17'
+  JAVA_VERSION: '24'
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Xmx4g'
   GRAALVM_HOME: ${{ github.workspace }}/graalvm
 
@@ -41,9 +41,9 @@ jobs:
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        graalvm-version: ${{ env.GRAALVM_VERSION }}
-        java-version: ${{ env.JAVA_VERSION }}
-        components: 'native-image'
+        version: ${{ env.GRAALVM_VERSION }}
+        distribution: 'graalvm-community'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
       run: native-image --version
@@ -98,9 +98,9 @@ jobs:
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        graalvm-version: ${{ env.GRAALVM_VERSION }}
-        java-version: ${{ env.JAVA_VERSION }}
-        components: 'native-image'
+        version: ${{ env.GRAALVM_VERSION }}
+        distribution: 'graalvm-community'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
       run: native-image --version
@@ -150,9 +150,9 @@ jobs:
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        graalvm-version: ${{ env.GRAALVM_VERSION }}
-        java-version: ${{ env.JAVA_VERSION }}
-        components: 'native-image'
+        version: ${{ env.GRAALVM_VERSION }}
+        distribution: 'graalvm-community'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
       run: native-image --version
