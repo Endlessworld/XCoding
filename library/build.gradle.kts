@@ -27,6 +27,7 @@ kotlin {
 // ==================== 反射参数名支持 ====================
 // 确保编译时写入方法参数名，使反射能获取真实参数名而非 arg0/arg1
 // Java 使用 -parameters，Kotlin 使用 -java-parameters（等价）
+//-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-parameters")
 }

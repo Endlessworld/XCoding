@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import java.util.concurrent.atomic.AtomicInteger
+import java.io.File
+import java.net.ServerSocket
+import java.util.UUID
 
 /**
  * AgiHarnessAgent 控制台调测 Demo。
@@ -38,11 +41,10 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * 运行: ./gradlew :library:runHarnessDemo
  */
-/** Demo 默认端口 */
 private const val DEMO_PORT = 19999
 private const val WS_URL = "ws://127.0.0.1:$DEMO_PORT/acp"
 
-/** ANSI 颜色 */
+// ── ANSI 颜色工具 ─────────────────────────────────────────────
 private object Color {
     const val RESET = "\u001B[0m"
     const val CYAN = "\u001B[36m"
@@ -54,17 +56,22 @@ private object Color {
     const val DIM = "\u001B[2m"
 }
 
+/** 彩色打印辅助 */
+private fun cprint(color: String, msg: String) = print("$color$msg${Color.RESET}")
+private fun cprintln(color: String, msg: String) = println("$color$msg${Color.RESET}")
+private fun ok(msg: String) = println("  ${Color.GREEN}ok${Color.RESET} $msg")
+private fun info(msg: String) = println("  ${Color.DIM}$msg${Color.RESET}")
+private fun err(msg: String) = cprintln(Color.RED, "  error: $msg")
+
 fun main() = runBlocking {
-    println("${Color.BOLD}${Color.CYAN}AgiHarnessAgent Console Demo${Color.RESET}")
-    println("${Color.DIM}----------------------------------------${Color.RESET}")
+    cprintln(Color.BOLD + Color.CYAN, "AgiHarnessAgent Console Demo")
+    cprintln(Color.DIM, "─".repeat(40))
     println()
 
     ensurePortAvailable(DEMO_PORT)
 
     // 1. 启动内嵌 WebSocket 服务器
-    println("${Color.DIM}[1/4] 启动 ACP WebSocket 服务器...${Color.RESET}")
-
-    // AgiHarnessAgent init block creates HarnessGateway and wires it to acpChannel via ChannelManager
+    info("[1/4] 启动 ACP WebSocket 服务器...")
     val agentSupport = AgiAgent()
 
     @Suppress("UNUSED")
@@ -75,11 +82,11 @@ fun main() = runBlocking {
         start()
     }
     delay(1500)
-    println("  ${Color.GREEN}ok${Color.RESET} 服务器已启动: ${Color.CYAN}ws://127.0.0.1:$DEMO_PORT/acp${Color.RESET}")
+    ok("服务器已启动: ${Color.CYAN}ws://127.0.0.1:$DEMO_PORT/acp${Color.RESET}")
     println()
 
     // 2. 连接 ACP 客户端
-    println("${Color.DIM}[2/4] 连接 ACP 客户端...${Color.RESET}")
+    info("[2/4] 连接 ACP 客户端...")
     val httpClient = HttpClient { install(WebSockets) }
     val protocol = httpClient.acpProtocolOnClientWebSocket(WS_URL, ProtocolOptions())
     protocol.start()
@@ -92,90 +99,74 @@ fun main() = runBlocking {
             )
         )
     )
-    println("  ${Color.GREEN}ok${Color.RESET} Agent: ${Color.BOLD}${agentInfo.implementation?.name}${Color.RESET} v${agentInfo.implementation?.version}")
-    println("  ${Color.GREEN}ok${Color.RESET} 协议版本: ${agentInfo.protocolVersion}")
+    ok("Agent: ${Color.BOLD}${agentInfo.implementation?.name}${Color.RESET} v${agentInfo.implementation?.version}")
+    ok("协议版本: ${agentInfo.protocolVersion}")
 
-    // 显示可用认证方式
     agentInfo.authMethods?.forEach { auth ->
-        println("  ${Color.DIM}  auth: ${auth.name}${Color.RESET}")
+        info("  auth: ${auth.name}")
     }
     println()
 
     // 3. 创建会话
-    println("${Color.DIM}[3/4] 创建 ACP 会话...${Color.RESET}")
+    info("[3/4] 创建 ACP 会话...")
     val session = acpClient.newSession(
         SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
     ) { _, _ -> DemoClientOperations() }
-    println("  ${Color.GREEN}ok${Color.RESET} 会话 ID: ${Color.CYAN}${session.sessionId}${Color.RESET}")
-    println("  ${Color.GREEN}ok${Color.RESET} 可用模型: ${session.availableModels.size} 个")
-    println("  ${Color.GREEN}ok${Color.RESET} 可用模式: ${session.availableModes.size} 个")
+    ok("会话 ID: ${Color.CYAN}${session.sessionId}${Color.RESET}")
+    ok("可用模型: ${session.availableModels.size} 个")
+    ok("可用模式: ${session.availableModes.size} 个")
     println()
 
     // 4. REPL 循环
-    println("${Color.DIM}[4/4] 进入交互模式${Color.RESET}")
+    info("[4/4] 进入交互模式")
     println("  输入消息发送给 Agent，输入 ${Color.YELLOW}/help${Color.RESET} 查看命令")
-    println("  ${Color.DIM}--------------------------------------------------${Color.RESET}")
+    cprintln(Color.DIM, "─".repeat(50))
     println()
 
     val reader = System.`in`.bufferedReader()
     var running = true
 
     while (running) {
-        print("${Color.CYAN}>${Color.RESET} ")
+        cprint(Color.CYAN, ">")
+        print(" ")
         System.out.flush()
         val line = reader.readLine() ?: break
         val input = line.trim()
 
         when {
-            input.startsWith("/") -> {
-                running = handleCommand(input, session, acpClient)
-            }
-
+            input.startsWith("/") -> running = handleCommand(input, session, acpClient)
             input.isBlank() -> continue
-            else -> {
-                sendPrompt(session, input)
-            }
+            else -> sendPrompt(session, input)
         }
     }
 
     // 清理
-    println("${Color.DIM}清理中...${Color.RESET}")
+    cprintln(Color.DIM, "清理中...")
     session.close()
     try {
         acpClient.logout()
     } catch (_: Exception) {
     }
     httpClient.close()
-    println("${Color.GREEN}再见！${Color.RESET}")
+    cprintln(Color.GREEN, "再见！")
 }
 
+// ── 命令处理 ──────────────────────────────────────────────────
 /** 处理命令，返回 false 表示退出 */
 private suspend fun handleCommand(
     input: String,
     session: ClientSession,
     client: Client
 ): Boolean {
-    val parts = input.split("\\s+".toRegex(), 2)
-    return when (parts[0]) {
+    val cmd = input.split("\\s+".toRegex(), 2)
+    return when (cmd[0]) {
         "/exit", "/quit" -> false
-        "/help" -> {
-            printHelp(); true
-        }
-
-        "/sessions" -> {
-            listSessions(client); true
-        }
-
-        "/mode" -> {
-            handleModeCommand(session, parts); true
-        }
-
-        "/model" -> {
-            handleModelCommand(session, parts); true
-        }
-
+        "/help" -> { printHelp(); true }
+        "/sessions" -> { listSessions(client); true }
+        "/mode" -> { handleModeCommand(session, cmd); true }
+        "/model" -> { handleModelCommand(session, cmd); true }
         else -> {
-            println("${Color.RED}未知命令: ${parts[0]}${Color.RESET}")
+            cprintln(Color.RED, "未知命令: ${cmd[0]}")
             printHelp()
             true
         }
@@ -183,8 +174,7 @@ private suspend fun handleCommand(
 }
 
 private fun printHelp() {
-    println(
-        """
+    println("""
   命令
   /exit      退出 Demo
   /help      显示此帮助
@@ -194,8 +184,7 @@ private fun printHelp() {
   /model <id> 切换到指定模型
   /sessions  列出所有会话
   其他内容作为 prompt 发送给 Agent
-    """.trimIndent()
-    )
+    """.trimIndent())
 }
 
 private suspend fun listSessions(client: Client) {
@@ -206,6 +195,7 @@ private suspend fun listSessions(client: Client) {
     }
 }
 
+// ── 模式 / 模型 切换 ─────────────────────────────────────────
 private suspend fun handleModeCommand(session: ClientSession, parts: List<String>) {
     val modes = session.availableModes
     if (parts.size < 2) {
@@ -221,11 +211,11 @@ private suspend fun handleModeCommand(session: ClientSession, parts: List<String
     val targetId = parts[1]
     val match = modes.find { it.id.toString() == targetId }
     if (match == null) {
-        println("${Color.RED}模式 '$targetId' 不存在${Color.RESET}")
+        cprintln(Color.RED, "模式 '$targetId' 不存在")
         return
     }
     session.setMode(match.id)
-    println("${Color.GREEN}ok${Color.RESET} 已切换到模式: ${Color.CYAN}${match.id}${Color.RESET}")
+    ok("已切换到模式: ${Color.CYAN}${match.id}${Color.RESET}")
 }
 
 private suspend fun handleModelCommand(session: ClientSession, parts: List<String>) {
@@ -243,50 +233,43 @@ private suspend fun handleModelCommand(session: ClientSession, parts: List<Strin
     val targetId = parts[1]
     val match = models.find { m -> m.modelId.toString() == targetId }
     if (match == null) {
-        println("${Color.RED}模型 '$targetId' 不存在${Color.RESET}")
+        cprintln(Color.RED, "模型 '$targetId' 不存在")
         return
     }
     session.setModel(match.modelId)
-    println("${Color.GREEN}ok${Color.RESET} 已切换到模型: ${Color.CYAN}${match.modelId}${Color.RESET}")
+    ok("已切换到模型: ${Color.CYAN}${match.modelId}${Color.RESET}")
 }
 
-/** Send the prompt and display the event stream in real time. */
+// ── 流式输出 ──────────────────────────────────────────────────
+/** 发送 prompt 并实时显示事件流。 */
 private suspend fun sendPrompt(session: ClientSession, text: String) {
-    // Print a blank line to separate sessions
     println()
-    // Send the request and obtain the event stream
     val flow = session.prompt(content = listOf(ContentBlock.Text(text)))
-    // Flag whether thought content has been printed
     var hasThought = false
-    // Flag whether reply content has been printed
     var hasMessage = false
 
-    // Process the event stream one by one, printing errors on exception
     try {
         flow.collect { event ->
             when (event) {
                 is Event.SessionUpdateEvent -> {
                     when (val update = event.update) {
-                            // Handle incremental chunks of thought content
                         is SessionUpdate.AgentThoughtChunk -> {
                             val t = (update.content as? ContentBlock.Text)?.text ?: ""
                             if (t.isNotBlank()) {
                                 if (!hasThought) {
-                                    print("${Color.DIM}${Color.MAGENTA} thought: ${Color.RESET}")
+                                    cprint(Color.DIM + Color.MAGENTA, " thought: ")
                                     hasThought = true
                                 }
-                                print("${Color.DIM}${t}${Color.RESET}")
-                                System.out.flush()
+                                cprint(Color.DIM, t)
                             }
                         }
 
-                        // Handle incremental chunks of reply content
                         is SessionUpdate.AgentMessageChunk -> {
                             val t = (update.content as? ContentBlock.Text)?.text ?: ""
                             if (t.isNotBlank()) {
                                 if (!hasMessage) {
                                     if (hasThought) println()
-                                    print("${Color.GREEN}  response: ${Color.RESET}")
+                                    cprint(Color.GREEN, "  response: ")
                                     hasMessage = true
                                 }
                                 print(t)
@@ -294,60 +277,62 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                             }
                         }
 
-                        // Handle tool call events, printing the tool name and arguments
                         is SessionUpdate.ToolCall -> {
                             println()
-                            println("  ${Color.YELLOW}tool: ${update.title}${Color.RESET}PENDING${Color.RESET}  (${update.rawInput}) ${Color.RED}")
+                            println("  ${Color.YELLOW}tool: ${update.title}${Color.RESET} ${Color.RED}PENDING${Color.RESET}  (${update.rawInput})")
                         }
 
                         is SessionUpdate.ToolCallUpdate -> {
-                            val status = update.status
-                            if (status != null) {
-                                println("  ${Color.YELLOW}tool: ${update.title}${Color.RESET}PENDING${Color.RESET}  (${update.rawInput}) ${Color.RED} ${update.rawOutput} ${update.content}")
+                            if (update.status != null) {
+                                println("  ${Color.YELLOW}tool: ${update.title}${Color.RESET} ${update.status}  ${update.rawOutput ?: ""} ${update.content}")
                             }
                         }
 
-                        // Handle token usage updates
                         is SessionUpdate.UsageUpdate -> {
                             println()
-                            println("  ${Color.DIM}token: ${update.used}${Color.RESET}")
+                            info("token: ${update.used}")
                         }
 
                         else -> {}
                     }
                 }
 
-                // Handle the end-of-response, printing stop reason and usage
                 is Event.PromptResponseEvent -> {
                     val reason = event.response.stopReason
                     println()
-                    println("  ${Color.DIM}stopReason: ${reason}${Color.RESET}")
+                    info("stopReason: $reason")
                     event.response.usage?.let { u ->
-                        println("  ${Color.DIM}usage: in=${u.inputTokens} out=${u.outputTokens} total=${u.totalTokens}${Color.RESET}")
+                        info("usage: in=${u.inputTokens} out=${u.outputTokens} total=${u.totalTokens}")
                     }
                 }
             }
         }
     } catch (e: Exception) {
         println()
-        println("${Color.RED}  error: ${e.message}${Color.RESET}")
+        err(e.message ?: "unknown error")
     }
     println()
 }
 
+// ── 端口检测 ──────────────────────────────────────────────────
 private fun ensurePortAvailable(port: Int) {
-    try {
-        java.net.ServerSocket(port).use { }
-    } catch (e: java.io.IOException) {
-        println("${Color.YELLOW}端口 $port 被占用，尝试等待释放...${Color.RESET}")
-        Thread.sleep(2000)
-        ensurePortAvailable(port)
+    var retries = 3
+    while (retries-- > 0) {
+        try {
+            ServerSocket(port).use { return }
+        } catch (_: java.io.IOException) {
+            if (retries == 0) {
+                err("端口 $port 被占用，无法启动服务器")
+                throw java.io.IOException("Port $port is not available")
+            }
+            cprintln(Color.YELLOW, "端口 $port 被占用，等待释放... ($retries 次重试剩余)")
+            Thread.sleep(2000)
+        }
     }
 }
 
-/**
- * Demo 用的 ClientSessionOperations — 自动批准权限，日志输出到控制台。
- */
+// ── Demo 用的 ClientSessionOperations ────────────────────────
+/** 自动批准权限，日志输出到控制台。 */
 private class DemoClientOperations : ClientSessionOperations {
     private val activeTerminals = mutableMapOf<String, Process>()
     private val permCounter = AtomicInteger(0)
@@ -361,7 +346,7 @@ private class DemoClientOperations : ClientSessionOperations {
         println("  ${Color.YELLOW}permission #$n: ${toolCall.title}${Color.RESET}")
         val selected = permissions.firstOrNull()
             ?: return RequestPermissionResponse(RequestPermissionOutcome.Cancelled)
-        println("  ${Color.GREEN}   -> auto-approve: ${selected.name}${Color.RESET}")
+        ok("   -> auto-approve: ${selected.name}")
         return RequestPermissionResponse(RequestPermissionOutcome.Selected(selected.optionId))
     }
 
@@ -372,14 +357,21 @@ private class DemoClientOperations : ClientSessionOperations {
     override suspend fun fsReadTextFile(
         path: String, line: UInt?, limit: UInt?, _meta: JsonElement?
     ): ReadTextFileResponse {
-        val content = java.io.File(path).readText()
-        return ReadTextFileResponse(content)
+        return try {
+            ReadTextFileResponse(File(path).readText())
+        } catch (e: Exception) {
+            ReadTextFileResponse("Error reading file: ${e.message}")
+        }
     }
 
     override suspend fun fsWriteTextFile(
         path: String, content: String, _meta: JsonElement?
     ): WriteTextFileResponse {
-        java.io.File(path).writeText(content)
+        try {
+            File(path).also { it.parentFile?.mkdirs() }.writeText(content)
+        } catch (e: Exception) {
+            err("写入文件失败: ${e.message}")
+        }
         return WriteTextFileResponse()
     }
 
@@ -388,10 +380,10 @@ private class DemoClientOperations : ClientSessionOperations {
         env: List<EnvVariable>, outputByteLimit: ULong?, _meta: JsonElement?
     ): CreateTerminalResponse {
         val pb = ProcessBuilder(listOf(command) + args)
-        if (cwd != null) pb.directory(java.io.File(cwd))
+        if (cwd != null) pb.directory(File(cwd))
         env.forEach { pb.environment()[it.name] = it.value }
         val proc = pb.start()
-        val tid = java.util.UUID.randomUUID().toString()
+        val tid = UUID.randomUUID().toString()
         activeTerminals[tid] = proc
         return CreateTerminalResponse(tid)
     }
@@ -399,7 +391,8 @@ private class DemoClientOperations : ClientSessionOperations {
     override suspend fun terminalOutput(
         terminalId: String, _meta: JsonElement?
     ): TerminalOutputResponse {
-        val proc = activeTerminals[terminalId] ?: error("Terminal $terminalId 不存在")
+        val proc = activeTerminals[terminalId]
+            ?: error("Terminal $terminalId 不存在")
         val stdout = proc.inputStream.bufferedReader().readText()
         val stderr = proc.errorStream.bufferedReader().readText()
         return TerminalOutputResponse(
@@ -411,7 +404,8 @@ private class DemoClientOperations : ClientSessionOperations {
     override suspend fun terminalWaitForExit(
         terminalId: String, _meta: JsonElement?
     ): WaitForTerminalExitResponse {
-        val proc = activeTerminals[terminalId] ?: error("Terminal $terminalId 不存在")
+        val proc = activeTerminals[terminalId]
+            ?: error("Terminal $terminalId 不存在")
         return WaitForTerminalExitResponse(proc.waitFor().toUInt())
     }
 

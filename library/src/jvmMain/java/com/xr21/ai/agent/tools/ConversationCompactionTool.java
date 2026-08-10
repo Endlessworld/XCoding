@@ -16,7 +16,6 @@
 package com.xr21.ai.agent.tools;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
-import com.alibaba.cloud.ai.graph.agent.node.AgentToolNode;
 import com.alibaba.cloud.ai.graph.agent.tools.ToolContextHelper;
 import com.alibaba.cloud.ai.graph.state.ReplaceAllWith;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -30,11 +29,7 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 会话压缩工具（纯工具实现），让智能体自主进行对话摘要与上下文管理。
@@ -121,7 +116,6 @@ public class ConversationCompactionTool {
 
         // 通过 ReplaceAllWith 整体替换 messages，AppendStrategy 会识别该包装并整体替换。
         stateForUpdate.put("messages", ReplaceAllWith.of(newMessages));
-
         log.info("compact_conversation applied: {} messages -> {} (keepLast={}, checkpoint={})",
                 messages.size(), newMessages.size(), keep, checkpoint);
         return ToolResult.builder()
