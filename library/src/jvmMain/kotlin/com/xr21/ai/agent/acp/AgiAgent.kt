@@ -35,7 +35,10 @@ import com.xr21.ai.agent.config.AiModels
 import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
 import com.xr21.ai.agent.tools.ToolKindFind
-import com.xr21.ai.agent.utils.*
+import com.xr21.ai.agent.utils.Json
+import com.xr21.ai.agent.utils.PermissionSettings
+import com.xr21.ai.agent.utils.SinksUtil
+import com.xr21.ai.agent.utils.ToolsUtil
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
@@ -51,6 +54,7 @@ import org.apache.commons.collections4.CollectionUtils
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
+import org.springframework.ai.chat.metadata.EmptyUsage
 import reactor.core.publisher.Flux
 import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
@@ -503,7 +507,7 @@ class AgiAgentSession(
      */
     private suspend fun FlowCollector<Event>.emitOutput(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
-        if (output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
+        if (output.tokenUsage !is EmptyUsage &&  output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
             // Publish the live input-token count of the latest model call so the
             // SummarizationHook can decide compaction from real provider-reported usage
             // instead of a rough character estimate.
@@ -591,7 +595,7 @@ class AgiAgentSession(
                             Event.SessionUpdateEvent(
                                 SessionUpdate.ToolCallUpdate(
                                     toolCallId = ToolCallId(response.id()),
-                                    title = Json.toPrettyJson(title),
+//                                    title = Json.toPrettyJson(title),
                                     kind = ToolKindFind.find(response.name()),
                                     status = if (resultData.success) ToolCallStatus.COMPLETED
                                     else ToolCallStatus.FAILED,

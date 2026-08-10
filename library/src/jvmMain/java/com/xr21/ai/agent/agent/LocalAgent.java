@@ -34,6 +34,7 @@ import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegi
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.*;
+import com.xr21.ai.agent.tools.ConversationCompactionTool;
 import com.xr21.ai.agent.tools.GroovyScriptTool;
 import com.xr21.ai.agent.tools.ShellTools;
 import com.xr21.ai.agent.tools.SleepTool;
@@ -189,7 +190,7 @@ public class LocalAgent {
     }
 
     private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers, List<ToolCallback> interceptorTools) {
-        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new SleepTool()).build();
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new SleepTool(), new ConversationCompactionTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具
@@ -231,7 +232,16 @@ public class LocalAgent {
         String currentMode = runnableConfig.context().get("mode") instanceof String mode ? mode : "accept_edits";
         boolean readOnly = "plan".equalsIgnoreCase(currentMode);
         var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(readOnly).withDefaultSecurity().build();
-        WorkerInterceptor workerInterceptor = WorkerInterceptor.builder().defaultModel(chatModel).defaultTools(filesystemInterceptor.getTools())
+
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new SleepTool(), new ConversationCompactionTool()).build();
+        List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
+        // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
+        GroovyScriptTool groovyScriptTool = new GroovyScriptTool(tools);
+        ToolCallback groovyCallback = MethodToolCallbackProvider.builder().toolObjects(groovyScriptTool).build().getToolCallbacks()[0];
+        tools.add(groovyCallback);
+        tools.addAll(filesystemInterceptor.getTools());
+        log.debug("Loaded {} base tools", tools.size());
+        WorkerInterceptor workerInterceptor = WorkerInterceptor.builder().defaultModel(chatModel).defaultTools(tools)
                 .includeGeneralPurpose(true)  // 同时包含通用Worker
                 .build();
         ModelRetryInterceptor retryInterceptor = ModelRetryInterceptor.builder()
