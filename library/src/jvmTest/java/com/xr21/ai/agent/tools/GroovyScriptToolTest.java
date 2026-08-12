@@ -113,6 +113,25 @@ public class GroovyScriptToolTest {
         assertTrue(r.path("returnValue").path("step2").asInt() == 13);
     }
 
+
+    @Test
+    public void testInspectTool() throws Exception {
+        // inspect 成功时应包含 success:true 以及 name/description/inputSchema
+        JsonNode r = runScript("println(tools.inspect('echo'))");
+        assertTrue(r.path("success").asBoolean());
+        assertTrue("content=" + content(r), content(r).contains("success:true"));
+        assertTrue(content(r).contains("echo"));
+        assertTrue(content(r).contains("inputSchema"));
+    }
+
+    @Test
+    public void testInspectUnknownTool() throws Exception {
+        // inspect 不存在的工具时应返回 success:false 和错误信息
+        JsonNode r = runScript("println(tools.inspect('nonexistent_tool'))");
+        assertTrue(r.path("success").asBoolean());
+        assertTrue("content=" + content(r), content(r).contains("success:false"));
+        assertTrue(content(r).contains("未找到工具"));
+    }
     @Test
     public void testErrorOnUnknownTool() throws Exception {
         JsonNode r = runScript("println(tools.nonexistent())");

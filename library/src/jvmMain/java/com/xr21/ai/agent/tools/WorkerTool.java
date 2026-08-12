@@ -29,13 +29,14 @@ import com.xr21.ai.agent.utils.AcpProgressUtil;
 import com.xr21.ai.agent.utils.SinksUtil;
 import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.util.StringUtils;
-import reactor.core.publisher.Flux;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
@@ -62,10 +63,7 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
      * Create a ToolCallback for the worker tool.
      */
     public static ToolCallback createWorkerToolCallback(Map<String, ReactAgent> workers, String description) {
-        return FunctionToolCallback.builder("worker", new WorkerTool(workers))
-                .description(description)
-                .inputType(WorkerRequest.class)
-                .build();
+        return FunctionToolCallback.builder("worker", new WorkerTool(workers)).description(description).inputType(WorkerRequest.class).build();
     }
 
     @Override
@@ -85,15 +83,11 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
         try {
             if (context.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
                 if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations clientSessionOperations) {
-                    SuspendKt.runSuspend((completion) -> {
-                        StringBuilder builder = new StringBuilder();
-                        Flux<AgentOutput<Object>> flux = null;
-                        try {
-                            flux = worker.stream(taskPrompt).map(SinksUtil.INSTANCE::buildContent);
-                        } catch (GraphRunnerException e) {
-                            return "Error executing worker task: " + e.getMessage();
-                        }
-                        flux.doOnNext(output -> {
+                    StringBuilder builder = new StringBuilder();
+                    try {
+                        String sessionId = "session-worker-" + System.currentTimeMillis();
+                        RunnableConfig runnableConfig = RunnableConfig.builder().threadId(sessionId).build();
+                        AgentOutput<@NotNull Object> blockedLast = worker.stream(taskPrompt, runnableConfig).map(SinksUtil.INSTANCE::buildContent).doOnNext(output -> {
                             if (StringUtils.hasText(output.getChunk())) {
                                 builder.append(output.getChunk());
                                 AcpProgressUtil.sendProgress(context, request.taskId, builder.toString());
@@ -103,20 +97,34 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
                                 AcpProgressUtil.sendProgress(context, request.taskId, builder.toString());
                             }
                         }).doOnComplete(() -> {
-                            log.info("Workers task complete");
-                            SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text("\n[Worker completed : " + request.title + "]", null, null));
-                            clientSessionOperations.notify(notification, null, completion);
+                            SuspendKt.runSuspend((completion) -> {
+                                log.info("Workers task complete");
+                                SessionUpdate notification = BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text("\n[Worker completed : " + request.title + "]", null, null));
+                                clientSessionOperations.notify(notification, null, completion);
+                                return null;
+                            });
                         }).doOnError(e -> {
                             log.error("Workers task failed", e);
                         }).blockLast();
+                        if (blockedLast != null && blockedLast.data.getOrDefault("messages", List.of()) instanceof List<?> msgs) {
+                            for (int i = msgs.size() - 1; i >= 0; i--) {
+                                if (msgs.get(i) instanceof AssistantMessage am) {
+                                    return am.getText();
+                                }
+                            }
+                        }
                         return builder.toString();
-                    });
+                    } catch (GraphRunnerException e) {
+                        return "Error executing worker task: " + e.getMessage();
+                    }
                 }
+            } else {
+                AssistantMessage workerOutput = worker.call(taskPrompt);
+                // 若 worker 通过 msg 工具显式回传了结果，则优先返回该结构化结果，
+                // 使主智能体可在 run_groovy_script 中解析结果并进行并行/分支编排
+                return workerOutput.getText();
             }
-            AssistantMessage workerOutput = worker.call(taskPrompt);
-            // 若 worker 通过 msg 工具显式回传了结果，则优先返回该结构化结果，
-            // 使主智能体可在 run_groovy_script 中解析结果并进行并行/分支编排
-            return workerOutput.getText();
+            return "Error executing worker task";
         } catch (Exception e) {
             return "Error executing worker task: " + e.getMessage();
         }
@@ -132,21 +140,19 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
         StringBuilder sb = new StringBuilder(request.description == null ? "" : request.description);
         boolean hasFileName = StringUtils.hasText(request.fileName);
         boolean hasResultType = StringUtils.hasText(request.resultType);
-        boolean taskId = StringUtils.hasText(request.taskId);
-        if (hasFileName || hasResultType) {
+        boolean hasTaskId = StringUtils.hasText(request.taskId);
+        if (hasFileName || hasResultType || hasTaskId) {
             sb.append("\n\n## 任务上下文（主智能体期望，仅作参考，由你根据任务实际决定如何回传）");
-            if (hasFileName) {
-                sb.append("\n- 期望成果物文件路径: ").append(request.fileName);
+            if (hasTaskId) {
+                sb.append("\n- 当前任务id: ").append(request.taskId).append("（调用msg工具时透传该任务id，以将结果返回给调用方）");
             }
             if (hasFileName) {
                 sb.append("\n- 期望成果物文件路径: ").append(request.fileName);
             }
             if (hasResultType) {
-                sb.append("\n- 当前任务id: ").append(request.resultType);
-                sb.append("\n- 调用msg工具时透传该任务id: 以将结果返回给调用方");
+                sb.append("\n- 期望返回格式: ").append(request.resultType);
             }
-            sb.append("\n请结合任务实际自行决定：回传格式（text/boolean/json/file）、是否写入文件")
-                    .append("（如需写入，请在 msg 工具中指定 file_name 或 result_type=file）以及最终回传内容。");
+            sb.append("\n请结合任务实际自行决定：回传格式（text/boolean/json/file）、是否写入文件").append("（如需写入，请在 msg 工具中指定 file_name 或 result_type=file）以及最终回传内容。");
         }
         return sb.toString();
     }

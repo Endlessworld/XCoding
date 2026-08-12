@@ -69,7 +69,7 @@ public class MsgTool implements BiFunction<MsgTool.MsgRequest, ToolContext, Stri
             String content = request.content == null ? "" : request.content;
             // 由 worker 自行决定返回格式与文件名
             ResultType type = request.resultType != null ? ResultType.parse(request.resultType) : ResultType.TEXT;
-            String fileName = request.fileName;
+            String fileName = request.filePath;
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("success", true);
@@ -113,7 +113,7 @@ public class MsgTool implements BiFunction<MsgTool.MsgRequest, ToolContext, Stri
                 }
             } else if (content.length() > maxInlineLength) {
                 // 默认 text：超长自动落盘
-                String filePath = writeToFile(content, request.fileName, request.workerType);
+                String filePath = writeToFile(content, request.filePath, request.workerType);
                 result.put("truncated", true);
                 result.put("contentLength", content.length());
                 result.put("filePath", filePath);
@@ -143,15 +143,39 @@ public class MsgTool implements BiFunction<MsgTool.MsgRequest, ToolContext, Stri
     }
 
     /**
-     * 将超大结果写入工作目录下 worker_output 子目录，返回文件绝对路径。
+     * 将结果写入工作目录下 worker_output 子目录，返回文件绝对路径。
+     * <p>
+     * 支持多级相对目录（sub/dir/report.txt，自动创建父目录）；若传入绝对路径或
+     * 越界（../）路径，则清洗非法字符后作为扁平文件名置于 worker_output 根下，
+     * 保证最终文件始终位于 worker_output 目录内，避免路径穿越与怪异文件名。
      */
     private String writeToFile(String content, String fileName, String workerType) throws Exception {
         Path base = Path.of(LocalAgent.WORKSPACE_ROOT, "worker_output").toAbsolutePath();
         Files.createDirectories(base);
-        String safeName = (fileName != null && !fileName.isBlank()) ? fileName.replaceAll("[\\\\/:*?\"<>|]", "_") : "worker_result_" + UUID.randomUUID().toString().substring(0, 8) + ".txt";
-        Path file = base.resolve(safeName);
-        Files.writeString(file, content, StandardCharsets.UTF_8);
-        return file.toAbsolutePath().toString();
+
+        // 未指定文件名时自动生成，避免重名覆盖
+        if (fileName == null || fileName.isBlank()) {
+            fileName = "worker_result_" + UUID.randomUUID().toString().substring(0, 8) + ".txt";
+        }
+
+        // 将 Windows/Linux 路径分隔符统一为 "/"，以支持多级相对目录（sub/dir/report.txt）
+        String normalized = fileName.replace('\\', '/');
+        Path target = base.resolve(normalized).normalize();
+
+        // 防路径穿越：解析后必须仍位于 base 目录内，否则回退为扁平文件名置于 base 根下
+        // （例如传入绝对路径或 "../" 越界路径时，清洗非法字符后作为普通文件名处理）
+        if (!target.startsWith(base)) {
+            String flat = fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+            target = base.resolve(flat).normalize();
+        }
+
+        // 确保目标父目录存在（支持多级子目录自动创建）
+        Path parent = target.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.writeString(target, content, StandardCharsets.UTF_8);
+        return target.toAbsolutePath().toString();
     }
 
     /**
@@ -220,9 +244,9 @@ public class MsgTool implements BiFunction<MsgTool.MsgRequest, ToolContext, Stri
         @JsonPropertyDescription("当前 worker 的类型名称")
         public String workerType;
 
-        @JsonProperty(value = "file_name")
-        @JsonPropertyDescription("(可选) 当决定将成果写入文件时使用的文件名，默认自动生成。若不提供且未指定 result_type=file，则按内容大小决定是否自动落盘")
-        public String fileName;
+        @JsonProperty(value = "file_path")
+        @JsonPropertyDescription("(可选) 当决定将成果写入文件时使用的文件目录+文件名(相对于工作目录的多级目录)，默认自动生成。若不提供且未指定 result_type=file，则按内容大小决定是否自动落盘")
+        public String filePath;
 
         @JsonProperty(value = "result_type")
         @JsonPropertyDescription("(可选) 本次回传结果的期望格式：text(默认)/boolean/json/file。boolean 校验 true/false；json 校验可解析的 JSON 并结构化返回；file 始终写入文件并只返回路径")

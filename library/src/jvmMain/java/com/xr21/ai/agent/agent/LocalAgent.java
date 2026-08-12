@@ -375,11 +375,11 @@ public class LocalAgent {
                         .build())
                 .autoReload(true)
                 .build());
-        hooks.add(SummarizationHook.builder()
-                .model(chatModel)
-                .maxTokensBeforeSummary(128 * 1024)
-                .messagesToKeep(3)
-                .build());
+//        hooks.add(SummarizationHook.builder()
+//                .model(chatModel)
+//                .maxTokensBeforeSummary(128 * 1024)
+//                .messagesToKeep(3)
+//                .build());
 
         return hooks;
     }

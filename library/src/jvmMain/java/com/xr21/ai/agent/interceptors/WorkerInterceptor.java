@@ -39,7 +39,7 @@ import java.util.*;
  * A chief benefit of workers is that they can handle multi-step tasks, and then return
  * a clean, concise response to the main agent.
  * <p>
- * This interceptor comes with a default general-purpose worker that can be used to
+ * This interceptor comes with a default worker worker that can be used to
  * handle the same tasks as the main agent, but with isolated context.
  * <p>
  * Example:
@@ -91,7 +91,7 @@ public class WorkerInterceptor extends ModelInterceptor {
             """;
 
     private static final String DEFAULT_GENERAL_PURPOSE_DESCRIPTION =
-            "General-purpose worker for researching complex questions, searching for files and content, " +
+            "worker worker for researching complex questions, searching for files and content, " +
                     "and executing multi-step tasks. This worker has access to all tools as the main agent.";
 
     private static final String WORKER_TOOL_DESCRIPTION = """
@@ -109,16 +109,16 @@ public class WorkerInterceptor extends ModelInterceptor {
             4. The worker's outputs should generally be trusted
             5. Clearly tell the worker whether you expect it to create content, perform analysis, or just do research
             6. If the worker description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
-            7. When only the general-purpose worker is provided, you should use it for all tasks. It is great for isolating context and token usage, and completing specific, complex tasks, as it has all the same capabilities as the main agent.
+            7. When only the worker worker is provided, you should use it for all tasks. It is great for isolating context and token usage, and completing specific, complex tasks, as it has all the same capabilities as the main agent.
             8. Optional params when dispatching a task (作为上下文提示下发给 worker，最终由 worker 自行决定如何输出、是否写文件)：
                - file_name: 期望 worker 将执行成果写入的目标文件路径（可选）。仅作为上下文提示下发给 worker，由 worker 自行判断是否写文件；worker 若决定写文件，会在 msg 工具中指定 file_name 或 result_type=file。
                - result_type: 期望 worker 返回的格式，可选 text(默认)/boolean/json/file（可选）。仅作为上下文提示下发给 worker，由 worker 自行决定实际回传格式。
                - 每个 worker 完成后都会通过 msg 工具回传 JSON：{success, file_name,worker_type, result_type, content 或 filePath}，可在 run_groovy_script 中解析以进行并行/分支编排。
                - 回传 JSON字段说明 success : worker执行是否完成期望目标,content : worker 执行成果内容，需要回传给主智能体的结果,
-            ### Example usage of the general-purpose worker:
+            ### Example usage of the worker worker:
             
             <example_worker_descriptions>
-            "general-purpose": use this worker for general purpose tasks, it has access to all tools as the main agent.
+            "worker": use this worker for general purpose tasks, it has access to all tools as the main agent.
             </example_worker_descriptions>
             
             <example>
@@ -243,13 +243,13 @@ public class WorkerInterceptor extends ModelInterceptor {
         StringBuilder workerDescriptions = new StringBuilder();
 
         if (includeGeneralPurpose) {
-            workerDescriptions.append("- general-purpose: ")
+            workerDescriptions.append("- worker: ")
                     .append(DEFAULT_GENERAL_PURPOSE_DESCRIPTION)
                     .append("\n");
         }
 
         for (Map.Entry<String, ReactAgent> entry : workers.entrySet()) {
-            if (!"general-purpose".equals(entry.getKey())) {
+            if (!"worker".equals(entry.getKey())) {
                 workerDescriptions.append("- ")
                         .append(entry.getKey())
                         .append(": ")
@@ -357,7 +357,7 @@ public class WorkerInterceptor extends ModelInterceptor {
         }
 
         /**
-         * Whether to include the default general-purpose worker.
+         * Whether to include the default worker worker.
          */
         public Builder includeGeneralPurpose(boolean include) {
             this.includeGeneralPurpose = include;
@@ -369,7 +369,9 @@ public class WorkerInterceptor extends ModelInterceptor {
                     .name(spec.getName())
                     .description(spec.getDescription())
                     .instruction(spec.getSystemPrompt())
-                    .saver(new MemorySaver());
+                    .outputKey("worker")
+                    .outputType(MsgTool.MsgRequest.class);
+//                    .saver(new MemorySaver());
 
             ChatModel model = spec.getModel() != null ? spec.getModel() : defaultModel;
             if (model != null) {
@@ -403,17 +405,17 @@ public class WorkerInterceptor extends ModelInterceptor {
         }
 
         public WorkerInterceptor build() {
-            // Add the default general-purpose worker reusing the same creation path as custom
+            // Add the default worker worker reusing the same creation path as custom
             // workers, so it also receives ReturnDirectModelHook and default hooks/interceptors.
             if (includeGeneralPurpose && defaultModel != null) {
                 SubAgentSpec generalPurposeSpec = SubAgentSpec.builder()
-                        .name("general-purpose")
+                        .name("worker")
                         .description(DEFAULT_GENERAL_PURPOSE_DESCRIPTION)
                         .systemPrompt(DEFAULT_WORKER_PROMPT)
                         .model(defaultModel)
                         .tools(defaultTools)
                         .build();
-                this.workers.put("general-purpose", createWorkerFromSpec(generalPurposeSpec));
+                this.workers.put("worker", createWorkerFromSpec(generalPurposeSpec));
             }
             return new WorkerInterceptor(this);
         }

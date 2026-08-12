@@ -2,6 +2,8 @@
 
 package com.xr21.ai.agent.acp
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.LoggerContext
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.client.Client
 import com.agentclientprotocol.client.ClientInfo
@@ -18,10 +20,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
-import java.util.concurrent.atomic.AtomicInteger
+import org.slf4j.LoggerFactory
 import java.io.File
+import java.io.FileDescriptor
+import java.io.FileOutputStream
+import java.io.PrintStream
 import java.net.ServerSocket
-import java.util.UUID
+import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * AgiHarnessAgent 控制台调测 Demo。
@@ -41,8 +47,8 @@ import java.util.UUID
  *
  * 运行: ./gradlew :library:runHarnessDemo
  */
-private const val DEMO_PORT = 19999
-private const val WS_URL = "ws://127.0.0.1:$DEMO_PORT/acp"
+private val DEMO_PORT = randomAvailablePort()
+private val WS_URL = "ws://127.0.0.1:$DEMO_PORT/acp"
 
 // ── ANSI 颜色工具 ─────────────────────────────────────────────
 private object Color {
@@ -63,12 +69,41 @@ private fun ok(msg: String) = println("  ${Color.GREEN}ok${Color.RESET} $msg")
 private fun info(msg: String) = println("  ${Color.DIM}$msg${Color.RESET}")
 private fun err(msg: String) = cprintln(Color.RED, "  error: $msg")
 
+
+/** 静默 logback：清空所有 appender 并将根日志级别设为 OFF，避免运行时刷屏日志干扰控制台输出。 */
+private fun silenceLogback() {
+    runCatching {
+        val factory = LoggerFactory.getILoggerFactory()
+        if (factory is LoggerContext) {
+            factory.reset() // 移除所有已配置的 appender
+            factory.getLogger(ch.qos.logback.classic.Logger.ROOT_LOGGER_NAME)
+                .also { it.detachAndStopAllAppenders() }
+                .level = Level.OFF
+        }
+    }
+}
+
+
+/** 应用 UTF-8 编码：设置 JVM 系统属性并重新绑定标准输出/错误流编码，避免中文乱码。
+ *  注意：file.encoding 等属性在 JVM 启动后已固化，这里同时重建 System.out/err 才能真正生效。 */
+private fun applyUtf8Encoding() {
+    runCatching {
+        System.setProperty("file.encoding", "UTF-8")
+        System.setProperty("native.encoding", "UTF-8")
+        System.setProperty("stdout.encoding", "UTF-8")
+        System.setProperty("stderr.encoding", "UTF-8")
+        val utf8 = Charsets.UTF_8
+        System.setOut(PrintStream(FileOutputStream(FileDescriptor.out), true, utf8.name()))
+        System.setErr(PrintStream(FileOutputStream(FileDescriptor.err), true, utf8.name()))
+    }
+}
+
 fun main() = runBlocking {
-    cprintln(Color.BOLD + Color.CYAN, "AgiHarnessAgent Console Demo")
+    silenceLogback()
+    applyUtf8Encoding()
+    cprintln(Color.BOLD , "AgiHarnessAgent Console Demo")
     cprintln(Color.DIM, "─".repeat(40))
     println()
-
-    ensurePortAvailable(DEMO_PORT)
 
     // 1. 启动内嵌 WebSocket 服务器
     info("[1/4] 启动 ACP WebSocket 服务器...")
@@ -241,36 +276,47 @@ private suspend fun handleModelCommand(session: ClientSession, parts: List<Strin
 }
 
 // ── 流式输出 ──────────────────────────────────────────────────
-/** 发送 prompt 并实时显示事件流。 */
+/** 发送 prompt 并实时渲染事件流。 */
 private suspend fun sendPrompt(session: ClientSession, text: String) {
     println()
+    cprintln(Color.BOLD + Color.CYAN, "  ┌─ you ─────────────────────────────")
+    println("  │ $text")
+    cprintln(Color.BOLD + Color.CYAN, "  └──────────────────────────────────")
+    println()
+
     val flow = session.prompt(content = listOf(ContentBlock.Text(text)))
-    var hasThought = false
-    var hasMessage = false
+
+    var thinking = false
+    var responding = false
+    var toolAreaOpen = false
+    val tools = linkedMapOf<String, ToolState>()
+    var stopReason: StopReason? = null
+    var usage: Usage? = null
 
     try {
         flow.collect { event ->
             when (event) {
                 is Event.SessionUpdateEvent -> {
-                    when (val update = event.update) {
+                    when (val u = event.update) {
                         is SessionUpdate.AgentThoughtChunk -> {
-                            val t = (update.content as? ContentBlock.Text)?.text ?: ""
+                            val t = (u.content as? ContentBlock.Text)?.text ?: ""
                             if (t.isNotBlank()) {
-                                if (!hasThought) {
-                                    cprint(Color.DIM + Color.MAGENTA, " thought: ")
-                                    hasThought = true
+                                if (!thinking) {
+                                    cprint(Color.MAGENTA, "  ─ thinking ─ ")
+                                    thinking = true
                                 }
-                                cprint(Color.DIM, t)
+                                print(Color.DIM + t + Color.RESET)
+                                System.out.flush()
                             }
                         }
 
                         is SessionUpdate.AgentMessageChunk -> {
-                            val t = (update.content as? ContentBlock.Text)?.text ?: ""
+                            val t = (u.content as? ContentBlock.Text)?.text ?: ""
                             if (t.isNotBlank()) {
-                                if (!hasMessage) {
-                                    if (hasThought) println()
-                                    cprint(Color.GREEN, "  response: ")
-                                    hasMessage = true
+                                if (thinking) { println(); thinking = false }
+                                if (!responding) {
+                                    cprintln(Color.GREEN, "  ${Color.BOLD}agent${Color.RESET}:")
+                                    responding = true
                                 }
                                 print(t)
                                 System.out.flush()
@@ -278,57 +324,154 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                         }
 
                         is SessionUpdate.ToolCall -> {
-                            println()
-                            println("  ${Color.YELLOW}tool: ${update.title}${Color.RESET} ${Color.RED}PENDING${Color.RESET}  (${update.rawInput})")
+                            if (thinking || responding) { println(); thinking = false; responding = false }
+                            val id = u.toolCallId.toString()
+                            val st = ToolState(
+                                title = u.title ?: "",
+                                kind = u.kind,
+                                status = u.status,
+                                rawInput = u.rawInput,
+                                rawOutput = u.rawOutput
+                            )
+                            tools[id] = st
+                            if (!toolAreaOpen) {
+                                cprintln(Color.BOLD + Color.CYAN, "  ┌─ tools ────────────────────────────")
+                                toolAreaOpen = true
+                            }
+                            renderToolStart(st)
                         }
 
                         is SessionUpdate.ToolCallUpdate -> {
-                            if (update.status != null) {
-                                println("  ${Color.YELLOW}tool: ${update.title}${Color.RESET} ${update.status}  ${update.rawOutput ?: ""} ${update.content}")
+                            if (thinking || responding) { println(); thinking = false; responding = false }
+                            val id = u.toolCallId.toString()
+                            val st = tools.getOrPut(id) { ToolState(title = u.title ?: "", kind = u.kind) }
+                            u.kind?.let { st.kind = it }
+                            if (st.title.isBlank() && u.title != null) st.title = u.title.toString()
+                            u.status?.let { st.status = it }
+                            u.rawInput?.let {
+                                if (it != st.rawInput) {
+                                    st.rawInput = it
+                                    renderToolInput(st)
+                                }
+                            }
+                            u.rawOutput?.let {
+                                if (it != st.rawOutput) {
+                                    st.rawOutput = it
+                                    renderToolOutput(st)
+                                }
                             }
                         }
 
-                        is SessionUpdate.UsageUpdate -> {
-                            println()
-                            info("token: ${update.used}")
-                        }
+                        is SessionUpdate.UsageUpdate -> { /* 最终用量在 summary 汇总 */ }
 
                         else -> {}
                     }
                 }
 
                 is Event.PromptResponseEvent -> {
-                    val reason = event.response.stopReason
-                    println()
-                    info("stopReason: $reason")
-                    event.response.usage?.let { u ->
-                        info("usage: in=${u.inputTokens} out=${u.outputTokens} total=${u.totalTokens}")
-                    }
+                    if (thinking || responding) println()
+                    thinking = false
+                    responding = false
+                    stopReason = event.response.stopReason
+                    usage = event.response.usage
                 }
             }
         }
     } catch (e: Exception) {
+        if (thinking || responding) println()
+        thinking = false
+        responding = false
         println()
         err(e.message ?: "unknown error")
+    }
+
+    // 关闭工具区域（若已打开）
+    if (toolAreaOpen) {
+        cprintln(Color.BOLD + Color.CYAN, "  └──────────────────────────────────")
+        println()
+    }
+
+    // 汇总
+    if (stopReason != null || usage != null) {
+        println()
+        cprintln(Color.BOLD, "  ┌─ summary ──────────────────────────")
+        stopReason?.let { info("stopReason: $it") }
+        usage?.let {
+            info("tokens: in=${it.inputTokens}  out=${it.outputTokens}  total=${it.totalTokens}")
+        }
+        cprintln(Color.BOLD, "  └──────────────────────────────────")
+        println()
     }
     println()
 }
 
+/** 工具类型标记 */
+private fun kindLabel(kind: ToolKind?): String = kind?.let {
+    "${Color.CYAN}[${it.name.lowercase()}]${Color.RESET}"
+} ?: ""
+
+/** 工具调用状态的颜色标记 */
+private fun statusLabel(status: ToolCallStatus?): String = when (status) {
+    ToolCallStatus.PENDING -> "${Color.DIM}[pending]${Color.RESET}"
+    ToolCallStatus.IN_PROGRESS -> "${Color.CYAN}[running]${Color.RESET}"
+    ToolCallStatus.COMPLETED -> "${Color.GREEN}[done]${Color.RESET}"
+    ToolCallStatus.FAILED -> "${Color.RED}[failed]${Color.RESET}"
+    null -> "${Color.DIM}[?]${Color.RESET}"
+}
+
+/** 一次工具调用的状态跟踪 */
+private class ToolState(
+    var title: String,
+    var kind: ToolKind? = null,
+    var status: ToolCallStatus? = null,
+    var rawInput: JsonElement? = null,
+    var rawOutput: JsonElement? = null
+)
+
+/** 工具被调用时立即输出调用头与完整入参。 */
+private fun renderToolStart(st: ToolState) {
+    println("  │ ${Color.YELLOW}${toolDisplayName(st)}${Color.RESET}  ${kindLabel(st.kind)} ${statusLabel(st.status)}")
+    st.rawInput?.let {
+        val s = it.toString()
+        if (s.isNotBlank()) println("  │  ${Color.BOLD}in:${Color.RESET}  $s")
+    }
+    System.out.flush()
+}
+
+/** 工具显示名：优先 title（工具名/标题），回退为类型名。 */
+private fun toolDisplayName(st: ToolState): String =
+    st.title.ifBlank { st.kind?.name?.lowercase() ?: "tool" }
+
+/** 工具入参更新（增量）时立即输出完整入参。 */
+private fun renderToolInput(st: ToolState) {
+    st.rawInput?.let {
+        val s = it.toString()
+        if (s.isNotBlank()) println("  │  ${Color.BOLD}in:${Color.RESET}  $s")
+    }
+    System.out.flush()
+}
+
+/** 工具出参更新时立即输出完整出参。 */
+private fun renderToolOutput(st: ToolState) {
+    st.rawOutput?.let {
+        val s = it.toString()
+        if (s.isNotBlank()) println("  │  ${Color.BOLD}out:${Color.RESET} $s")
+    }
+    System.out.flush()
+}
+
 // ── 端口检测 ──────────────────────────────────────────────────
-private fun ensurePortAvailable(port: Int) {
-    var retries = 3
-    while (retries-- > 0) {
+/** 在 [19999, 65536] 之间随机挑选一个当前可用的端口（每次运行不同）。
+ *  按随机顺序尝试绑定，若全部被占用则抛出异常。 */
+private fun randomAvailablePort(min: Int = 19999, max: Int = 65536): Int {
+    for (port in (min..max).shuffled()) {
         try {
-            ServerSocket(port).use { return }
+            ServerSocket(port).use { return port }
         } catch (_: java.io.IOException) {
-            if (retries == 0) {
-                err("端口 $port 被占用，无法启动服务器")
-                throw java.io.IOException("Port $port is not available")
-            }
-            cprintln(Color.YELLOW, "端口 $port 被占用，等待释放... ($retries 次重试剩余)")
-            Thread.sleep(2000)
+            // 端口被占用，尝试下一个
         }
     }
+    throw java.io.IOException("No available port in range $min..$max")
 }
 
 // ── Demo 用的 ClientSessionOperations ────────────────────────

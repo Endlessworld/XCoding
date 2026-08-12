@@ -41,7 +41,17 @@ public class GroovyToolBindings implements GroovyObject {
      */
     @Override
     public Object invokeMethod(String name, Object args) {
+        // 内置方法：判断指定类名在当前脚本环境（类加载器）下是否可加载/调用。
+        if ("canLoad".equals(name)) {
+            return canLoad(resolveClassName(args));
+        }
+        // 内置方法：返回指定工具的工具信息（名称/描述/输入schema）
+        if ("inspect".equals(name)) {
+            return inspect(resolveToolName(args));
+        }
+
         ToolCallback callback = toolsByName.get(name);
+
         if (callback == null) {
             throw new MissingMethodException(name, getClass(), toArgsArray(args));
         }
@@ -187,5 +197,117 @@ public class GroovyToolBindings implements GroovyObject {
             return arr;
         }
         return args == null ? new Object[0] : new Object[]{args};
+    }
+
+    /**
+     * 从调用参数中解析出类名字符串（兼容直接传 String 或 Map 包裹）。
+     */
+    private String resolveClassName(Object args) {
+        Object[] arr = toArgsArray(args);
+        if (arr.length == 0 || arr[0] == null) {
+            throw new IllegalArgumentException("canLoad 需要一个类名参数，如 tools.canLoad('java.lang.String')");
+        }
+        Object first = arr[0];
+        if (first instanceof Map<?, ?> m && m.containsKey("className")) {
+            return String.valueOf(m.get("className"));
+        }
+        if (first instanceof Map<?, ?> m && m.containsKey("class_name")) {
+            return String.valueOf(m.get("class_name"));
+        }
+        return String.valueOf(first);
+    }
+
+    /**
+     * 内置方法：判断指定类名在当前脚本环境（类加载器链）下是否可加载，
+     * 并在可加载时进一步探测是否可实例化调用。
+     */
+    private Object canLoad(String className) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("className", className);
+        try {
+            Class<?> clazz = Class.forName(className, false, resolveClassLoader());
+            result.put("success", true);
+            result.put("classLoader", clazz.getClassLoader() != null ? clazz.getClassLoader().toString() : "bootstrap");
+            result.put("isInterface", clazz.isInterface());
+            result.put("isAbstract", java.lang.reflect.Modifier.isAbstract(clazz.getModifiers()));
+            // 探测是否可实例化（非接口/抽象/枚举，且存在可访问的无参构造器）。
+            boolean instantiable = !clazz.isInterface() && !clazz.isEnum()
+                    && !java.lang.reflect.Modifier.isAbstract(clazz.getModifiers())
+                    && hasAccessibleNoArgConstructor(clazz);
+            result.put("instantiable", instantiable);
+            // 探测是否可直接调用静态方法（存在任何非 private 静态方法）。
+            boolean hasStaticCallable = java.util.Arrays.stream(clazz.getMethods())
+                    .anyMatch(m -> java.lang.reflect.Modifier.isStatic(m.getModifiers())
+                            && !java.lang.reflect.Modifier.isPrivate(m.getModifiers()));
+            result.put("hasStaticCallable", hasStaticCallable);
+            return result;
+        } catch (Throwable e) {
+            result.put("success", false);
+            result.put("error", e.getClass().getSimpleName() + ": " + e.getMessage());
+            return result;
+        }
+    }
+
+    /**
+     * 从调用参数中解析出工具名字符串（兼容直接传 String 或 Map 包裹）。
+     */
+    private String resolveToolName(Object args) {
+        Object[] arr = toArgsArray(args);
+        if (arr.length == 0 || arr[0] == null) {
+            throw new IllegalArgumentException("inspect 需要一个工具名参数，如 tools.inspect('read_file')");
+        }
+        Object first = arr[0];
+        if (first instanceof Map<?, ?> m && m.containsKey("toolName")) {
+            return String.valueOf(m.get("toolName"));
+        }
+        if (first instanceof Map<?, ?> m && m.containsKey("tool_name")) {
+            return String.valueOf(m.get("tool_name"));
+        }
+        return String.valueOf(first);
+    }
+
+    /**
+     * 内置方法：返回指定工具的工具信息，包括名称、描述与输入 schema（JSON）。
+     */
+    private Object inspect(String toolName) {
+        ToolCallback callback = toolsByName.get(toolName);
+        if (callback == null) {
+            return Map.of("success", false, "error", "未找到工具: " + toolName
+                    + "（可用 tools.names 查看全部工具）");
+        }
+        var def = callback.getToolDefinition();
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("success", true);
+        info.put("name", def.name());
+        info.put("description", def.description());
+        try {
+            JsonNode schema = objectMapper.readTree(def.inputSchema());
+            info.put("inputSchema", objectMapper.convertValue(schema, Object.class));
+        } catch (Exception e) {
+            info.put("inputSchema", def.inputSchema());
+            info.put("inputSchemaParseError", e.getMessage());
+        }
+        return info;
+    }
+
+    /**
+     * 依次尝试上下文类加载器与当前类所在类加载器，尽可能反映脚本运行环境的可见类。
+     */
+    private ClassLoader resolveClassLoader() {
+        ClassLoader contextCl = Thread.currentThread().getContextClassLoader();
+        if (contextCl != null) {
+            return contextCl;
+        }
+        ClassLoader ownCl = getClass().getClassLoader();
+        return ownCl != null ? ownCl : ClassLoader.getSystemClassLoader();
+    }
+
+    private boolean hasAccessibleNoArgConstructor(Class<?> clazz) {
+        try {
+            java.lang.reflect.Constructor<?> ctor = clazz.getDeclaredConstructor();
+            return !java.lang.reflect.Modifier.isPrivate(ctor.getModifiers());
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
     }
 }

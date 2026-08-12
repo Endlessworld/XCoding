@@ -64,6 +64,16 @@ tasks.named<Jar>("jar") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
+
+tasks.register<JavaExec>("runHarnessDemo") {
+    group = "application"
+    description = "Runs the AgiHarnessAgentConsoleDemo REPL (start ACP WebSocket server + client)"
+    dependsOn("testClasses")
+    mainClass.set("com.xr21.ai.agent.acp.AgiHarnessAgentConsoleDemoKt")
+    classpath = sourceSets.test.get().runtimeClasspath
+    workingDir = rootDir
+    standardInput = System.`in`
+}
 dependencies {
     // Spring AI
     implementation(libs.spring.ai.openai)
@@ -109,6 +119,8 @@ dependencies {
 
     // Groovy - Groovy script execution (GroovyScriptTool binds a `tools` object for MCP tool orchestration)
     implementation("org.codehaus.groovy:groovy:3.0.25")
+    // groovy-json - JSON support for Groovy scripts (JsonSlurper / JsonOutput / JsonBuilder)
+    implementation("org.codehaus.groovy:groovy-json:3.0.25")
     // Test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
