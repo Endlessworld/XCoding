@@ -567,8 +567,9 @@ class AgiAgentSession(
                                 toolCallId = ToolCallId(toolCall.id()),
                                 title = getTitle(toolCall),
                                 kind = ToolKindFind.find(toolCall.name()),
-                                status = ToolCallStatus.PENDING,
-                                content = content
+                                status = ToolCallStatus.IN_PROGRESS,
+                                content = content,
+                                rawInput = kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
                             )
                         )
                     )
@@ -580,44 +581,27 @@ class AgiAgentSession(
                 )
             }
         }
-
-        // Tool execution results (ToolResponseMessage)
         if (output.message is ToolResponseMessage) {
             val message = output.message
             if (CollectionUtils.isNotEmpty(message.responses)) {
                 message.responses.forEach { response ->
                     val resultData = ToolsUtil.parseToolResult(response.responseData())
-                    logger.info { "output.responses $resultData" }
-                    var kind = ToolKindFind.find(response.name())
-                    if (kind == ToolKind.EXECUTE) {
-                        var title = response.responseData();
-                        emit(
-                            Event.SessionUpdateEvent(
-                                SessionUpdate.ToolCallUpdate(
-                                    toolCallId = ToolCallId(response.id()),
-//                                    title = Json.toPrettyJson(title),
-                                    kind = ToolKindFind.find(response.name()),
-                                    status = if (resultData.success) ToolCallStatus.COMPLETED
-                                    else ToolCallStatus.FAILED,
-                                    content = resultData.toolCallContents,
-                                    locations = resultData.locations,
-                                )
+                    logger.debug { "output.responses $resultData" }
+                    emit(
+                        Event.SessionUpdateEvent(
+                            SessionUpdate.ToolCallUpdate(
+                                toolCallId = ToolCallId(response.id()),
+                                kind = ToolKindFind.find(response.name()),
+                                status = if (resultData.success) ToolCallStatus.COMPLETED
+                                else ToolCallStatus.FAILED,
+                                content = resultData.toolCallContents,
+                                locations = resultData.locations,
+                                rawOutput = runCatching {
+                                    kotlinx.serialization.json.Json.parseToJsonElement(response.responseData())
+                                }.getOrNull()
                             )
                         )
-                    }else{
-                        emit(
-                            Event.SessionUpdateEvent(
-                                SessionUpdate.ToolCallUpdate(
-                                    toolCallId = ToolCallId(response.id()),
-                                    kind = ToolKindFind.find(response.name()),
-                                    status = if (resultData.success) ToolCallStatus.COMPLETED
-                                    else ToolCallStatus.FAILED,
-                                    content = resultData.toolCallContents,
-                                    locations = resultData.locations,
-                                )
-                            )
-                        )
-                    }
+                    )
                 }
             }
         }
@@ -631,17 +615,18 @@ class AgiAgentSession(
         }.getOrNull() as? JsonObject
 
         // 无法解析为 JSON 时，直接返回原始 arguments
-        if (args == null) return toolCall.arguments()
+        if (args == null) return toolCall.name
 
         val title = args.string("title").ifBlank { toolCall.name() }
         val command = args.string("command")
         val script = args.string("script")
         val input = args.string("input")
+        val description = args.string("description")
 
-        val suffix = listOf(command, script).filter { it.isNotBlank() }.joinToString(" ")
+        val suffix = listOf(command, script,description).filter { it.isNotBlank() }.joinToString("")
 
         // arguments 中不包含任何特定字段时，返回 arguments 本身
-        if (suffix.isBlank() && input.isBlank()) return toolCall.arguments()
+        if (suffix.isBlank() && input.isBlank()) return toolCall.name
 
         return if (suffix.isNotBlank()) "$title $suffix" else input
     }

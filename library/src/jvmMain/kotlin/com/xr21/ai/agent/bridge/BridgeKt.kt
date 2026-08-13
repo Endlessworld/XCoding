@@ -256,7 +256,7 @@ object BridgeKt {
 
     /** 从 ToolCallUpdate 的 content 列表提取文本 */
     @JvmStatic
-    fun extractToolCallUpdateText(update: SessionUpdate.ToolCallUpdate): String {
+    fun extractToolCallUpdateText(update: ToolCallUpdate): String {
         return (update.content ?: emptyList()).joinToString("") {
             when (it) {
                 is ToolCallContent.Content -> (it.content as? ContentBlock.Text)?.text ?: ""
@@ -301,12 +301,12 @@ object BridgeKt {
 
     @JvmStatic
     fun buildToolCallUpdate(toolCall: AssistantMessage.ToolCall, arguments: String?): ToolCallUpdate {
-       return ToolCallUpdate(
-           ToolCallId(toolCall.id()),
-           arguments,
-            ToolKindFind.find(toolCall.name()),
-            ToolCallStatus.PENDING,
-            build(toolCall.name(), arguments)
+        return ToolCallUpdate(
+            toolCallId = ToolCallId(toolCall.id()),
+            kind = ToolKindFind.find(toolCall.name()),
+            status = ToolCallStatus.PENDING,
+//            content = build(toolCall.name(), arguments),
+            rawInput = kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments()),
         )
     }
 
@@ -359,6 +359,7 @@ object BridgeKt {
                         results.add(ToolCallContent.Diff(filePath, replaceText, searchText.ifEmpty { null }, null))
                     }
                 }
+
                 "insert_at_line" -> {
                     val newContent = edit["newContent"] as? String ?: ""
                     if (newContent.isNotEmpty()) {
@@ -373,6 +374,7 @@ object BridgeKt {
     private fun fallback(arguments: String): List<ToolCallContent> {
         return listOf(ToolCallContent.Content(ContentBlock.Text(arguments)))
     }
+
     @JvmStatic
     fun getLine(location: ToolCallLocation): Int {
         return location.line?.toInt() ?: 0
