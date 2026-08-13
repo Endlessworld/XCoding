@@ -74,6 +74,53 @@ tasks.named<Jar>("jar") {
     }
 }
 
+// ==================== Thin Launcher（瘦 jar + 运行时下载依赖） ====================
+// 生成运行时依赖坐标清单（group:artifact:version，每行一个）
+val thinDepsFile = layout.buildDirectory.file("generated/thin-deps.properties")
+
+tasks.register("generateThinDeps") {
+    group = "build"
+    description = "Generates thin-deps.properties from runtime classpath"
+    val outFile = thinDepsFile.get().asFile
+    outputs.file(outFile)
+    doLast {
+        outFile.parentFile.mkdirs()
+        val lines = configurations.runtimeClasspath.get()
+            .resolvedConfiguration.resolvedArtifacts
+            .mapNotNull { it.moduleVersion }
+            .map { m: ResolvedModuleVersion ->
+                "${m.id.group}:${m.id.name}:${m.id.version}"
+            }
+            .filter { !it.startsWith("com.xr21:") } // 排除项目自身子模块，仅保留三方依赖
+            .distinct()
+            .sorted()
+        outFile.writeText(lines.joinToString("\n"))
+        println("Thin deps generated: ${lines.size} artifacts -> ${outFile}")
+    }
+}
+
+// 瘦 jar：只含项目代码 + ThinLauncher + 依赖清单，不含三方依赖
+// 依赖由 ThinLauncher 在首次运行时自动下载到 ~/.xagent/lib
+// 可用 -Dxagent.home=... 覆盖缓存根目录
+// 用法: java -jar XAgent-thin.jar [args]
+tasks.register<Jar>("thinJar") {
+    dependsOn("classes", "generateThinDeps")
+    group = "build"
+    description = "Builds a thin JAR (no 3rd-party deps); deps downloaded at runtime by ThinLauncher"
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes["Main-Class"] = "com.xr21.ai.agent.ThinLauncher"
+        attributes["Multi-Release"] = "true"
+    }
+    from(sourceSets.main.get().output)
+    // 把项目自身子模块（:library / :tui）的 class 也打进瘦 jar（它们不是三方依赖，无需下载）
+    from(project(":library").sourceSets.main.get().output)
+    from(project(":tui").sourceSets.main.get().output)
+    from(thinDepsFile) { into("/") }
+    archiveBaseName.set("XAgent")
+    archiveClassifier.set("thin")
+}
+
 // 创建 fatJar 任务（打包所有依赖为可执行 fat JAR）
 tasks.register<Jar>("fatJar") {
     dependsOn("classes")

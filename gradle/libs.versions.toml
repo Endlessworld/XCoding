@@ -9,7 +9,9 @@ lombok = "1.18.38"
 agentclientprotocol = "0.23.0"
 ktor = "3.1.3"
 jsoup = "1.18.3"
-mordant = "3.0.2"
+kotlinxCoroutines = "1.9.0"
+kotlinxCollectionsImmutable = "0.3.7"
+groovy = "3.0.25"
 
 [libraries]
 spring-core = { group = "org.springframework", name = "spring-core", version.ref = "spring" }
@@ -28,6 +30,7 @@ acp-model-jvm = { group = "com.agentclientprotocol", name = "acp-model-jvm", ver
 acp-ktor-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-jvm", version.ref = "agentclientprotocol" }
 acp-ktor-client-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-client-jvm", version.ref = "agentclientprotocol" }
 acp-ktor-server-jvm = { group = "com.agentclientprotocol", name = "acp-ktor-server-jvm", version.ref = "agentclientprotocol" }
+acp-ktor-server = { group = "com.agentclientprotocol", name = "acp-ktor-server", version.ref = "agentclientprotocol" }
 
 # Ktor HTTP Client (engine required by ACP Ktor transport)
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
@@ -36,11 +39,17 @@ ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty", version.ref
 # HTML parsing
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 
+# Kotlin & KotlinX
+kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib" }
+kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test" }
+kotlin-test-junit = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-jdk8 = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-jdk8", version.ref = "kotlinxCoroutines" }
+kotlinx-collections-immutable = { group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
 
-# Mordant TUI
-mordant = { group = "com.github.ajalt.mordant", name = "mordant", version.ref = "mordant" }
-mordant-coroutines = { group = "com.github.ajalt.mordant", name = "mordant-coroutines", version.ref = "mordant" }
-mordant-markdown = { group = "com.github.ajalt.mordant", name = "mordant-markdown", version.ref = "mordant" }
-mordant-jvm-jna = { group = "com.github.ajalt.mordant", name = "mordant-jvm-jna", version.ref = "mordant" }
+# Groovy (GroovyScriptTool for MCP tool orchestration)
+groovy = { group = "org.codehaus.groovy", name = "groovy", version.ref = "groovy" }
+groovy-json = { group = "org.codehaus.groovy", name = "groovy-json", version.ref = "groovy" }
 [plugins]
 vanniktech-mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }

@@ -28,6 +28,14 @@ kotlin {
 // 确保编译时写入方法参数名，使反射能获取真实参数名而非 arg0/arg1
 // Java 使用 -parameters，Kotlin 使用 -java-parameters（等价）
 //-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8
+
+// ==================== 排除 Spring Boot 框架 ====================
+// Spring AI 的 starter 与 Alibaba AI 依赖会传递引入 Spring Boot，
+// 本库为纯 Spring 库无需 Spring Boot 运行时，此处全局排除整个 group。
+configurations.all {
+    exclude(group = "org.springframework.boot")
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-parameters")
 }
@@ -100,7 +108,7 @@ dependencies {
     implementation(libs.acp.ktor.client.jvm)
     implementation(libs.acp.ktor.server.jvm)
 // Source: https://mvnrepository.com/artifact/com.agentclientprotocol/acp-ktor-server
-    implementation("com.agentclientprotocol:acp-ktor-server:0.23.0")
+    implementation(libs.acp.ktor.server)
     // Ktor HTTP Client Engine (required by acp-ktor-jvm at runtime)
     implementation(libs.ktor.client.okhttp)
 
@@ -108,22 +116,22 @@ dependencies {
     implementation(libs.ktor.server.netty)
 
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-stdlib")
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.7")
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlin.reflect)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.jdk8)
+    implementation(libs.kotlinx.collections.immutable)
 
     // Jsoup - HTML parsing (used by WebSearchTool for DuckDuckGo search)
     implementation(libs.jsoup)
 
     // Groovy - Groovy script execution (GroovyScriptTool binds a `tools` object for MCP tool orchestration)
-    implementation("org.codehaus.groovy:groovy:3.0.25")
+    implementation(libs.groovy)
     // groovy-json - JSON support for Groovy scripts (JsonSlurper / JsonOutput / JsonBuilder)
-    implementation("org.codehaus.groovy:groovy-json:3.0.25")
+    implementation(libs.groovy.json)
     // Test dependencies
-    testImplementation("org.jetbrains.kotlin:kotlin-test")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlin.test.junit)
     testImplementation(kotlin("test"))
 }
 
