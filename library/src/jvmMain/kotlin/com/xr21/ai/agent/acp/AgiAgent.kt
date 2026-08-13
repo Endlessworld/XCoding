@@ -240,7 +240,7 @@ class AgiAgentSession(
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
             runnableConfig.context().putIfAbsent("mode", defaultMode.value)
             runnableConfig.context().putIfAbsent("thought_level", SessionConfigOptionsFactory.ThoughtLevel.LOW.valueId)
-            val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig)
+            val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig,currentCoroutineContext().client)
             agent.setSystemPrompt(LocalAgent.getInstruction(cwd))
             val recursiveFlux = recursiveAgentFlux(agent, userMessage)
             val channel = Channel<AgentOutput<Any>>(Channel.UNLIMITED)

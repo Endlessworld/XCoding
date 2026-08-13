@@ -23,7 +23,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.TokenCounter;
 import com.alibaba.cloud.ai.graph.agent.hook.messages.AgentCommand;
 import com.alibaba.cloud.ai.graph.agent.hook.messages.MessagesModelHook;
 import com.alibaba.cloud.ai.graph.agent.hook.messages.UpdatePolicy;
-import com.xr21.ai.agent.utils.AcpProgressUtil;
+import com.xr21.ai.agent.utils.AcpNotifyHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -138,12 +138,12 @@ public class SummarizationHook extends MessagesModelHook {
         }
 
         log.info("Token count {} exceeds threshold {}, triggering summarization", totalTokens, maxTokensBeforeSummary);
-        AcpProgressUtil.sendProgress(config, "Token count %s exceeds threshold %s, triggering summarization".formatted(totalTokens, maxTokensBeforeSummary));
+        AcpNotifyHelper.sendProgress(config, "Token count %s exceeds threshold %s, triggering summarization".formatted(totalTokens, maxTokensBeforeSummary));
 
         int cutoffIndex = findSafeCutoff(previousMessages);
 
         if (cutoffIndex <= 0) {
-            AcpProgressUtil.sendProgress(config, "⚠Cannot find safe cutoff point for summarization");
+            AcpNotifyHelper.sendProgress(config, "⚠Cannot find safe cutoff point for summarization");
             log.warn("Cannot find safe cutoff point for summarization");
             return new AgentCommand(previousMessages);
         }
@@ -174,7 +174,7 @@ public class SummarizationHook extends MessagesModelHook {
         String summary = summaryInput.isEmpty()
                 ? "No new conversation."
                 : createSummary(summaryInput);
-        AcpProgressUtil.sendProgress(config, summary);
+        AcpNotifyHelper.sendProgress(config, summary);
         // 缓存前缀稳定性优化：DeepSeek 等提供商按“从消息开头开始的最长公共前缀”命中缓存。
         // 固定前缀从队首一直延伸到最后一个 System（含旧摘要），内容逐字节不变，
         // 每轮压缩后，队首到摘要边界这段最昂贵、最稳定的前缀仍能命中缓存。
@@ -186,7 +186,7 @@ public class SummarizationHook extends MessagesModelHook {
         int incrementalCount = summaryEnd - lastSystemIndex - 1;
         log.info("Summarized {} incremental messages, keeping {} recent messages (fixed prefix {} preserved)",
                 incrementalCount, recentMessages.size(), fixedPrefix.size());
-        AcpProgressUtil.sendProgress(config, "Summarized %s incremental messages, keeping %s recent messages"
+        AcpNotifyHelper.sendProgress(config, "Summarized %s incremental messages, keeping %s recent messages"
                 .formatted(incrementalCount, recentMessages.size()));
         // 压缩后历史已大幅缩短，重置上次模型调用的 live token 数，避免下次 beforeModel
         // 仍读到旧的、远超阈值的 lastInputTokens 而立即再次触发压缩（重复压缩循环）。
@@ -201,7 +201,7 @@ public class SummarizationHook extends MessagesModelHook {
      */
     private int resolveTotalTokens(List<Message> previousMessages, RunnableConfig config) {
         Object live = config.context().get("lastInputTokens");
-        AcpProgressUtil.sendProgress(config, "lastInputTokens %s".formatted(live));
+        AcpNotifyHelper.sendProgress(config, "lastInputTokens %s".formatted(live));
         if (live instanceof Number n && n.longValue() > 0) {
             return n.intValue();
         }

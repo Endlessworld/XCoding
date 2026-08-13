@@ -34,7 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.xr21.ai.agent.utils.AcpProgressUtil.sendProgress;
+import static com.xr21.ai.agent.utils.AcpNotifyHelper.sendProgress;
 
 /**
  * 网络搜索工具 - 使用 Bing 免费搜索引擎（无需 API Key，国内可正常访问）

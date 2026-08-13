@@ -81,6 +81,12 @@ tasks.register<JavaExec>("runHarnessDemo") {
     classpath = sourceSets.test.get().runtimeClasspath
     workingDir = rootDir
     standardInput = System.`in`
+    // 服务端日志绑定为 slf4j-simple：默认仅 warn，仅输出应用日志（com.xr21.ai.agent）到控制台，
+    // 避免第三方库刷屏干扰 REPL。
+    systemProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn")
+    systemProperty("org.slf4j.simpleLogger.log.com.xr21.ai.agent", "info")
+    systemProperty("org.slf4j.simpleLogger.showDateTime", "true")
+    systemProperty("org.slf4j.simpleLogger.dateTimeFormat", "HH:mm:ss.SSS")
 }
 dependencies {
     // Spring AI
@@ -133,6 +139,9 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(kotlin("test"))
+    // SLF4J 日志绑定：升级后（Spring Boot 4.0）不再提供 logback，这里用 slf4j-simple
+    // 作为唯一 provider，使 KotlinLogging 的服务端日志可输出到控制台。
+    testRuntimeOnly("org.slf4j:slf4j-simple:2.0.17")
 }
 
 mavenPublishing {

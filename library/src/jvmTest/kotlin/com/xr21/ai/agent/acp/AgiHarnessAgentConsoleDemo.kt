@@ -2,8 +2,6 @@
 
 package com.xr21.ai.agent.acp
 
-import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.LoggerContext
 import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.client.Client
 import com.agentclientprotocol.client.ClientInfo
@@ -20,7 +18,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
-import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileOutputStream
@@ -70,20 +67,6 @@ private fun info(msg: String) = println("  ${Color.DIM}$msg${Color.RESET}")
 private fun err(msg: String) = cprintln(Color.RED, "  error: $msg")
 
 
-/** 静默 logback：清空所有 appender 并将根日志级别设为 OFF，避免运行时刷屏日志干扰控制台输出。 */
-private fun silenceLogback() {
-    runCatching {
-        val factory = LoggerFactory.getILoggerFactory()
-        if (factory is LoggerContext) {
-            factory.reset() // 移除所有已配置的 appender
-            factory.getLogger(ch.qos.logback.classic.Logger.ROOT_LOGGER_NAME)
-                .also { it.detachAndStopAllAppenders() }
-                .level = Level.OFF
-        }
-    }
-}
-
-
 /** 应用 UTF-8 编码：设置 JVM 系统属性并重新绑定标准输出/错误流编码，避免中文乱码。
  *  注意：file.encoding 等属性在 JVM 启动后已固化，这里同时重建 System.out/err 才能真正生效。 */
 private fun applyUtf8Encoding() {
@@ -99,7 +82,6 @@ private fun applyUtf8Encoding() {
 }
 
 fun main() = runBlocking {
-    silenceLogback()
     applyUtf8Encoding()
     cprintln(Color.BOLD , "AgiHarnessAgent Console Demo")
     cprintln(Color.DIM, "─".repeat(40))

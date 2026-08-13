@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
-import static com.xr21.ai.agent.utils.AcpProgressUtil.sendProgress;
+import static com.xr21.ai.agent.utils.AcpNotifyHelper.sendProgress;
 
 /**
  * 在文件中搜索文本模式的工具

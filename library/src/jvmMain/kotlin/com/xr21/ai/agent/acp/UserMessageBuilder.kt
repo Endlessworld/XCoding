@@ -240,7 +240,7 @@ object UserMessageBuilder {
             // 解析 MIME 类型
             val contentType = URLConnection.guessContentTypeFromName(uri)
             if (contentType == null) {
-                return Media.builder().mimeType(MimeType.valueOf("application/octet-stream")).data(uri).build()
+                return Media.builder().mimeType(MimeType.valueOf("application/octet-stream")).data(URI.create(uri)).build()
             }
             val mimeType = MimeType.valueOf(contentType)
             val mediaBuilder = Media.builder().mimeType(mimeType)

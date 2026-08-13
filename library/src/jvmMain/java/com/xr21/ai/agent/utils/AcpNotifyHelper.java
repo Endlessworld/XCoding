@@ -22,6 +22,7 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.tools.ToolContextHelper;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ToolContext;
 
@@ -33,7 +34,7 @@ import static com.xr21.ai.agent.acp.AgiAgentKt.SESSION_ID_CONTEXT_KEY;
  * Reference: AcpWriteTodosTool.sendAcpPlanUpdate()
  */
 @Slf4j
-public class AcpProgressUtil {
+public class AcpNotifyHelper {
 
     /**
      * Send a real-time AgentThoughtChunk notification to the ACP client.
@@ -47,11 +48,11 @@ public class AcpProgressUtil {
             if (toolContext.getContext().get("_AGENT_CONFIG_") instanceof RunnableConfig config) {
                 AssistantMessage assistantMessage = ToolContextHelper.getState(toolContext).map(state -> state.value("agent_output", AssistantMessage.class).orElse(null)).orElse(null);
                 AssistantMessage.ToolCall toolCall = null;
-                if (assistantMessage !=null && assistantMessage.hasToolCalls()) {
+                if (assistantMessage != null && assistantMessage.hasToolCalls()) {
                     toolCall = assistantMessage.getToolCalls().get(0);
                     log.info("toolCall {}", toolCall);
-                    sendProgress(config, message,toolCall);
-                }else{
+                    sendProgress(config, message, toolCall);
+                } else {
                     sendProgress(config, message);
                 }
             }
@@ -99,8 +100,8 @@ public class AcpProgressUtil {
      * Send a real-time AgentThoughtChunk notification to the ACP client.
      * This allows tools to stream progress updates as they execute.
      *
-     * @param config   the RunnableConfig
-     * @param message  the progress message to send
+     * @param config  the RunnableConfig
+     * @param message the progress message to send
      */
     public static void sendProgress(RunnableConfig config, String message) {
         try {
@@ -123,7 +124,7 @@ public class AcpProgressUtil {
         try {
             if (config.context().get(CLIENT_SESSION_CONTEXT_KEY) instanceof ClientSessionOperations client) {
                 SuspendKt.runSuspend((completion) -> {
-                    SessionUpdate notification = BridgeKt.buildToolCallUpdate(toolCall,message);
+                    SessionUpdate notification = BridgeKt.buildToolCallUpdate(toolCall, message);
                     client.notify(notification, null, completion);
                     if (config.context().get(SESSION_ID_CONTEXT_KEY) instanceof String sessionId) {
                         log.debug("ACP progress [{}]: {}", sessionId, message);
@@ -134,5 +135,19 @@ public class AcpProgressUtil {
         } catch (Exception e) {
             log.debug("Could not send ACP progress update: {}", e.getMessage());
         }
+    }
+
+    public static void sendMessageChunk(@NotNull ClientSessionOperations client, String message) {
+        SuspendKt.runSuspend((completion) -> {
+            SessionUpdate notification = BridgeKt.createAgentMessageChunk(message);
+            return client.notify(notification, null, completion);
+        });
+    }
+
+    public static void sendThoughtChunk(@NotNull ClientSessionOperations client, String message) {
+        SuspendKt.runSuspend((completion) -> {
+            SessionUpdate notification = BridgeKt.createAgentThoughtChunk("<p>"+message+"</p> <br>");
+            return client.notify(notification, null, completion);
+        });
     }
 }

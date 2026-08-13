@@ -16,6 +16,7 @@
 package com.xr21.ai.agent.tui.acp
 
 import com.agentclientprotocol.agent.AgentInfo
+import com.agentclientprotocol.annotations.UnstableApi
 import com.agentclientprotocol.client.Client
 import com.agentclientprotocol.client.ClientInfo
 import com.agentclientprotocol.client.ClientSession
@@ -51,6 +52,7 @@ import java.io.BufferedReader
  *
  * 通过 [lifecycleState] StateFlow 和 [lifecycleEvents] SharedFlow 监听生命周期变化。
  */
+@OptIn(UnstableApi::class)
 class AcpClientManager(private val appState: AppState) {
 
     // ========== 生命周期字段 ==========

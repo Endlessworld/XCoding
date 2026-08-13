@@ -29,9 +29,9 @@
 
 ### 技术栈
 
-- **语言**: Java 17, Kotlin 1.9.24
-- **框架**: Spring AI 1.1.0, Spring AI Alibaba 1.1.0.0
-- **协议**: ACP SDK 0.9.0-SNAPSHOT
+- **语言**: Java 21, Kotlin 1.9.24
+- **框架**: Spring AI 2.0.0-M1, Spring AI Alibaba 2.0.0-M1.1
+- **协议**: ACP SDK 0.23.0
 - **构建工具**: Gradle 8.x
 - **原生支持**: GraalVM Native Image
 
@@ -80,25 +80,26 @@
 
 ```
 ai-agents/
-├── library/                          # 主要模块
-│   ├── src/
-│   │   ├── jvmMain/
-│   │   │   └── java/com/xr21/ai/agent/
-│   │   │       ├── agent/
-│   │   │       │   ├── AcpAgent.java    # ACP 协议主入口
-│   │   │       │   └── LocalAgent.java  # 本地 Agent 实现
-│   │   │       ├── config/
-│   │   │       │   ├── AiModels.java    # AI 模型配置入口
-│   │   │       │   ├── ModelConfigLoader.java  # 配置加载器
-│   │   │       │   └── ModelsConfig.java # 配置数据类
-│   │   │       ├── entity/              # 数据实体
-│   │   │       ├── interceptors/       # 拦截器实现
-│   │   │       ├── tools/               # 工具实现
-│   │   │       └── utils/               # 工具类
-│   │   └── jvmTest/                    # 测试代码
-│   ├── build.gradle.kts               # 模块构建配置
-│   ├── native-reflect-config.json     # GraalVM 反射配置
-│   └── native-resource-config.json    # GraalVM 资源配置
+├── library/                          # 核心库（:library）
+│   ├── src/jvmMain/
+│   │   ├── java/com/xr21/ai/agent/    # Java 实现
+│   │   │   ├── agent/                 # LocalAgent（本地 Agent 核心）
+│   │   │   ├── config/                # AiModels / ModelConfigLoader
+│   │   │   ├── entity/                # AcpSession / AgentOutput / ...
+│   │   │   ├── interceptors/          # 7 个拦截器
+│   │   │   ├── tools/                 # 16 个工具实现
+│   │   │   └── utils/                 # 工具类
+│   │   └── kotlin/com/xr21/ai/agent/  # Kotlin 实现
+│   │       ├── acp/                   # AgiAgent / AcpAgentLauncher
+│   │       ├── auth/                  # AuthFlow / AuthManager
+│   │       ├── bridge/                # BridgeKt
+│   │       └── model/                 # Config
+│   ├── src/jvmTest/                   # 测试代码
+│   └── build.gradle.kts               # 模块构建配置
+├── tui/                               # Java TUI（:tui，tamboui 组件栈）
+├── app/                               # 可执行入口（:app，fatJar/thinJar/nativeCompile）
+├── tui-rust/                          # Rust TUI（独立 cargo 工程）
+├── docker/                            # Docker 配置
 ├── build.gradle.kts                   # 根构建配置
 ├── settings.gradle.kts                # 项目设置
 └── gradle/                            # Gradle 包装器
@@ -144,6 +145,7 @@ ai-agents/
 |-----|------|
 | `ContextCacheTool` | 指针数据读取器，用于重新获取超长工具调用参数/结果 |
 | `AcpWriteTodosTool` | ACP 任务管理，支持 Plan 模式 |
+| `ConversationCompactionTool` | 会话压缩，长对话摘要化处理 |
 
 #### 网络工具
 | 工具 | 描述 |
@@ -180,18 +182,18 @@ ai-agents/
 
 1. **作为 ACP Agent 运行**
    ```bash
-   ./gradlew :library:runAcpAgent
+   ./gradlew :app:runAcpAgent
    ```
 
 2. **使用 Fat JAR**
    ```bash
-   java -jar library/build/libs/library-1.0.0-all.jar
+   java -jar app/build/libs/XAgent-0.0.1-all.jar
    ```
 
 3. **原生可执行文件（需要 GraalVM）**
    ```bash
-   ./gradlew :library:nativeCompile
-   ./library/build/native/nativeCompile/ai-agents
+   ./gradlew :app:nativeCompile
+   ./app/build/native/nativeCompile/XAgent
    ```
 
 ## 📋 编码智能体工作流程
@@ -223,7 +225,7 @@ ai-agents/
 
 项目使用 JSON 配置文件管理 AI 模型，支持多供应商配置：
 
-**配置文件位置**: `library/src/main/resources/models-config.json`
+**配置文件位置**: `library/src/jvmMain/resources/models.json`
 
 ```json
 {
@@ -408,6 +410,6 @@ public class MyCustomTool {
 
 ---
 
-**最后更新**: 2026年2月
+**最后更新**: 2026年8月
 **项目状态**: 活跃开发中
 **协议**: Apache License 2.0

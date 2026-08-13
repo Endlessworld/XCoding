@@ -25,7 +25,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.AgentOutput;
-import com.xr21.ai.agent.utils.AcpProgressUtil;
+import com.xr21.ai.agent.utils.AcpNotifyHelper;
 import com.xr21.ai.agent.utils.SinksUtil;
 import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
@@ -90,11 +90,11 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
                         AgentOutput<@NotNull Object> blockedLast = worker.stream(taskPrompt, runnableConfig).map(SinksUtil.INSTANCE::buildContent).doOnNext(output -> {
                             if (StringUtils.hasText(output.getChunk())) {
                                 builder.append(output.getChunk());
-                                AcpProgressUtil.sendProgress(context, request.taskId, builder.toString());
+                                AcpNotifyHelper.sendProgress(context, request.taskId, builder.toString());
                             }
                             if (StringUtils.hasText(output.getThink())) {
                                 builder.append(output.getThink());
-                                AcpProgressUtil.sendProgress(context, request.taskId, builder.toString());
+                                AcpNotifyHelper.sendProgress(context, request.taskId, builder.toString());
                             }
                         }).doOnComplete(() -> {
                             SuspendKt.runSuspend((completion) -> {

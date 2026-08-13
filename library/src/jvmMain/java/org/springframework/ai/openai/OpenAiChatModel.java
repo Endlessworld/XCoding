@@ -53,8 +53,9 @@ import org.springframework.ai.support.UsageCalculator;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.core.retry.RetryException;
+import org.springframework.core.retry.RetryTemplate;
 import org.springframework.http.ResponseEntity;
-import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -145,7 +146,7 @@ public class OpenAiChatModel implements ChatModel {
         this.retryTemplate = retryTemplate;
         this.observationRegistry = observationRegistry;
         this.toolExecutionEligibilityPredicate = toolExecutionEligibilityPredicate;
-        logger.info("OpenAiChatModel defaultOptions {}",defaultOptions);
+        logger.info("OpenAiChatModel defaultOptions {}", defaultOptions);
     }
 
     public static Builder builder() {
@@ -168,7 +169,12 @@ public class OpenAiChatModel implements ChatModel {
 
         ChatResponse response = ChatModelObservationDocumentation.CHAT_MODEL_OPERATION.observation(this.observationConvention, DEFAULT_OBSERVATION_CONVENTION, () -> observationContext, this.observationRegistry).observe(() -> {
 
-            ResponseEntity<ChatCompletion> completionEntity = this.retryTemplate.execute(ctx -> this.openAiApi.chatCompletionEntity(request, getAdditionalHttpHeaders(prompt)));
+            ResponseEntity<ChatCompletion> completionEntity = null;
+            try {
+                completionEntity = this.retryTemplate.execute(() -> this.openAiApi.chatCompletionEntity(request, getAdditionalHttpHeaders(prompt)));
+            } catch (RetryException e) {
+                throw new RuntimeException(e);
+            }
 
             var chatCompletion = completionEntity.getBody();
 
@@ -468,9 +474,9 @@ public class OpenAiChatModel implements ChatModel {
             requestOptions.setToolCallbacks(this.defaultOptions.getToolCallbacks());
             requestOptions.setToolContext(this.defaultOptions.getToolContext());
         }
-
+        requestOptions.setToolCallbacks(new ArrayList<>(new HashSet<>(requestOptions.getToolCallbacks())));
         ToolCallingChatOptions.validateToolCallbacks(requestOptions.getToolCallbacks());
-        if(CollectionUtils.isEmpty( requestOptions.getTools())){
+        if (CollectionUtils.isEmpty(requestOptions.getTools())) {
             requestOptions.setToolChoice(null);
         }
         return new Prompt(prompt.getInstructions(), requestOptions);
@@ -535,7 +541,7 @@ public class OpenAiChatModel implements ChatModel {
             requestOptions.setTools(this.getFunctionTools(toolDefinitions));
         }
         List<String> jsonPropertyValues = ModelOptionsUtils.getJsonPropertyValues(ChatCompletionRequest.class);
-        request = ModelOptionsUtils.merge(requestOptions, request, ChatCompletionRequest.class,jsonPropertyValues);
+        request = ModelOptionsUtils.merge(requestOptions, request, ChatCompletionRequest.class, jsonPropertyValues);
         // Remove `streamOptions` from the request if it is not a streaming request
         if (request.streamOptions() != null && !stream) {
             logger.warn("Removing streamOptions from the request as it is not a streaming request!");

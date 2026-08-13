@@ -46,12 +46,12 @@ XAgent 基于 ACP 协议，兼容 IntelliJ IDEA 系列、VSCode、Zed、Neovim�
 
 | 类别 | 技术 | 版本 |
 |------|------|------|
-| **语言** | Java | 17 |
+| **语言** | Java | 21 |
 | **语言** | Kotlin | 1.9.24 |
 | **框架** | Spring Framework | 6.2.0 |
-| **框架** | Spring AI | 1.1.2 |
-| **框架** | Spring AI Alibaba | 1.1.2.0 |
-| **协议** | ACP SDK | 0.9.0-SNAPSHOT |
+| **框架** | Spring AI | 2.0.0-M1 |
+| **框架** | Spring AI Alibaba | 2.0.0-M1.1 |
+| **协议** | ACP SDK | 0.23.0 |
 | **响应式** | Reactor Core | 3.6.0 |
 | **JSON** | Jackson | 2.17.0 |
 | **工具库** | Lombok | 1.18.30 |
@@ -68,8 +68,7 @@ XAgent/
 │   │   ├── jvmMain/
 │   │   │   └── java/com/xr21/ai/agent/
 │   │   │       ├── agent/
-│   │   │       │   ├── AcpAgent.java          # ACP 协议主入口
-│   │   │       │   └── LocalAgent.java        # 本地 Agent 核心
+│   │   │       │   └── LocalAgent.java        # 本地 Agent 核心（ReAct）
 │   │   │       ├── config/
 │   │   │       │   ├── AiModels.java          # AI 模型配置入口
 │   │   │       │   ├── ModelConfigLoader.java # 配置加载器
@@ -84,21 +83,20 @@ XAgent/
 │   │   │       │   ├── ContextEditingInterceptor.java # 上下文编辑
 │   │   │       │   ├── FilesystemInterceptor.java    # 文件系统拦截
 │   │   │       │   ├── ToolRetryInterceptor.java     # 工具重试
+│   │   │       │   ├── ModelRetryInterceptor.java    # 模型重试
+│   │   │       │   ├── SummarizationHook.java        # 会话摘要钩子
 │   │   │       │   └── WorkerInterceptor.java        # Worker 拦截
-│   │   │       ├── tools/
+│   │   │       ├── tools/                       # 16 个工具
 │   │   │       │   ├── AcpWriteTodosTool.java  # ACP 任务管理
 │   │   │       │   ├── ContextCacheTool.java    # 上下文缓存
-│   │   │       │   ├── EditFileTool.java         # 编辑文件
-│   │   │       │   ├── FeedBackTool.java        # 用户反馈
-│   │   │       │   ├── GlobTool.java             # 文件模式匹配
-│   │   │       │   ├── GrepTool.java             # 文件搜索
-│   │   │       │   ├── ListFilesTool.java        # 目录列表
-│   │   │       │   ├── ReadFileTool.java         # 读取文件
+│   │   │       │   ├── ConversationCompactionTool.java # 会话压缩
+│   │   │       │   ├── ReadFileTool.java / WriteFileTool.java / SmartEditTool.java # 文件操作
+│   │   │       │   ├── GlobTool.java / GrepTool.java / ListFilesTool.java          # 文件搜索/列表
 │   │   │       │   ├── ShellTools.java          # Shell 命令执行
-│   │   │       │   ├── ToolKindFind.java         # 工具类型查找
-│   │   │       │   ├── WebSearchTool.java       # 网络搜索
-│   │   │       │   ├── WorkerTool.java          # Worker 工具
-│   │   │       │   └── WriteFileTool.java       # 写入文件
+│   │   │       │   ├── WebTool.java             # 网络搜索/抓取
+│   │   │       │   ├── GroovyScriptTool.java    # Groovy 编排
+│   │   │       │   ├── WorkerTool.java / MsgTool.java / SleepTool.java             # 编排与 Worker
+│   │   │       │   └── ToolKindFind.java         # 工具类型查找
 │   │   │       └── utils/
 │   │   │           ├── DefaultTokenCounter.java  # 令牌计数
 │   │   │           ├── GitignoreUtil.java         # Gitignore 解析
@@ -108,8 +106,10 @@ XAgent/
 │   │   │           └── ToolsUtil.java            # MCP 工具加载
 │   │   └── jvmTest/                           # 测试代码
 │   ├── build.gradle.kts                       # 模块构建配置
-│   ├── native-reflect-config.json             # GraalVM 反射配置
-│   └── native-resource-config.json            # GraalVM 资源配置
+├── tui/                                        # Java TUI（:tui，tamboui 组件栈）
+├── app/                                        # 可执行入口（:app）
+│   └── build.gradle.kts                       # fatJar / thinJar / nativeCompile
+├── tui-rust/                                   # Rust TUI（独立 cargo 工程）
 ├── docker/                                     # Docker 配置
 ├── gradle/                                     # Gradle 包装器
 ├── build.gradle.kts                           # 根构建配置
@@ -221,10 +221,10 @@ cd XAgent
 ./gradlew build
 
 # 构建 Fat JAR
-./gradlew :library:fatJar
+./gradlew :app:fatJar
 
 # 原生编译（需要 GraalVM）
-./gradlew :library:nativeCompile
+./gradlew :app:nativeCompile
 ```
 
 ### 运行方式
@@ -232,32 +232,32 @@ cd XAgent
 #### 作为 ACP Agent 运行
 
 ```bash
-./gradlew :library:runAcpAgent
+./gradlew :app:runAcpAgent
 ```
 
-#### 运行异步客户端
+#### 运行 Harness Demo（ACP WS server + client REPL）
 
 ```bash
-./gradlew :library:runAsyncAgentClient
+./gradlew :library:runHarnessDemo
 ```
 
 #### 使用 Fat JAR
 
 ```bash
-java -jar library/build/libs/XAgent-0.0.1-all.jar
+java -jar app/build/libs/XAgent-0.0.1-all.jar
 ```
 
 #### 原生可执行文件
 
 ```bash
-./gradlew :library:nativeCompile
-# Windows: library\build\native\nativeCompile\XAgent.exe
-# Linux/macOS: ./library/build/native/nativeCompile/XAgent
+./gradlew :app:nativeCompile
+# Windows: app\build\native\nativeCompile\XAgent.exe
+# Linux/macOS: ./app/build/native/nativeCompile/XAgent
 ```
 
 ## AI 模型配置
 
-项目使用 JSON 配置文件管理 AI 模型，配置文件位于 `${user.home}\.agi_working\models.json`：
+项目使用 JSON 配置文件管理 AI 模型，配置文件位于 `library/src/jvmMain/resources/models.json`：
 
 ```json
 {
@@ -436,4 +436,4 @@ open library/build/reports/tests/test/index.html
 
 ---
 
-*最后更新：2026 年 3 月*
+*最后更新：2026 年 8 月*

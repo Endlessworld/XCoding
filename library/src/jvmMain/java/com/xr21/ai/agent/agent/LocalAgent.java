@@ -15,6 +15,7 @@
  */
 package com.xr21.ai.agent.agent;
 
+import com.agentclientprotocol.common.ClientSessionOperations;
 import com.agentclientprotocol.model.McpServer;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
@@ -34,22 +35,23 @@ import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegi
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory;
 import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.*;
-import com.xr21.ai.agent.tools.ConversationCompactionTool;
-import com.xr21.ai.agent.tools.GroovyScriptTool;
-import com.xr21.ai.agent.tools.ShellTools;
-import com.xr21.ai.agent.tools.SleepTool;
-import com.xr21.ai.agent.tools.WebTool;
+import com.xr21.ai.agent.plugins.GroovyPluginLoader;
+import com.xr21.ai.agent.plugins.GroovyPluginRegistry;
+import com.xr21.ai.agent.tools.*;
+import com.xr21.ai.agent.utils.AcpNotifyHelper;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
 import com.xr21.ai.agent.utils.Json;
 import com.xr21.ai.agent.utils.ToolsUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.StaticToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.lang.NonNull;
 import org.springframework.util.CollectionUtils;
@@ -58,12 +60,12 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.io.File;
 import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * LocalAgent 类负责创建和配置本地文件操作智能体。
@@ -100,61 +102,96 @@ public class LocalAgent {
     public static final FileSystemSaver FILE_SYSTEM_SAVER = FileSystemSaver.builder().targetFolder(FILE_SYSTEM_SAVER_FOLDER).stateSerializer(new SpringAIJacksonStateSerializer(OverAllState::new)).build();
 
     private static final String SYSTEM_PROMPT_TEMPLATE = """
-            你是一个编码智能体 XAgent
-            通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
-            The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
-            当前系统：{osName}
-            当前系统换行符：{lineSeparator}
-            当前系统语言:{language}
-            您只能执行当前系统平台默认存在的命令
-            请使用当前系统语言:{language}回复用户
-            - 使用批量编辑 一次修改多处进行高效修改
-            - 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
-            - 灵活利用run_groovy_script工具进行并发工具调用/多步骤工具编排/worker编排/执行现有工具无法实现的操作
-            <编码指南>
-            ## 1.写代码前先思考
-                **别假设。不要掩饰困惑。表面权衡。**
-                在实施之前：
-                - 明确陈述你的假设。如果不确定，可以问。
-                - 如果存在多种解读，就提出来——不要默默选择。
-                - 如果存在更简单的方法，请说明。必要时反驳。
-                - 如果有什么不清楚的，就停。说出什么让人困惑。问吧。
-            ## 2.简洁优先
-                **解决问题的最低代码。没有任何推测性内容。**
-                - 没有超出要求的特征。
-                - 一次性代码不进行抽象。
-                - 没有“灵活性”或“可配置性”，除非是被要求的。
-                - 不处理不可能的错误处理。
-                - 如果你写了200行，可能有50行能解决问题，就重写。
-                - 遵循极致的高内聚 低耦合原则
-                问问自己：“高级工程师会说这太复杂了吗？”如果是，那就简化。
-            ## 3.原子更改遵循最小改动
-                **只触碰你必须触碰的。只收拾你自己的烂摊子。**
-                编辑现有代码时：
-                - 不要“改进”相邻的代码、注释或格式。
-                - 不要重构没坏掉的东西。
-                - 要符合现有风格，即使你会用不同的方式。
-                - 如果你发现了无关的死代码，要提及——不要删除。 
-                当你的更改产生孤儿时：
-                    - 移除你的更改导致未使用的导入/变量/函数。
-                    - 除非被要求，不要删除已有的死代码。   
-                测试：每一行更改的线条都应直接追踪到用户的请求。
-            ## 4.目标驱动执行    
-            **定义成功标准。循环直到确认。**
-            将任务转化为可验证的目标：
-            - “添加验证”→“为无效输入写测试，然后使其通过”
-            - “修复漏洞”→“编写一个复现该漏洞的测试，然后使其通过”
-            - “重构X”→“确保测试在之前和之后通过”
-            对于多步骤任务，请提出简要计划：
-            ```
-            1. [步骤] → 验证：[检查]
-            2. [步骤] → 验证：[检查]
-            3. [步骤] → 验证：[检查]
-            ```
-            **这些指南有效条件是：** 
-                差异中不必要的更改减少，因过度复杂而减少重写，澄清问题应在实施前而非错误之后。   
-           </编码指南>        
-           """;
+             你是一个编码智能体 XAgent
+             通过文件/内容查找、读取、文件创建、编辑等工具进行项目代码编辑
+             The current working directory is：{cwd} 所有文件操作仅限于工作目录之内
+             当前系统：{osName}
+             当前系统换行符：{lineSeparator}
+             当前系统语言:{language}
+             您只能执行当前系统平台默认存在的命令
+             请使用当前系统语言:{language}回复用户
+             - 使用批量编辑 一次修改多处进行高效修改
+             - 如果工作目录下存在 AGENTS.md 或 README.md 可以通过它们快速了解当前项目
+             - 灵活利用run_groovy_script工具进行并发工具调用/多步骤工具编排/worker编排/执行现有工具无法实现的操作
+             <编码指南>
+             ## 1.写代码前先思考
+                 **别假设。不要掩饰困惑。表面权衡。**
+                 在实施之前：
+                 - 明确陈述你的假设。如果不确定，可以问。
+                 - 如果存在多种解读，就提出来——不要默默选择。
+                 - 如果存在更简单的方法，请说明。必要时反驳。
+                 - 如果有什么不清楚的，就停。说出什么让人困惑。问吧。
+             ## 2.简洁优先
+                 **解决问题的最低代码。没有任何推测性内容。**
+                 - 没有超出要求的特征。
+                 - 一次性代码不进行抽象。
+                 - 没有“灵活性”或“可配置性”，除非是被要求的。
+                 - 不处理不可能的错误处理。
+                 - 如果你写了200行，可能有50行能解决问题，就重写。
+                 - 遵循极致的高内聚 低耦合原则
+                 问问自己：“高级工程师会说这太复杂了吗？”如果是，那就简化。
+             ## 3.原子更改遵循最小改动
+                 **只触碰你必须触碰的。只收拾你自己的烂摊子。**
+                 编辑现有代码时：
+                 - 不要“改进”相邻的代码、注释或格式。
+                 - 不要重构没坏掉的东西。
+                 - 要符合现有风格，即使你会用不同的方式。
+                 - 如果你发现了无关的死代码，要提及——不要删除。
+                 当你的更改产生孤儿时：
+                     - 移除你的更改导致未使用的导入/变量/函数。
+                     - 除非被要求，不要删除已有的死代码。   
+                 测试：每一行更改的线条都应直接追踪到用户的请求。
+             ## 4.目标驱动执行    
+             **定义成功标准。循环直到确认。**
+             将任务转化为可验证的目标：
+             - “添加验证”→“为无效输入写测试，然后使其通过”
+             - “修复漏洞”→“编写一个复现该漏洞的测试，然后使其通过”
+             - “重构X”→“确保测试在之前和之后通过”
+             对于多步骤任务，请提出简要计划：
+             ```
+             1. [步骤] → 验证：[检查]
+             2. [步骤] → 验证：[检查]
+             3. [步骤] → 验证：[检查]
+             ```
+             **这些指南有效条件是：** 
+                 差异中不必要的更改减少，因过度复杂而减少重写，澄清问题应在实施前而非错误之后。   
+            </编码指南>
+            <self>
+            ## 上下文管理
+            在当前工作目录 .agents/context/ 目录维护结构化项目上下文，按需读写、控制 token 开销。
+
+            ### 目录结构（对象三件套：info=是什么 / state=怎么样 / milestones=演进）
+            .agents/context/
+            ├── index.md                 # 入口导航 + 场景读取顺序
+            ├── base/                    # 静态基线（低频，建立后几乎不变）
+            │   ├── project.md           # 项目画像：定位/技术栈/关键路径
+            │   ├── architecture.md      # 架构总览：模块划分/依赖关系
+            │   ├── conventions.md       # 编码约定：风格/命名/禁忌
+            │   └── commands.md          # 命令速查：构建/测试/运行/Git
+            ├── modules/[模块名]/        # 核心模块各一个目录
+            │   └── info.md / state.md / milestones.md
+            ├── state/                   # 动态状态（高频，每轮增量更新）
+            │   ├── session.md           # 当前目标/进行中任务/下一步
+            │   ├── todo.md              # 待办队列 P0/P1/P2 + 阻塞项
+            │   └── risks.md             # 风险与假设
+            └── history/                 # 演进历史（只追加，永不重写）
+                ├── adr.md               # 架构决策记录（为什么）
+                ├── learnings.md         # 经验教训（踩过的坑）
+                └── session-summary/     # 会话摘要
+                    └── YYYY-MM-DD.md    # 每次会话结束写一篇
+            ### 读写策略
+            - 会话启动：index.md → base/ 按需 → state/session.md 恢复上下文；任务未完成则续接
+            - 操作中：只写 state/ 与对应模块 state.md；里程碑完成 → 更新 modules/*/milestones.md
+            - 决策 → 追加 adr.md；会话结束 → 写 session-summary/[日期].md
+            - base/ 变更须显式更新，禁止静默漂移；history/ 只追加不重写
+            - 模块为最小粒度，不做类级拆分；代码文件不入上下文；只维护可复用知识
+
+            ### 触发方式
+            - 新会话且 .agents/context/ 不存在：探索 AGENTS.md/README.md/SKILL.md + ls 后初始化
+            - 已存在且项目未变化：直接引用，跳过重建
+            - 用户输入 /context：强制按上述流程重新校验/更新/重建
+            </self>
+            """;
     /**
      * 当前工作空间根目录，可在运行时更新
      */
@@ -169,11 +206,12 @@ public class LocalAgent {
      * @param cwd            工作目录路径，智能体将在此目录下执行文件操作
      * @param mcpServers     MCP服务器列表，用于集成额外的工具
      * @param runnableConfig 运行配置，包含模型配置和上下文信息
+     * @param client
      * @return 配置完成的智能体实例
      * @throws RuntimeException         如果智能体创建失败
      * @throws IllegalArgumentException 如果参数无效
      */
-    public static ReactAgent createAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
+    public static ReactAgent createAgent(String cwd, @Nullable List<McpServer> mcpServers, RunnableConfig runnableConfig, @NotNull ClientSessionOperations client) {
         try {
             if (!StringUtils.isNotBlank(cwd)) {
                 String tempDir = System.getProperty("java.io.tmpdir");
@@ -182,7 +220,7 @@ public class LocalAgent {
                 log.error("create agent with cwd tmpdir: {} ", cwd);
             }
             WORKSPACE_ROOT = cwd;
-            return buildAgent(cwd, mcpServers, runnableConfig);
+            return buildAgent(cwd, mcpServers, runnableConfig, client);
         } catch (Exception e) {
             log.error("Failed to create agent with cwd: {}, mcpServers: {}", cwd, mcpServers != null ? mcpServers.size() : 0, e);
             throw new RuntimeException("Failed to create LocalAgent", e);
@@ -195,15 +233,20 @@ public class LocalAgent {
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具
         if (!CollectionUtils.isEmpty(mcpServers)) {
-            List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
-            tools.addAll(mcpTools);
-            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
+//            List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
+//            tools.addAll(mcpTools);
+//            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
         }
         // 将拦截器提供的文件系统工具（ls/read_file/write_file 等）与 write_todos 工具一并暴露给 Groovy 脚本绑定
         if (interceptorTools != null && !interceptorTools.isEmpty()) {
             tools.addAll(interceptorTools);
             log.info("Added {} interceptor tools to Groovy script bindings", interceptorTools.size());
         }
+        // Groovy 插件加载：宿主工具 = 当前 tools 快照；插件工具并入（须在 new GroovyScriptTool 之前）
+        GroovyPluginLoader.loadAll(tools, WORKSPACE_ROOT);
+        List<ToolCallback> pluginTools = GroovyPluginRegistry.get().toolCallbacks();
+        tools.addAll(pluginTools);
+        log.info("Loaded {} plugin tools", pluginTools.size());
         // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
         GroovyScriptTool groovyScriptTool = new GroovyScriptTool(tools);
         ToolCallback groovyCallback = MethodToolCallbackProvider.builder().toolObjects(groovyScriptTool).build().getToolCallbacks()[0];
@@ -211,7 +254,7 @@ public class LocalAgent {
         return new StaticToolCallbackProvider(tools);
     }
 
-    private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel) {
+    private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel,@NotNull ClientSessionOperations client) {
         ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(64 * 1024)  // 优化：降低到21k，提前触发优化
                 .clearAtLeast(10 * 1024)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
@@ -227,12 +270,12 @@ public class LocalAgent {
                 .maxDelay(5000)     // 最大延迟5秒
                 .onFailure(ToolRetryInterceptor.OnFailureBehavior.RETURN_MESSAGE).errorFormatter(e -> Json.toJson(Map.of("error", "工具调用失败，请输出完整、严谨的JSON结构: " + e.getMessage()))).jitter(true)        // 启用抖动)
                 .build();
+
         // 根据当前模式决定文件系统是否只读
         log.info(" runnableConfig.context() {}", runnableConfig.context().get("mode"));
         String currentMode = runnableConfig.context().get("mode") instanceof String mode ? mode : "accept_edits";
         boolean readOnly = "plan".equalsIgnoreCase(currentMode);
         var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(readOnly).withDefaultSecurity().build();
-
         var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new SleepTool(), new ConversationCompactionTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
@@ -273,6 +316,10 @@ public class LocalAgent {
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
         log.info("Agent mode: {}, filesystem readOnly: {}", currentMode, readOnly);
+        AcpNotifyHelper.sendThoughtChunk(client, "Use Mode : " + currentMode);
+        for (Interceptor interceptor : interceptors) {
+            AcpNotifyHelper.sendThoughtChunk(client, "Use Interceptor : " + interceptor.getName());
+        }
         return interceptors;
     }
 
@@ -289,15 +336,17 @@ public class LocalAgent {
      * @throws IllegalArgumentException 如果参数无效
      * @throws RuntimeException         如果组件初始化失败
      */
-    public static ReactAgent buildAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig) {
+    public static ReactAgent buildAgent(String cwd, List<McpServer> mcpServers, RunnableConfig runnableConfig, @NotNull ClientSessionOperations client) {
         if (cwd == null || cwd.trim().isEmpty()) {
             throw new IllegalArgumentException("Workspace directory (cwd) cannot be null or empty");
         }
+        AcpNotifyHelper.sendThoughtChunk(client, "当前工作目录 :" + cwd);
         log.info("Building LocalAgent for workspace: {}", cwd);
         log.info("Building LocalAgent for context: {}", runnableConfig.context());
 
         ChatModel chatModel = getChatModel(runnableConfig);
-        List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel));
+        AcpNotifyHelper.sendThoughtChunk(client, "Use model : " + chatModel.getDefaultOptions().getModel());
+        List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel,client));
         // 收集拦截器提供的文件系统工具与 write_todos 工具，供 Groovy 脚本绑定调用
         List<ToolCallback> interceptorTools = new ArrayList<>();
         for (Interceptor interceptor : interceptors) {
@@ -310,6 +359,9 @@ public class LocalAgent {
             }
         }
         List<Hook> hooks = getHooks(runnableConfig, chatModel);
+        for (Hook hook : hooks) {
+            AcpNotifyHelper.sendThoughtChunk(client, "Use Hook : " +hook.getName());
+        }
         // 使用 PromptTemplate 渲染指令
         var instruction = getInstruction(WORKSPACE_ROOT);
         var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
@@ -318,6 +370,7 @@ public class LocalAgent {
             log.info("thought_level: {}", level);
             thoughtLevel = level;
         }
+        AcpNotifyHelper.sendThoughtChunk(client, "Use thought_level : " + thoughtLevel);
         if (SessionConfigOptionsFactory.ThoughtLevel.DISABLED.getValueId().equals(thoughtLevel)) {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));
         } else {
@@ -326,6 +379,10 @@ public class LocalAgent {
         }
         var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers, interceptorTools);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
+        // 插件 hooks / interceptors 并入（loader 已在 staticToolCallbackProvider 内触发，默认追加到内置之后）
+        hooks.addAll(GroovyPluginRegistry.get().hooks());
+        interceptors.addAll(GroovyPluginRegistry.get().interceptors());
+        AcpNotifyHelper.sendThoughtChunk(client, "Use tools : " + tools.stream().map(ToolCallback::getToolDefinition).map(ToolDefinition::name).distinct().collect(Collectors.joining(",")));
         var agent = ReactAgent.builder().name("agent")
                 .tools(tools)
                 .hooks(hooks)

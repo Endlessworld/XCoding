@@ -40,10 +40,7 @@ object SinksUtil {
                     builder.think(reasoningContent)
                 }
                 val finishReason = output.message().metadata["finishReason"]
-                if (StringUtils.hasLength(output.message().text) && !OpenAiApi.ChatCompletionFinishReason.STOP.name.equals(
-                        finishReason?.toString(),
-                        ignoreCase = true
-                    )
+                if (StringUtils.hasLength(output.message().text) && OpenAiApi.ChatCompletionFinishReason.STOP.name != finishReason
                 ) {
                     builder.chunk(output.message().text)
                 }
