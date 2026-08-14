@@ -37,6 +37,7 @@ import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.*;
 import com.xr21.ai.agent.plugins.GroovyPluginLoader;
 import com.xr21.ai.agent.plugins.GroovyPluginRegistry;
+import com.xr21.ai.agent.plugins.PluginContext;
 import com.xr21.ai.agent.tools.*;
 import com.xr21.ai.agent.utils.AcpNotifyHelper;
 import com.xr21.ai.agent.utils.DefaultTokenCounter;
@@ -242,8 +243,7 @@ public class LocalAgent {
             tools.addAll(interceptorTools);
             log.info("Added {} interceptor tools to Groovy script bindings", interceptorTools.size());
         }
-        // Groovy 插件加载：宿主工具 = 当前 tools 快照；插件工具并入（须在 new GroovyScriptTool 之前）
-        GroovyPluginLoader.loadAll(tools, WORKSPACE_ROOT);
+        // 插件工具并入（loader 已在 buildAgent 中以完整 PluginContext 触发；此处幂等并入已注册插件工具）
         List<ToolCallback> pluginTools = GroovyPluginRegistry.get().toolCallbacks();
         tools.addAll(pluginTools);
         log.info("Loaded {} plugin tools", pluginTools.size());
@@ -377,9 +377,17 @@ public class LocalAgent {
             chatOptions.extraBody(Map.of("thinking", Map.of("type", "enabled")));
             chatOptions.reasoningEffort(thoughtLevel);
         }
+        // Groovy 插件加载（阶段二）：以完整 PluginContext（client/chatModel）触发，随后并入插件工具
+        PluginContext pluginCtx = PluginContext.builder()
+                .toolContext(null)
+                .client(client)
+                .chatModel(chatModel)
+                .hostTools(interceptorTools)
+                .build();
+        GroovyPluginLoader.loadAll(interceptorTools, WORKSPACE_ROOT, pluginCtx);
         var staticToolCallbackProvider = staticToolCallbackProvider(mcpServers, interceptorTools);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
-        // 插件 hooks / interceptors 并入（loader 已在 staticToolCallbackProvider 内触发，默认追加到内置之后）
+        // 插件 hooks / interceptors 并入（默认追加到内置之后）
         hooks.addAll(GroovyPluginRegistry.get().hooks());
         interceptors.addAll(GroovyPluginRegistry.get().interceptors());
         AcpNotifyHelper.sendThoughtChunk(client, "Use tools : " + tools.stream().map(ToolCallback::getToolDefinition).map(ToolDefinition::name).distinct().collect(Collectors.joining(",")));

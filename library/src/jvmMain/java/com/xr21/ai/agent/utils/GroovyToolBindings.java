@@ -2,6 +2,10 @@ package com.xr21.ai.agent.utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xr21.ai.agent.plugins.ConversationAccess;
+import com.xr21.ai.agent.plugins.GroovyPluginParser;
+import com.xr21.ai.agent.plugins.GroovyPluginRegistry;
+import com.xr21.ai.agent.plugins.PluginContext;
 import groovy.lang.GroovyObject;
 import groovy.lang.MetaClass;
 import groovy.lang.MissingMethodException;
@@ -20,16 +24,23 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 绑定到 Groovy 脚本的 tools 对象。
  * 脚本内通过 tools.xxx(...) 动态调用当前已注册的所有 MCP 工具，实现工具编排。
+ * 阶段二新增：tools.inject(key) 白名单能力注入、tools.plugin(name, desc) 运行时注册通道。
  */
 public class GroovyToolBindings implements GroovyObject {
 
     private final Map<String, ToolCallback> toolsByName = new LinkedHashMap<>();
     private final ToolContext toolContext;
+    private final PluginContext pluginContext;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, List<String>> schemaPropsCache = new ConcurrentHashMap<>();
 
     public GroovyToolBindings(List<ToolCallback> tools, ToolContext toolContext) {
+        this(tools, toolContext, null);
+    }
+
+    public GroovyToolBindings(List<ToolCallback> tools, ToolContext toolContext, PluginContext pluginContext) {
         this.toolContext = toolContext;
+        this.pluginContext = pluginContext;
         this.metaClass = InvokerHelper.getMetaClass(this.getClass());
         for (ToolCallback cb : tools) {
             toolsByName.putIfAbsent(cb.getToolDefinition().name(), cb);
@@ -48,6 +59,14 @@ public class GroovyToolBindings implements GroovyObject {
         // 内置方法：返回指定工具的工具信息（名称/描述/输入schema）
         if ("inspect".equals(name)) {
             return inspect(resolveToolName(args));
+        }
+        // 阶段二：白名单能力注入（client/chatModel/conversation/workers/sharedCache/hostTools）
+        if ("inject".equals(name)) {
+            return inject(resolveInjectKey(args));
+        }
+        // 阶段二：运行时注册插件能力（tools.plugin(name, desc)）
+        if ("plugin".equals(name)) {
+            return plugin(args);
         }
 
         ToolCallback callback = toolsByName.get(name);
@@ -72,7 +91,57 @@ public class GroovyToolBindings implements GroovyObject {
         if ("names".equals(propertyName)) {
             return new ArrayList<>(toolsByName.keySet());
         }
+        // 阶段二：tools.conversation 直接访问工作流上下文门面（无 ToolContext 时返回空门面）
+        if ("conversation".equals(propertyName)) {
+            return pluginContext != null
+                    ? pluginContext.inject("conversation")
+                    : new ConversationAccess(toolContext);
+        }
+        // 阶段二：tools.injectNames 列出可注入能力
+        if ("injectNames".equals(propertyName)) {
+            return pluginContext != null ? pluginContext.injectNames() : List.of("conversation");
+        }
         throw new MissingPropertyException(propertyName, getClass());
+    }
+
+    /** 阶段二：白名单能力注入。 */
+    private Object inject(String key) {
+        if (pluginContext == null) {
+            if ("conversation".equals(key)) {
+                return new ConversationAccess(toolContext);
+            }
+            return Map.of("success", false, "error", "pluginContext 未注入，仅支持 conversation");
+        }
+        return pluginContext.inject(key);
+    }
+
+    /** 阶段二：运行时注册插件（tools.plugin(name, desc)）。 */
+    @SuppressWarnings("unchecked")
+    private Object plugin(Object args) {
+        Object[] arr = toArgsArray(args);
+        if (arr.length < 2 || !(arr[1] instanceof Map<?, ?> desc)) {
+            return Map.of("success", false, "error", "plugin 需要 (name, desc) 两个参数，如 tools.plugin('my-tools', [tools: [...]])");
+        }
+        String name = String.valueOf(arr[0]);
+        try {
+            var parsed = GroovyPluginParser.parse(name, (Map<String, Object>) desc,
+                    com.xr21.ai.agent.plugins.GroovyPluginLoader.EXTENSION_NAMESPACE,
+                    java.nio.file.Path.of(System.getProperty("user.dir")),
+                    java.nio.file.Path.of(System.getProperty("user.dir")), true);
+            GroovyPluginRegistry.get().register(parsed);
+            return Map.of("success", true, "pluginId", name);
+        } catch (Exception e) {
+            return Map.of("success", false, "error", "插件注册失败: " + e.getMessage());
+        }
+    }
+
+    /** 从调用参数中解析注入能力 key。 */
+    private String resolveInjectKey(Object args) {
+        Object[] arr = toArgsArray(args);
+        if (arr.length == 0 || arr[0] == null) {
+            throw new IllegalArgumentException("inject 需要一个能力 key，如 tools.inject('client')");
+        }
+        return String.valueOf(arr[0]);
     }
 
     @Override

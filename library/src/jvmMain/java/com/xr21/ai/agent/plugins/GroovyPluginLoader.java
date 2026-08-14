@@ -61,10 +61,22 @@ public final class GroovyPluginLoader {
      * @return 本次已加载插件列表
      */
     public static synchronized List<GroovyPlugin> loadAll(List<ToolCallback> hostTools, String cwd) {
+        return loadAll(hostTools, cwd, null);
+    }
+
+    /**
+     * 幂等加载（阶段二重载）：额外接收 {@link PluginContext} 能力容器。
+     *
+     * @param hostTools 宿主工具快照（注入插件闭包 bindings，tools.xxx 编排用）
+     * @param cwd       项目工作目录（用于定位项目级 .agents/plugins）
+     * @param ctx       插件能力上下文（client/chatModel/workers/sharedCache 注入，可为 null）
+     * @return 本次已加载插件列表
+     */
+    public static synchronized List<GroovyPlugin> loadAll(List<ToolCallback> hostTools, String cwd, PluginContext ctx) {
         if (loaded) {
             return new ArrayList<>(GroovyPluginRegistry.get().plugins());
         }
-        GroovyPluginRegistry.get().setHostTools(hostTools);
+        GroovyPluginRegistry.get().setPluginContext(ctx != null ? ctx : PluginContext.builder().hostTools(hostTools).build());
         Path userHome = Path.of(System.getProperty("user.home"));
         Path base = Path.of(cwd == null || cwd.isBlank() ? System.getProperty("user.dir") : cwd);
         Path dataRoot = userHome.resolve(".agents").resolve(DATA_DIR_NAME);
@@ -82,11 +94,17 @@ public final class GroovyPluginLoader {
         return result;
     }
 
-    /** 重载全部插件（清空注册后重新扫描；阶段三热重载/测试用）。 */
+    /** 重载全部插件（先逐个 close() 释放状态，再重新扫描；阶段三热重载/测试用）。 */
     public static synchronized void reload(List<ToolCallback> hostTools, String cwd) {
+        reload(hostTools, cwd, null);
+    }
+
+    /** 重载全部插件（阶段二：带 PluginContext）。 */
+    public static synchronized void reload(List<ToolCallback> hostTools, String cwd, PluginContext ctx) {
         loaded = false;
+        GroovyPluginRegistry.get().unregisterAll();
         GroovyPluginRegistry.get().reset();
-        loadAll(hostTools, cwd);
+        loadAll(hostTools, cwd, ctx);
     }
 
     /** 扫描一个目录包根，加载每个含 plugin.json 的子目录。 */
@@ -250,11 +268,15 @@ public final class GroovyPluginLoader {
 
     /** 在独立线程执行入口脚本（超时保护），返回脚本最后表达式的 Map。 */
     private static Map<String, Object> evaluate(String script, Path root, Path dataDir, String pluginName) {
+        PluginContext ctx = GroovyPluginRegistry.get().getPluginContext();
         Binding binding = new Binding();
-        binding.setVariable("tools", new GroovyToolBindings(GroovyPluginRegistry.get().hostTools(), null));
+        binding.setVariable("tools", new GroovyToolBindings(GroovyPluginRegistry.get().hostTools(), null, ctx));
         binding.setVariable("PLUGIN_ROOT", root.toAbsolutePath().toString());
         binding.setVariable("PLUGIN_DATA", dataDir.toAbsolutePath().toString());
         binding.setVariable("cwd", System.getProperty("user.dir"));
+        // 阶段二：conversation 门面（无 ToolContext 时为空操作门面）+ 能力上下文
+        binding.setVariable("conversation", new ConversationAccess(null));
+        binding.setVariable("pluginContext", ctx);
         CompilerConfiguration cc = new CompilerConfiguration();
         cc.addCompilationCustomizers(new ImportCustomizer() {{
             addStarImports("groovy.json");
@@ -278,7 +300,7 @@ public final class GroovyPluginLoader {
         return Map.of();
     }
 
-    /** 把每个入口返回 Map 的 tools/hooks/interceptors 追加进合并描述。 */
+    /** 把每个入口返回 Map 的 tools/hooks/interceptors/init/close 合并进描述（init/close 首条生效）。 */
     @SuppressWarnings("unchecked")
     private static void mergeDesc(Map<String, Object> target, Map<String, Object> source) {
         if (source.get("tools") instanceof List<?> t) {
@@ -289,6 +311,12 @@ public final class GroovyPluginLoader {
         }
         if (source.get("interceptors") instanceof List<?> i) {
             ((List<Object>) target.get("interceptors")).addAll((List<?>) i);
+        }
+        if (source.containsKey("init") && !target.containsKey("init")) {
+            target.put("init", source.get("init"));
+        }
+        if (source.containsKey("close") && !target.containsKey("close")) {
+            target.put("close", source.get("close"));
         }
     }
 }

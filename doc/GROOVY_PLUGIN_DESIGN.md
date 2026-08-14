@@ -7,9 +7,11 @@
 > 参考实现: `tools/GroovyScriptTool.java` / `utils/GroovyToolBindings.java` / `tools/ConversationCompactionTool.java` / `agent/LocalAgent.java` / `interceptors/WorkerInterceptor.java`
 > 对齐机制: skill 目录扫描加载（`FileSystemSkillRegistry` + `SkillsAgentHook`）
 > 参考范式: deepseek-harness `cordis-host-runner` + `tool-cordis`（动态插件常驻运行时的参照系）
-> **实现状态: 阶段一已完成（2026-08-14）** —— `plugins/` 包落地：GroovyPluginRegistry / GroovyPluginLoader /
->   GroovyPluginParser / ClosureToolCallback / GroovyPluginHook / GroovyPluginInterceptor，已接入 LocalAgent
->   装配链三处；示例插件 `my-tools`（天气工具+钩子+拦截器）与单元测试 GroovyPluginLoaderTest 通过。
+> **实现状态: 阶段一已完成（2026-08-14），阶段二进行中** —— `plugins/` 包落地：GroovyPluginRegistry /
+>   GroovyPluginLoader / GroovyPluginParser / ClosureToolCallback / GroovyPluginHook / GroovyPluginInterceptor，
+>   已接入 LocalAgent 装配链三处；阶段二新增 PluginContext 能力容器（白名单 inject）、ConversationAccess
+>   （工作流上下文读写）、init/close 生命周期、GroovyToolBindings 的 inject/plugin() 通道。
+>   测试：GroovyPluginLoaderTest 4 用例（含生命周期/注入白名单）通过。
 ---
 
 ## 0. 重构说明（v0.2 → v0.3）
@@ -544,16 +546,21 @@ def cacheDir = "${PLUGIN_DATA}/my-tools"
 | 接入 `LocalAgent` | tools 并入（构造 GroovyScriptTool 前）+ hooks/interceptors 并入 | ✅ |
 | 验证 | `my-tools/plugin.json + entry.groovy`；GroovyPluginLoaderTest（加载/工具调用/非法 schema 拒绝）通过 | ✅ |
 
-### 阶段二：工作流上下文 + 运行时热挂载
+### 阶段二：工作流上下文 + 运行时热挂载 —— 核心已完成（2026-08-14），可移植层迁移【已搁置】
 
-- `PluginContext` 能力容器（§5.6）：注入白名单 client/chatModel/conversation/workers/sharedCache；
-- `ConversationAccess`：封装 ToolContextHelper 读写（messages/state/replaceMessages/setState/appendMessage）；
-- 消息双向转换器（Message ↔ Map）；
-- 插件实例生命周期 init/close（§5.7）；
-- `GroovyToolBindings` 增加 `plugin(name, desc)` 运行时注册通道；
-- 可移植层迁移：将 ShellTools / WorkerTool / MsgTool / ContextCacheTool 改为插件（经 PluginContext 注入依赖）；
-- 路线 B：动态 tools 注入（验证 graph 是否支持；不支持则 interceptModel 注入）；
-- 验证：插件脚本读取对话 → 截断 → 写回，复用 ConversationCompactionTool 安全切割逻辑。
+> **搁置说明（2026-08-14）**：可移植层迁移（ShellTools/WorkerTool/MsgTool/ContextCacheTool 插件化）经用户确认**明确搁置**，
+> 除非后续明确决定开始移植，否则不推进。PluginContext 能力容器已就绪，未来随时可启动。
+
+- ✅ `PluginContext` 能力容器（§5.6）：白名单注入 client/chatModel/conversation/workers/sharedCache；
+- ✅ `ConversationAccess`：封装 ToolContextHelper 读写（messages/state/replaceMessages/setState/appendMessage）；
+- ✅ 消息双向转换器（Message ↔ Map）；
+- ✅ 插件实例生命周期 init/close（§5.7）+ 每插件状态实例（脚本局部变量跨调用保留）；
+- ✅ `GroovyToolBindings` 增加 `inject(key)`/`conversation` 访问 + `plugin(name, desc)` 运行时注册通道；
+- ⏸ 可移植层迁移：将 ShellTools / WorkerTool / MsgTool / ContextCacheTool 改为插件（经 PluginContext 注入依赖）——**已搁置**；
+- ⬜ 路线 B：动态 tools 注入（验证 graph 是否支持；不支持则 interceptModel 注入）；
+- ⬜ 验证：插件脚本读取对话 → 截断 → 写回，复用 ConversationCompactionTool 安全切割逻辑。
+- 实现说明：mergeDesc 现合并 init/close（首条生效）；reload 先 unregisterAll()（逐个 close()）再重扫；
+  LocalAgent 在 buildAgent 中以完整 PluginContext（client/chatModel）触发 loader（staticToolCallbackProvider 幂等并入）。
 
 ### 阶段三（可选）：热重载、MCP 桥接与安全加固
 

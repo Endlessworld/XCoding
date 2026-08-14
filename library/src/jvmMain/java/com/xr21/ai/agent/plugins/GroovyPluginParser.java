@@ -53,6 +53,8 @@ public final class GroovyPluginParser {
                 }
             }
         }
+        Closure<?> init = desc.get("init") instanceof Closure<?> initClosure ? initClosure : null;
+        Closure<?> close = desc.get("close") instanceof Closure<?> closeClosure ? closeClosure : null;
         return GroovyPlugin.builder()
                 .name(name)
                 .version(version)
@@ -64,6 +66,8 @@ public final class GroovyPluginParser {
                 .tools(tools)
                 .hooks(hooks)
                 .interceptors(interceptors)
+                .init(init)
+                .close(close)
                 .build();
     }
 

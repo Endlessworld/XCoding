@@ -61,12 +61,16 @@ public class ClosureToolCallback implements ToolCallback {
         }
         // 闭包 delegate 绑定宿主上下文：可编排宿主工具、访问 ToolContext；DELEGATE_FIRST 使
         // 直接方法调用/属性先查 bindings，变量名（如 tools）仍回退到脚本 binding。
-        GroovyToolBindings bindings = new GroovyToolBindings(GroovyPluginRegistry.get().hostTools(), toolContext);
+        PluginContext ctx = GroovyPluginRegistry.get().getPluginContext();
+        PluginContext ctxWithTool = ctx != null ? ctx.withToolContext(toolContext) : null;
+        GroovyToolBindings bindings = new GroovyToolBindings(GroovyPluginRegistry.get().hostTools(), toolContext, ctxWithTool);
         run.setDelegate(bindings);
         run.setResolveStrategy(Closure.DELEGATE_FIRST);
-        // 同步更新脚本 binding 的 tools 变量，使闭包内 tools.xxx 使用带当前 ToolContext 的 bindings。
+        // 同步更新脚本 binding 的 tools/conversation 变量，使闭包内 tools.xxx / conversation.xxx
+        // 使用带当前 ToolContext 的 bindings 与门面。
         if (run.getOwner() instanceof Script script) {
             script.getBinding().setVariable("tools", bindings);
+            script.getBinding().setVariable("conversation", new com.xr21.ai.agent.plugins.ConversationAccess(toolContext));
         }
         try {
             Object result = (args == null || args.isEmpty()) ? run.call() : run.call(args);

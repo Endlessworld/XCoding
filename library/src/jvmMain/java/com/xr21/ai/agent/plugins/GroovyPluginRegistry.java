@@ -2,6 +2,7 @@ package com.xr21.ai.agent.plugins;
 
 import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
+import groovy.lang.Closure;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 
@@ -31,6 +32,8 @@ public final class GroovyPluginRegistry {
     private final List<Interceptor> interceptors = new CopyOnWriteArrayList<>();
     /** 宿主工具快照：注入插件闭包 bindings（tools.xxx 编排宿主工具） */
     private volatile List<ToolCallback> hostTools = List.of();
+    /** 插件能力上下文（阶段二）：client/chatModel/workers/sharedCache 注入 */
+    private volatile PluginContext pluginContext;
     /** 工具名去重：内置工具名 + 已注册插件工具名 */
     private final Set<String> reservedToolNames = ConcurrentHashMap.newKeySet();
 
@@ -52,6 +55,25 @@ public final class GroovyPluginRegistry {
 
     public List<ToolCallback> hostTools() {
         return hostTools;
+    }
+
+    /** 登记插件能力上下文（阶段二，须在插件注册前调用）。 */
+    public void setPluginContext(PluginContext ctx) {
+        this.pluginContext = ctx;
+        if (ctx != null && ctx.getHostTools() != null) {
+            this.hostTools = ctx.getHostTools();
+            for (ToolCallback cb : hostTools) {
+                reservedToolNames.add(cb.getToolDefinition().name());
+            }
+        }
+        log.info("GroovyPluginRegistry: plugin context set (client={}, chatModel={}, workers={})",
+                ctx != null && ctx.getClient() != null,
+                ctx != null && ctx.getChatModel() != null,
+                ctx != null && ctx.getWorkers() != null);
+    }
+
+    public PluginContext getPluginContext() {
+        return pluginContext;
     }
 
     /** 清空全部注册（热重载/测试用）。 */
@@ -119,14 +141,34 @@ public final class GroovyPluginRegistry {
                 }
             }
         }
+        // 生命周期 init：注册后执行一次 init(PluginContext ctx)（失败仅告警，不阻塞注册）
+        Closure<?> init = plugin.getInit();
+        if (init != null) {
+            try {
+                init.call(pluginContext);
+                log.info("GroovyPluginRegistry: plugin '{}' init() executed", plugin.getName());
+            } catch (Exception e) {
+                log.warn("GroovyPluginRegistry: plugin '{}' init() failed: {}", plugin.getName(), e.getMessage());
+            }
+        }
         plugins.put(plugin.getName(), plugin);
         log.info("GroovyPluginRegistry: registered plugin '{}' v{} with {} tools, {} hooks, {} interceptors (root={}, legacy={})",
                 plugin.getName(), plugin.getVersion(), toolCount, hookCount, interceptorCount, plugin.getRoot(), plugin.isLegacy());
     }
 
-    /** 卸载插件：移除其工具/hook/interceptor 注册（阶段三热重载用）。 */
+    /** 卸载插件：先执行 close() 释放状态，再移除其工具/hook/interceptor 注册（阶段三热重载用）。 */
     public void unregister(String name) {
-        GroovyPlugin plugin = plugins.remove(name);
+        GroovyPlugin plugin = plugins.get(name);
+        // close 钩子：try/finally 保证卸载不因 close 失败而中断
+        if (plugin != null && plugin.getClose() != null) {
+            try {
+                plugin.getClose().call();
+                log.info("GroovyPluginRegistry: plugin '{}' close() executed", name);
+            } catch (Exception e) {
+                log.warn("GroovyPluginRegistry: plugin '{}' close() failed: {}", name, e.getMessage());
+            }
+        }
+        GroovyPlugin removed = plugins.remove(name);
         if (plugin == null) {
             return;
         }
@@ -147,6 +189,14 @@ public final class GroovyPluginRegistry {
             }
         }
         log.info("GroovyPluginRegistry: unregistered plugin '{}'", name);
+    }
+
+    /** 卸载全部插件（reload 前置），逐个执行 close()。 */
+    public void unregisterAll() {
+        for (String name : List.copyOf(plugins.keySet())) {
+            unregister(name);
+        }
+        plugins.clear();
     }
 
     public GroovyPlugin plugin(String name) {

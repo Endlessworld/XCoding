@@ -99,6 +99,68 @@ public class GroovyPluginLoaderTest {
     }
 
     @Test
+    public void lifecycleInitCloseAndState() throws Exception {
+        Path pkg = tempFolder.newFolder(".agents", "plugins", "lifecycle-plugin").toPath();
+        Files.writeString(pkg.resolve("plugin.json"), """
+                {
+                  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                  "name": "lifecycle-plugin",
+                  "extensions": {
+                    "com.xr21.agent": {
+                      "groovy": { "entrypoints": ["./entry.groovy"] }
+                    }
+                  }
+                }
+                """);
+        Files.writeString(pkg.resolve("entry.groovy"), """
+                def state = [initialized: false, counter: 0]
+                return [
+                    name: "lifecycle-plugin",
+                    init: { ctx -> state.initialized = true },
+                    close: { -> state.initialized = false },
+                    tools: [
+                        [
+                            name: "lifecycle_status",
+                            description: "状态",
+                            inputSchema: [type: "object", properties: [:]],
+                            run: { Map args -> [initialized: state.initialized, counter: ++state.counter] }
+                        ]
+                    ]
+                ]
+                """);
+        GroovyPluginLoader.reload(List.of(), tempFolder.getRoot().getAbsolutePath());
+
+        ToolCallback status = GroovyPluginRegistry.get().toolCallbacks().stream()
+                .filter(cb -> cb.getToolDefinition().name().equals("lifecycle_status"))
+                .findFirst().orElse(null);
+        assertNotNull("lifecycle_status 应注册", status);
+        // init 已执行 → initialized=true
+        String raw = status.call("{}", new ToolContext(Map.of("session", "t")));
+        assertTrue("init 后状态应为 true: " + raw, raw.contains("\"initialized\":true"));
+        // 每插件状态实例：counter 跨调用递增
+        String raw2 = status.call("{}", new ToolContext(Map.of("session", "t")));
+        assertTrue("counter 应递增: " + raw2, raw2.contains("\"counter\":2"));
+
+        // unregister 触发 close() → initialized=false
+        GroovyPluginRegistry.get().unregister("lifecycle-plugin");
+        assertTrue("卸载后插件应移除", GroovyPluginRegistry.get().plugin("lifecycle-plugin") == null);
+    }
+
+    @Test
+    public void pluginContextInjectWhitelist() throws Exception {
+        // 构造带 chatModel 占位的 PluginContext，验证 inject 白名单
+        PluginContext ctx = PluginContext.builder()
+                .hostTools(List.of())
+                .sharedTools(Map.of("shared", org.springframework.ai.tool.function.FunctionToolCallback
+                        .builder("dummy", (Map<String, Object> m) -> Map.of()).inputType(Map.class).build()))
+                .build();
+        assertTrue("未白名单 key 应拒绝", ((Map<?, ?>) ctx.inject("evilKey")).containsKey("error"));
+        assertTrue("sharedCache 应放行", ctx.inject("sharedCache") instanceof Map);
+        assertTrue("conversation 应放行", ctx.inject("conversation") instanceof ConversationAccess);
+        assertTrue("injectNames 应列出白名单", ctx.injectNames().contains("chatModel"));
+    }
+
+    @Test
     public void rejectInvalidSchemaAndName() throws Exception {
         Path pkg = tempFolder.newFolder(".agents", "plugins", "bad-plugin").toPath();
         Files.writeString(pkg.resolve("plugin.json"), """
