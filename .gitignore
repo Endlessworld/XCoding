@@ -18,3 +18,5 @@ logs
 .XCoding
 .ai
 .agents
+__pycache__
+*.pyc
