@@ -40,7 +40,14 @@ object SinksUtil {
                     builder.think(reasoningContent)
                 }
                 val finishReason = output.message().metadata["finishReason"]
-                if (StringUtils.hasLength(output.message().text) && OpenAiApi.ChatCompletionFinishReason.STOP.name != finishReason
+                // 排除携带工具调用的 AssistantMessage：其文本（工具调用前的说明）会被
+                // ToolCall 事件独立承载，且 graph 框架原生 chunk 也会跳过它；若此处再
+                // 作为 AgentMessageChunk 发送，会造成工具调用前后出现重复消息。
+                val isToolCallMessage = output.message() is AssistantMessage &&
+                        (output.message() as AssistantMessage).hasToolCalls()
+                if (StringUtils.hasLength(output.message().text)
+                    && !isToolCallMessage
+                    && OpenAiApi.ChatCompletionFinishReason.STOP.name != finishReason
                 ) {
                     builder.chunk(output.message().text)
                 }

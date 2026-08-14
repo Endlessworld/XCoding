@@ -32,6 +32,7 @@ import com.xr21.ai.agent.agent.LocalAgent
 import com.xr21.ai.agent.agent.LocalAgent.FILE_SYSTEM_SAVER_FOLDER
 import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.config.AiModels
+import com.xr21.ai.agent.config.ModelConfigLoader
 import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
 import com.xr21.ai.agent.tools.ToolKindFind
@@ -64,6 +65,9 @@ import java.util.concurrent.atomic.AtomicReference
 
 
 private val logger = KotlinLogging.logger {}
+
+/** 未在模型配置中声明 contextWindow 时的默认上下文窗口大小（token） */
+private const val DEFAULT_CONTEXT_WINDOW = 128L * 1024
 
 /** Session-level MCP server cache */
 private val sessionMcpServers = ConcurrentHashMap<String, List<McpServer>>()
@@ -225,7 +229,7 @@ class AgiAgentSession(
             )
             emit(
                 Event.SessionUpdateEvent(
-                    SessionUpdate.UsageUpdate(sessionTokenUsageRef.get().inputTokens / 100, 1024 * 1024, Cost(calculateCost(tokenUsageRef.get()), "CNY"))
+                    SessionUpdate.UsageUpdate(contextUsedTokens(), contextWindowSize(), Cost(calculateCost(tokenUsageRef.get()), "CNY"))
                 )
             )
             val executionThread = Thread.currentThread()
@@ -282,7 +286,7 @@ class AgiAgentSession(
             )
             emit(
                 Event.SessionUpdateEvent(
-                    SessionUpdate.UsageUpdate(sessionTokenUsageRef.get().inputTokens / 100, 1024 * 1024, Cost(calculateCost(tokenUsageRef.get()), "CNY"))
+                    SessionUpdate.UsageUpdate(contextUsedTokens(), contextWindowSize(), Cost(calculateCost(tokenUsageRef.get()), "CNY"))
                 )
             )
             logger.info { "events END_TURN" }
@@ -487,6 +491,29 @@ class AgiAgentSession(
     }
 
     /**
+     * 当前上下文窗口已使用的 token 数（usage_update.used）。
+     * 以最近一次模型调用送入的 prompt tokens（真实上下文占用）为准；
+     * 尚未发生模型调用时回退到会话累计 inputTokens（不超过窗口上限）。
+     */
+    private fun contextUsedTokens(): Long {
+        val last = runnableConfig.context()["lastInputTokens"]
+        if (last is Number && last.toLong() > 0) return last.toLong()
+        return sessionTokenUsageRef.get().inputTokens.coerceAtMost(contextWindowSize())
+    }
+
+    /**
+     * 模型上下文窗口总大小（token，usage_update.size）。
+     * 优先取当前模型的 contextWindow 配置，未配置时使用默认值。
+     */
+    private fun contextWindowSize(): Long {
+        val modelId = runnableConfig.context()["model"] as? String
+        val configs = ModelConfigLoader.loadConfigs()
+        val config = modelId?.let { ModelConfigLoader.findConfigByModelName(it, configs) }
+            ?: ModelConfigLoader.getDefaultConfig(configs)
+        return config?.contextWindow ?: DEFAULT_CONTEXT_WINDOW
+    }
+
+    /**
      * 按档位A价格计算费用（元/百万 tokens）：输入-缓存命中 0.02、输入-缓存未命中 1、输出 2。
      * 缓存命中输入取 cachedReadTokens，未命中输入 = inputTokens - cachedReadTokens。
      */
@@ -576,7 +603,7 @@ class AgiAgentSession(
                 }
                 emit(
                     Event.SessionUpdateEvent(
-                        SessionUpdate.UsageUpdate(sessionTokenUsageRef.get().inputTokens / 100, 1024 * 1024, Cost(calculateCost(tokenUsageRef.get()), "CNY"))
+                        SessionUpdate.UsageUpdate(contextUsedTokens(), contextWindowSize(), Cost(calculateCost(tokenUsageRef.get()), "CNY"))
                     )
                 )
             }

@@ -124,7 +124,12 @@ class Config {
         /**
          * 额外的请求体参数，用于传递供应商特有的配置
          */
-        var extraBody: MutableMap<String, Any?>? = null
+        var extraBody: MutableMap<String, Any?>? = null,
+        /**
+         * 模型上下文窗口大小（token 数），用于 ACP usage_update 的 size 字段
+         * 未配置时由 AgiAgentSession 使用默认值
+         */
+        var contextWindow: Long? = null
     ) {
         /**
          * 校验模型配置的有效性

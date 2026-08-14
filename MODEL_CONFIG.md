@@ -75,6 +75,7 @@
 | `modelName` | String | 是 | 模型名称（实际发送给API的模型名称） |
 | `temperature` | Double | 否 | 温度参数，控制输出的随机性（默认 0.65） |
 | `maxTokens` | Integer | 否 | 最大令牌数（可选） |
+| `contextWindow` | Long | 否 | 模型上下文窗口大小（token 数）。用于 ACP `usage_update` 的 `size` 字段；未配置时默认 128K |
 | `providerId` | String | 否 | 引用的供应商标识符（推荐使用） |
 | `baseUrl` | String | 否 | API 基础 URL（如果不使用 providerId） |
 | `apiKey` | String | 否 | API 密钥（如果不使用 providerId） |

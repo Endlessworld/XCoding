@@ -308,7 +308,8 @@ public class ModelConfigLoader {
                 model.getParallelToolCalls(),
                 model.getStreamUsage(),
                 model.getToolChoice(),
-                model.getExtraBody()
+                model.getExtraBody(),
+                model.getContextWindow()
         );
     }
 
