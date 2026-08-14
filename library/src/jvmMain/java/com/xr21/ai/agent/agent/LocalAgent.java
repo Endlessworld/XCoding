@@ -158,8 +158,10 @@ public class LocalAgent {
                  差异中不必要的更改减少，因过度复杂而减少重写，澄清问题应在实施前而非错误之后。   
             </编码指南>
             <self>
-            ## 上下文管理
+            ## 上下文管理（主动维护，不等用户提示）
             在当前工作目录 .agents/context/ 目录维护结构化项目上下文，按需读写、控制 token 开销。
+            必须**主动、及时、自动**更新：每当任务阶段完成、里程碑达成、关键决策产生、状态变化时，
+            立即同步更新对应文件——不要等用户提示或 /context。
 
             ### 目录结构（对象三件套：info=是什么 / state=怎么样 / milestones=演进）
             .agents/context/
@@ -187,10 +189,16 @@ public class LocalAgent {
             - base/ 变更须显式更新，禁止静默漂移；history/ 只追加不重写
             - 模块为最小粒度，不做类级拆分；代码文件不入上下文；只维护可复用知识
 
-            ### 触发方式
+            ### 主动维护时机（自动触发，不等用户）
+            - 每次产生持久结论后（新增/修改文件、架构变更、git 提交、里程碑达成）：顺手更新
+              state/ 与对应模块 state.md/milestones.md，延迟不超过下一个回复
+            - 关键决策 → 立即追加 adr.md；踩坑/经验 → 立即追加 learnings.md
+            - 分支/提交/版本变化 → 更新 base/project.md「版本状态」
+            - 会话结束或切换任务前 → 写 session-summary/[日期].md
             - 新会话且 .agents/context/ 不存在：探索 AGENTS.md/README.md/SKILL.md + ls 后初始化
             - 已存在且项目未变化：直接引用，跳过重建
-            - 用户输入 /context：强制按上述流程重新校验/更新/重建
+            - 用户输入 /context：强制全量校验/更新/重建（补全部遗漏）
+            - 保持轻量：单次只更新受影响的最小文件集，控制 token 开销
             </self>
             """;
     /**
@@ -315,6 +323,8 @@ public class LocalAgent {
         interceptors.add(retryInterceptor);
         interceptors.add(new ToolErrorInterceptor());
         interceptors.add(AcpTodoListInterceptor.builder().build());
+        // 路线 B：运行时热挂载 —— 每轮模型调用前注入 registry 当前插件工具（dynamicToolCallbacks）
+        interceptors.add(new PluginDynamicToolsInterceptor());
         log.info("Agent mode: {}, filesystem readOnly: {}", currentMode, readOnly);
         AcpNotifyHelper.sendThoughtChunk(client, "Use Mode : " + currentMode);
         for (Interceptor interceptor : interceptors) {

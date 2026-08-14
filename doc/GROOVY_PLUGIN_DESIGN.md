@@ -461,10 +461,21 @@ def cacheDir = "${PLUGIN_DATA}/my-tools"
 
 > **顺序约束（v0.3 强化，安全边界）**：拦截器**顺序敏感**——重试类（Model/Tool/ToolError Retry）应包裹工具调用、`FilesystemInterceptor` 须先行做路径校验。插件注入的 interceptors 需声明**相对内置的前后顺序/优先级**（如 `after=Filesystem`、`before=ModelRetry`），默认追加到内置之后，防止插件破坏重试与安全语义。插件的文件工具**必须复用 `FilesystemInterceptor` 的 ToolContext 校验链路**，禁止自带绕过路径校验的“裸 IO”。
 
-### 7.3 路线 B：运行时热挂载（阶段二，需要框架支持验证，不变）
+### 7.3 路线 B：运行时热挂载（✅ 已验证并落地，2026-08-14）
 
-- 将 `ReactAgent.builder().tools(...)` 从构建期静态列表改为**每次模型调用前从 registry 动态组装**；
-- 需验证 graph 框架是否支持动态 tools；若不支持，则仿照 `ContextEditingInterceptor.interceptModel`，在钩子/拦截器里对 `ModelRequest` 注入当前插件工具，使“脚本执行中途注册的工具下一轮可见”。
+- **框架能力验证结论**：`spring-ai-alibaba 2.0.0-M1.1` **原生支持动态工具注入**，无需修改
+  `ReactAgent.builder().tools(...)` 可变性：
+  - `ModelRequest.dynamicToolCallbacks`：模型请求级动态工具列表（拦截器可注入）；
+  - `AgentLlmNode.buildChatClientRequestSpec`：将 dynamicToolCallbacks 合并进本轮模型调用，
+    并存入 `config.context().put(RunnableConfig.DYNAMIC_TOOL_CALLBACKS_METADATA_KEY, ...)`；
+  - `AgentToolNode.resolveFromConfigMetadata`：从 config metadata 解析并执行动态工具。
+- **落地实现**：新增 `PluginDynamicToolsInterceptor`（`ModelInterceptor`），在 `interceptModel`
+  中把 `GroovyPluginRegistry` 当前插件工具注入 `ModelRequest.dynamicToolCallbacks`；
+  去重策略——跳过已在 `ModelRequest.tools`（节点工具名列表）中的工具，只注入运行期
+  新增的插件工具。已接入 `LocalAgent.getInterceptors`（AcpTodoListInterceptor 之后）。
+- 效果：脚本执行中途用 `tools.plugin(...)` 注册的新工具，**下一轮模型调用即对模型可见、
+  可被调用执行**（真·常驻热挂载）。测试：`PluginDynamicToolsInterceptorTest` 4 用例通过
+  （空透传/注入新增/跳过已并入/部分注入）。
 ---
 
 ## 8. 安全设计（硬约束）
