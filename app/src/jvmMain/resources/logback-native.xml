@@ -81,7 +81,7 @@
         </filter>
     </appender>
 
-    <!-- 综合日志文件 - 记录INFO及以上所有级别（保持向后兼容） -->
+    <!-- 综合日志文件 - 记录全部级别日志（DEBUG及以上） -->
     <appender name="ALL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_HOME}/ai-agent.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
@@ -91,13 +91,15 @@
         <encoder>
             <pattern>${LOG_PATTERN}</pattern>
         </encoder>
+        <!-- ThresholdFilter 阈值设为 DEBUG：DEBUG 为最低级别，即记录全部日志 -->
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>INFO</level>
+            <level>DEBUG</level>
         </filter>
     </appender>
 
     <!-- 应用日志级别设置 -->
-    <logger name="com.xr21.ai.agent" level="INFO" additivity="false">
+    <logger name="com.xr21.ai.agent" level="DEBUG" additivity="false">
+        <appender-ref ref="DEBUG_FILE"/>
         <appender-ref ref="INFO_FILE"/>
         <appender-ref ref="WARN_FILE"/>
         <appender-ref ref="ERROR_FILE"/>
@@ -167,8 +169,9 @@
         <appender-ref ref="ALL_FILE"/>
     </logger>
 
-    <!-- 根日志配置 - 完全不包含控制台输出 -->
-    <root level="INFO">
+    <!-- 根日志配置 - 完全不包含控制台输出，DEBUG 使所有日志进入 ai-agent.log -->
+    <root level="DEBUG">
+        <appender-ref ref="DEBUG_FILE"/>
         <appender-ref ref="INFO_FILE"/>
         <appender-ref ref="WARN_FILE"/>
         <appender-ref ref="ERROR_FILE"/>

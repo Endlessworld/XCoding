@@ -63,6 +63,13 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:3.1.3")
     // Ktor HTTP Client Engine
     implementation("io.ktor:ktor-client-okhttp:3.1.3")
+
+    // SLF4J 绑定：logback-classic（日志文件输出）。
+    // 说明：:library 全局 exclude(org.springframework.boot) 会连带排除 spring-boot-starter-logging
+    // （内含 logback-classic/logback-core），导致 fatJar 只有 slf4j-api 而无 SLF4J provider，
+    // 运行日志被 NOP 静默丢弃。此处显式声明 logback 1.5.x（与 slf4j-api 2.0.17 匹配），
+    // 使 logback.xml 的 RollingFileAppender 真正生效，日志写入 ${user.home}/.agi_working/logs。
+    implementation("ch.qos.logback:logback-classic:1.5.16")
 }
 
 // ==================== 可执行入口 ====================
