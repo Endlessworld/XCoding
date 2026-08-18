@@ -596,7 +596,9 @@ class AgiAgentSession(
                                 kind = ToolKindFind.find(toolCall.name()),
                                 status = ToolCallStatus.IN_PROGRESS,
                                 content = content,
-                                rawInput = kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
+                                rawInput = runCatching {
+                                    kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
+                                }.getOrNull() as? JsonObject,
                             )
                         )
                     )

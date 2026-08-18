@@ -25,6 +25,7 @@ import com.xr21.ai.agent.tools.ToolKindFind
 import com.xr21.ai.agent.utils.Json
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import org.springframework.ai.chat.messages.AssistantMessage
 
 /**
@@ -306,7 +307,9 @@ object BridgeKt {
             kind = ToolKindFind.find(toolCall.name()),
             status = ToolCallStatus.PENDING,
 //            content = build(toolCall.name(), arguments),
-            rawInput = kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments()),
+            rawInput = runCatching {
+                kotlinx.serialization.json.Json.parseToJsonElement(toolCall.arguments())
+            }.getOrNull() as? JsonObject,
         )
     }
 
