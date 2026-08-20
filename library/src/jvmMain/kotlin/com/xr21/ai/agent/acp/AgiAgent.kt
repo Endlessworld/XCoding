@@ -561,6 +561,8 @@ class AgiAgentSession(
                     cachedWriteTokens = prev.cachedWriteTokens
                 )
             )
+        }else{
+            runnableConfig.context().put("lastInputTokens",  0)
         }
         if (output.chunk != null) {
             emit(

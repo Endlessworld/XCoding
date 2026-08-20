@@ -20,11 +20,11 @@ import com.alibaba.cloud.ai.graph.agent.extension.interceptor.SubAgentSpec;
 import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.hook.returndirect.ReturnDirectModelHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.*;
-import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.xr21.ai.agent.tools.MsgTool;
 import com.xr21.ai.agent.tools.WorkerTool;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.*;
@@ -400,7 +400,7 @@ public class WorkerInterceptor extends ModelInterceptor {
             }
             builder.hooks(new ReturnDirectModelHook());
             builder.enableLogging(spec.isEnableLoopingLog());
-
+            builder.chatOptions(ChatOptions.builder().model("mimo-v2.5").build());
             return builder.build();
         }
 

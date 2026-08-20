@@ -83,7 +83,7 @@ private fun applyUtf8Encoding() {
 
 fun main() = runBlocking {
     applyUtf8Encoding()
-    cprintln(Color.BOLD , "AgiHarnessAgent Console Demo")
+    cprintln(Color.BOLD, "AgiHarnessAgent Console Demo")
     cprintln(Color.DIM, "─".repeat(40))
     println()
 
@@ -126,8 +126,25 @@ fun main() = runBlocking {
 
     // 3. 创建会话
     info("[3/4] 创建 ACP 会话...")
+    var mcpServers = """
+[
+     {
+      "name": "code-review-graph",
+      "command": "code-review-graph",
+      "args": [
+        "serve"
+      ],
+      "env": []
+    }
+  ]
+    """.trimIndent()
+
+
     val session = acpClient.newSession(
-        SessionCreationParameters(cwd = System.getProperty("user.dir"), mcpServers = emptyList())
+        SessionCreationParameters(
+            cwd = System.getProperty("user.dir"),
+            mcpServers = arrayListOf(McpServer.Stdio("code-review-graph", "code-review-graph", arrayListOf("serve"), emptyList<EnvVariable>()))
+        )
     ) { _, _ -> DemoClientOperations() }
     ok("会话 ID: ${Color.CYAN}${session.sessionId}${Color.RESET}")
     ok("可用模型: ${session.availableModels.size} 个")
@@ -178,10 +195,22 @@ private suspend fun handleCommand(
     val cmd = input.split("\\s+".toRegex(), 2)
     return when (cmd[0]) {
         "/exit", "/quit" -> false
-        "/help" -> { printHelp(); true }
-        "/sessions" -> { listSessions(client); true }
-        "/mode" -> { handleModeCommand(session, cmd); true }
-        "/model" -> { handleModelCommand(session, cmd); true }
+        "/help" -> {
+            printHelp(); true
+        }
+
+        "/sessions" -> {
+            listSessions(client); true
+        }
+
+        "/mode" -> {
+            handleModeCommand(session, cmd); true
+        }
+
+        "/model" -> {
+            handleModelCommand(session, cmd); true
+        }
+
         else -> {
             cprintln(Color.RED, "未知命令: ${cmd[0]}")
             printHelp()
@@ -191,7 +220,8 @@ private suspend fun handleCommand(
 }
 
 private fun printHelp() {
-    println("""
+    println(
+        """
   命令
   /exit      退出 Demo
   /help      显示此帮助
@@ -201,7 +231,8 @@ private fun printHelp() {
   /model <id> 切换到指定模型
   /sessions  列出所有会话
   其他内容作为 prompt 发送给 Agent
-    """.trimIndent())
+    """.trimIndent()
+    )
 }
 
 private suspend fun listSessions(client: Client) {
@@ -295,7 +326,9 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                         is SessionUpdate.AgentMessageChunk -> {
                             val t = (u.content as? ContentBlock.Text)?.text ?: ""
                             if (t.isNotBlank()) {
-                                if (thinking) { println(); thinking = false }
+                                if (thinking) {
+                                    println(); thinking = false
+                                }
                                 if (!responding) {
                                     cprintln(Color.GREEN, "  ${Color.BOLD}agent${Color.RESET}:")
                                     responding = true
@@ -306,7 +339,9 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                         }
 
                         is SessionUpdate.ToolCall -> {
-                            if (thinking || responding) { println(); thinking = false; responding = false }
+                            if (thinking || responding) {
+                                println(); thinking = false; responding = false
+                            }
                             val id = u.toolCallId.toString()
                             val st = ToolState(
                                 title = u.title ?: "",
@@ -324,7 +359,9 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                         }
 
                         is SessionUpdate.ToolCallUpdate -> {
-                            if (thinking || responding) { println(); thinking = false; responding = false }
+                            if (thinking || responding) {
+                                println(); thinking = false; responding = false
+                            }
                             val id = u.toolCallId.toString()
                             val st = tools.getOrPut(id) { ToolState(title = u.title ?: "", kind = u.kind) }
                             u.kind?.let { st.kind = it }
@@ -344,7 +381,8 @@ private suspend fun sendPrompt(session: ClientSession, text: String) {
                             }
                         }
 
-                        is SessionUpdate.UsageUpdate -> { /* 最终用量在 summary 汇总 */ }
+                        is SessionUpdate.UsageUpdate -> { /* 最终用量在 summary 汇总 */
+                        }
 
                         else -> {}
                     }

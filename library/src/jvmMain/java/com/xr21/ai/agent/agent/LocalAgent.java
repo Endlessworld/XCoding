@@ -61,6 +61,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.io.File;
 import java.io.IOException;
+import java.net.SocketException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -140,9 +141,9 @@ public class LocalAgent {
                  - 如果你发现了无关的死代码，要提及——不要删除。
                  当你的更改产生孤儿时：
                      - 移除你的更改导致未使用的导入/变量/函数。
-                     - 除非被要求，不要删除已有的死代码。   
+                     - 除非被要求，不要删除已有的死代码。
                  测试：每一行更改的线条都应直接追踪到用户的请求。
-             ## 4.目标驱动执行    
+             ## 4.目标驱动执行
              **定义成功标准。循环直到确认。**
              将任务转化为可验证的目标：
              - “添加验证”→“为无效输入写测试，然后使其通过”
@@ -242,9 +243,9 @@ public class LocalAgent {
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具
         if (!CollectionUtils.isEmpty(mcpServers)) {
-//            List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
-//            tools.addAll(mcpTools);
-//            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
+            List<ToolCallback> mcpTools = ToolsUtil.getMcpTools(mcpServers);
+            tools.addAll(mcpTools);
+            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
         }
         // 将拦截器提供的文件系统工具（ls/read_file/write_file 等）与 write_todos 工具一并暴露给 Groovy 脚本绑定
         if (interceptorTools != null && !interceptorTools.isEmpty()) {
@@ -296,7 +297,7 @@ public class LocalAgent {
                 .includeGeneralPurpose(true)  // 同时包含通用Worker
                 .build();
         ModelRetryInterceptor retryInterceptor = ModelRetryInterceptor.builder()
-                .maxAttempts(3)              // 总尝试次数 3（即最多重试 2 次）
+                .maxAttempts(3)              // 总尝试次数 3（即最多重试 2··· 次）
                 .initialDelay(200)           // 首次重试延迟 200ms
                 .maxDelay(4000)              // 最大延迟 4s
                 .retryableExceptionPredicate((e) -> {
@@ -310,7 +311,7 @@ public class LocalAgent {
                         return status.is5xxServerError() || status.value() == 429;
                     }
                     // 连接超时、IO 异常等暂时性网络错误也应重试
-                    return e instanceof IOException;
+                    return e instanceof IOException || e.getCause() instanceof SocketException;
                 })
                 .backoffMultiplier(2.0)      // 指数退避倍数
                 .build();
@@ -450,11 +451,10 @@ public class LocalAgent {
                         .build())
                 .autoReload(true)
                 .build());
-//        hooks.add(SummarizationHook.builder()
-//                .model(chatModel)
-//                .maxTokensBeforeSummary(128 * 1024)
-//                .messagesToKeep(3)
-//                .build());
+        // 上下文 token 达到阈值时，注入引导消息促使模型主动调用 compact_conversation 工具压缩会话
+        hooks.add(CompactionPromptHook.builder()
+                .maxTokensBeforePrompt(256 * 1024)
+                .build());
 
         return hooks;
     }

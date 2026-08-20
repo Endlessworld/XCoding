@@ -1851,13 +1851,16 @@ public class OpenAiApi {
                         @JsonProperty("completion_tokens") Integer completionTokens,
                         @JsonProperty("prompt_tokens") Integer promptTokens,
                         @JsonProperty("total_tokens") Integer totalTokens,
+                        @JsonProperty("prompt_cache_hit_tokens")    Integer  promptCacheHitTokens,      // 缓存命中的 tokens
+                        @JsonProperty("prompt_cache_miss_tokens")    Integer  promptCacheMissTokens,      // 缓存未命中的
+                        @JsonProperty("cache_creation")    Integer  cacheCreation,      // 创建缓存写入的 tokens（部分服务）
                         @JsonProperty("prompt_tokens_details") PromptTokensDetails promptTokensDetails,
                         @JsonProperty("completion_tokens_details") CompletionTokenDetails completionTokenDetails
     ) { // @formatter:on
-
-        public Usage(Integer completionTokens, Integer promptTokens, Integer totalTokens) {
-            this(completionTokens, promptTokens, totalTokens, null, null);
-        }
+//
+//        public Usage(Integer completionTokens, Integer promptTokens, Integer totalTokens) {
+//            this(completionTokens, promptTokens, totalTokens, null, null,null);
+//        }
 
         /**
          * Breakdown of tokens used in the prompt
