@@ -242,7 +242,9 @@ public class ShellTools {
                 }
             } else {
                 if (os.contains("win")) {
-                    shellCommand = new String[]{"cmd.exe", "/c", command};
+                    // Windows once 模式：把命令写入临时 .bat 文件再执行。
+                    // 规避 ProcessBuilder 对 cmd.exe 参数引号的脆弱处理，并正确保留换行与元字符（& | ^ ( )）。
+                    shellCommand = buildWindowsCommand(command);
                 } else {
                     shellCommand = new String[]{"/bin/bash", "-c", command};
                 }
@@ -316,6 +318,34 @@ public class ShellTools {
             return MAX_TIMEOUT_MS;
         }
         return timeout;
+    }
+
+    /**
+     * Windows once 模式：将命令写入临时 .bat 文件再交由 cmd.exe 执行。
+     * 相比直接把命令作为 cmd /c 参数，可规避 ProcessBuilder 对 cmd.exe 参数引号的脆弱处理，
+     * 并正确保留命令中的换行与元字符（& | ^ ( )），避免被 cmd 提前截断或误解释。
+     * .bat 文件使用平台默认字符集编写（中文 Windows 下为 GBK），与 cmd 解析批处理的代码页一致。
+     */
+    private String[] buildWindowsCommand(String command) {
+        File bat = null;
+        try {
+            bat = File.createTempFile("fsx_cmd_", ".bat");
+            bat.deleteOnExit();
+            Charset cs = Charset.defaultCharset();
+            try (Writer w = new OutputStreamWriter(new FileOutputStream(bat), cs)) {
+                // @echo off 避免命令回显；末尾确保换行以保证末行命令被完整执行
+                w.write("@echo off\r\n");
+                w.write(command);
+                if (!command.endsWith("\r\n") && !command.endsWith("\n")) {
+                    w.write("\r\n");
+                }
+                w.write("\r\n");
+            }
+            return new String[]{"cmd.exe", "/c", bat.getAbsolutePath()};
+        } catch (IOException e) {
+            log.warn("Failed to create temp batch file for command, falling back to cmd /c: {}", e.getMessage());
+            return new String[]{"cmd.exe", "/c", command};
+        }
     }
 
     /**
