@@ -29,9 +29,16 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -315,9 +322,9 @@ public class ShellTools {
      * Handle completed process - return result and clean up session
      */
     private Map<String, Object> handleCompletedProcess(ShellSession session, String shellId, String command) {
-        // Wait for output readers to finish
+        // 输出可能接近 MAX_OUTPUT_CHARS(1MB)，读取线程可能需要较长时间；给足 30s 保证完整读取
         try {
-            session.waitForOutputReaders(5000);
+            session.waitForOutputReaders(30000);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -331,17 +338,22 @@ public class ShellTools {
         session.destroy();
         shellSessions.remove(shellId);
 
-        // Build result
+        // Build result - 按到达顺序交错合并 stdout/stderr，保留真实时序（编译进度与错误交错可见）
         StringBuilder result = new StringBuilder();
         result.append("bash_id: ").append(shellId).append("\n\n");
 
-        if (stdout != null && !stdout.isEmpty()) {
-            result.append(stdout);
-        }
-
-        if (stderr != null && !stderr.isEmpty()) {
-            if (result.length() > result.indexOf("\n\n") + 2) result.append("\n");
-            result.append("STDERR:\n").append(stderr);
+        List<ShellSession.OutputChunk> ordered = session.getOrderedOutput();
+        if (!ordered.isEmpty()) {
+            for (ShellSession.OutputChunk chunk : ordered) {
+                if ("STDERR".equals(chunk.stream)) {
+                    result.append("STDERR: ");
+                }
+                result.append(chunk.text);
+            }
+        } else {
+            // 无交错记录时回退到分流原始 buffer（兼容性兜底）
+            if (stdout != null && !stdout.isEmpty()) result.append(stdout);
+            if (stderr != null && !stderr.isEmpty()) result.append("STDERR:\n").append(stderr);
         }
 
         if (exitCode != 0) {
@@ -349,17 +361,22 @@ public class ShellTools {
             result.append("Exit code: ").append(exitCode);
         }
 
-        // Truncate if too long - keep the tail, since errors/stack traces/failures are usually at the end
+        // Truncate if too long - 保留头部 + 正文前 40% 与后 60%，
+        // 兼顾开头上下文与结尾错误/堆栈，避免中间被整体丢弃丢失关键信息
         String output = result.toString();
         if (output.length() > MAX_RETURN_CHARS) {
-            String header = output.substring(0, output.indexOf("\n\n") + 2);
-            String content = output.substring(output.indexOf("\n\n") + 2);
+            int headerEnd = output.indexOf("\n\n") + 2;
+            String header = output.substring(0, headerEnd);
+            String content = output.substring(headerEnd);
             int keep = MAX_RETURN_CHARS - header.length() - "\n... (output truncated)\n".length();
             if (keep <= 0) {
                 keep = Math.min(1000, content.length());
             }
-            String tail = content.substring(Math.max(0, content.length() - keep));
-            output = header + "\n... (output truncated)\n" + tail;
+            int headKeep = (int) (keep * 0.4);
+            int tailKeep = keep - headKeep;
+            String head = content.substring(0, Math.min(headKeep, content.length()));
+            String tail = content.substring(Math.max(headKeep, content.length() - tailKeep));
+            output = header + head + "\n... (output truncated)\n" + tail;
         }
 
         return ToolResult.builder()
@@ -629,6 +646,12 @@ public class ShellTools {
         final String command;
         final ClientSessionOperations clientSessionOperations;
         final String charsetName;
+        final boolean isWindows;
+
+        // 按到达顺序记录 stdout/stderr 输出块，供 once 模式交错合并（保留真实时序）
+        final ConcurrentLinkedQueue<OutputChunk> orderedOutput = new ConcurrentLinkedQueue<>();
+        final AtomicLong outputSeq = new AtomicLong();
+        final AtomicLong orderedChars = new AtomicLong();
 
         final AtomicBoolean stdoutFinished = new AtomicBoolean(false);
         final AtomicBoolean stderrFinished = new AtomicBoolean(false);
@@ -653,53 +676,143 @@ public class ShellTools {
             // Get the stdin stream for sending commands
             this.stdin = process.getOutputStream();
             String osName = System.getProperty("os.name").toLowerCase();
-            String charsetName = osName.contains("win") ? "GBK" : Charset.defaultCharset().name();
-            this.charsetName = charsetName;
-            // Start thread to read stdout
-            this.stdoutReader = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), charsetName))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        appendLine(stdout, stdoutDropped, stdoutAppended, line);
-                        if (clientSessionOperations != null) {
-                            String finalLine = line + "\n";
-                            SuspendKt.runSuspend((completion) -> {
-                                clientSessionOperations.notify(BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(finalLine, null, null)), null, completion);
-                                return null;
-                            });
-                        }
-                    }
-                } catch (IOException e) {
-                    // Process terminated or stream closed
-                } finally {
-                    stdoutFinished.set(true);
-                }
-            });
+            this.isWindows = osName.contains("win");
+            // 发送命令到子进程 stdin 时使用平台编码（Windows=GBK，cmd 期望的编码）。
+            this.charsetName = isWindows ? "GBK" : Charset.defaultCharset().name();
+            // 读取 stdout/stderr：按字节块累积，按行边界分割，对每行做编码自动检测解码，
+            // 从而同时兼容 UTF-8（fsx/git 等现代 CLI）与 GBK（ipconfig 等旧 CLI）输出的中文。
+            this.stdoutReader = new Thread(() -> readDecoded(process.getInputStream(), stdout, stdoutDropped, stdoutAppended, stdoutFinished, clientSessionOperations));
             this.stdoutReader.setDaemon(true);
             this.stdoutReader.start();
 
             // Start thread to read stderr
-            this.stderrReader = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), charsetName))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        appendLine(stderr, stderrDropped, stderrAppended, line);
-                        if (clientSessionOperations != null) {
-                            String finalLine = line + "\n";
-                            SuspendKt.runSuspend((completion) -> {
-                                clientSessionOperations.notify(BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(finalLine, null, null)), null, completion);
-                                return null;
-                            });
-                        }
-                    }
-                } catch (IOException e) {
-                    // Process terminated or stream closed
-                } finally {
-                    stderrFinished.set(true);
-                }
-            });
+            this.stderrReader = new Thread(() -> readDecoded(process.getErrorStream(), stderr, stderrDropped, stderrAppended, stderrFinished, clientSessionOperations));
             this.stderrReader.setDaemon(true);
             this.stderrReader.start();
+        }
+
+        /**
+         * 读取子进程输出流：按字节累积，遇换行符分割成一行，对每行做编码自动检测解码。
+         * 兼容 UTF-8（fsx/git 等现代 CLI）与平台编码 GBK（ipconfig 等旧 CLI）的中文输出。
+         */
+        private void readDecoded(InputStream in, StringBuilder sb, AtomicLong dropped,
+                                 AtomicLong appended, AtomicBoolean finished,
+                                 ClientSessionOperations clientSessionOperations) {
+            try (BufferedInputStream bis = new BufferedInputStream(in)) {
+                ByteArrayOutputStream lineBytes = new ByteArrayOutputStream();
+                // 块读取以降低逐字节方法调用开销（大输出如 git log / 目录遍历性能关键）
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = bis.read(buf)) != -1) {
+                    for (int i = 0; i < n; i++) {
+                        byte b = buf[i];
+                        if (b == '\n') {
+                            emitDecodedLine(sb, dropped, appended, clientSessionOperations, lineBytes.toByteArray());
+                            lineBytes.reset();
+                        } else {
+                            lineBytes.write(b);
+                        }
+                    }
+                }
+                // 末尾无换行的残余内容
+                if (lineBytes.size() > 0) {
+                    emitDecodedLine(sb, dropped, appended, clientSessionOperations, lineBytes.toByteArray());
+                }
+            } catch (IOException e) {
+                // Process terminated or stream closed
+            } finally {
+                finished.set(true);
+            }
+        }
+
+        /**
+         * 对一行字节做编码检测解码并追加到缓冲（同时推送 ACP 通知）。
+         * 先按 UTF-8 严格解码，失败则回退平台编码（Windows=GBK）。
+         */
+        private void emitDecodedLine(StringBuilder sb, AtomicLong dropped, AtomicLong appended,
+                                     ClientSessionOperations clientSessionOperations, byte[] lineBytes) {
+            String line = decodeBestEffort(lineBytes);
+            recordOrdered(line, sb == stdout ? "STDOUT" : "STDERR");
+            appendLine(sb, dropped, appended, line);
+            if (clientSessionOperations != null) {
+                String finalLine = line + "\n";
+                SuspendKt.runSuspend((completion) -> {
+                    clientSessionOperations.notify(BridgeKt.buildAgentThoughtChunk(new ContentBlock.Text(finalLine, null, null)), null, completion);
+                    return null;
+                });
+            }
+        }
+
+        /**
+         * 编码自动检测解码：优先 UTF-8 严格解码（REPORT 非法字节），失败则回退
+         * Charset.defaultCharset()。从而同时支持 UTF-8（fsx/git）与 JVM 默认编码
+         * 匹配系统代码页时的中文输出。
+         */
+        private static String decodeBestEffort(byte[] bytes) {
+            try {
+                String s = StandardCharsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT)
+                        .decode(ByteBuffer.wrap(bytes)).toString();
+                return stripCr(s);
+            } catch (CharacterCodingException e) {
+                // UTF-8 解码失败，回退 JVM 默认编码
+                return stripCr(new String(bytes, Charset.defaultCharset()));
+            }
+        }
+
+        /**
+         * 处理行内 \r：既剥离行尾 CR（CRLF），又将行内 \r 视为覆盖点（进度条/光标移动场景），
+         * 保留最后一个 \r 之后的内容，避免 \r 残留夹在行中导致的乱码/时序错乱。
+         */
+        private static String stripCr(String s) {
+            if (s.endsWith("\r")) {
+                return s.substring(0, s.length() - 1);
+            }
+            int lastCr = s.lastIndexOf('\r');
+            if (lastCr >= 0) {
+                return s.substring(lastCr + 1);
+            }
+            return s;
+        }
+
+        /**
+         * 记录到交错输出队列（once 模式合并用），按 MAX_OUTPUT_CHARS 限制丢弃最旧块避免无界增长。
+         */
+        private void recordOrdered(String text, String stream) {
+            String line = text + "\n";
+            synchronized (orderedOutput) {
+                while (!orderedOutput.isEmpty() && orderedChars.get() + line.length() > MAX_OUTPUT_CHARS) {
+                    OutputChunk old = orderedOutput.poll();
+                    if (old != null) {
+                        orderedChars.addAndGet(-old.text.length());
+                    }
+                }
+                orderedOutput.add(new OutputChunk(outputSeq.incrementAndGet(), stream, line));
+                orderedChars.addAndGet(line.length());
+            }
+        }
+
+        /**
+         * once 模式交错输出块（按到达顺序）。
+         */
+        List<OutputChunk> getOrderedOutput() {
+            synchronized (orderedOutput) {
+                return new ArrayList<>(orderedOutput);
+            }
+        }
+
+        /** once 模式交错输出的一个输出块（含到达序号与来源流）。 */
+        static class OutputChunk {
+            final long seq;
+            final String stream;
+            final String text;
+
+            OutputChunk(long seq, String stream, String text) {
+                this.seq = seq;
+                this.stream = stream;
+                this.text = text;
+            }
         }
 
         /**
@@ -709,7 +822,6 @@ public class ShellTools {
             try {
                 // Add newline if not present (use CRLF on Windows for interactive shells)
                 String cmd = input;
-                boolean isWindows = charsetName.equalsIgnoreCase("GBK");
                 String lineSep = isWindows ? "\r\n" : "\n";
                 if (!cmd.endsWith("\r\n") && !cmd.endsWith("\n")) {
                     cmd = cmd + lineSep;
@@ -844,7 +956,7 @@ public class ShellTools {
                 // Ignore
             }
             // On Windows, kill the whole process tree to avoid orphan processes (cmd.exe may spawn children)
-            if (charsetName.equalsIgnoreCase("GBK")) {
+            if (isWindows) {
                 try {
                     new ProcessBuilder("taskkill", "/F", "/T", "/PID", String.valueOf(process.pid()))
                             .redirectErrorStream(true)
