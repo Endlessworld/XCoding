@@ -297,9 +297,9 @@ public class LocalAgent {
                 .includeGeneralPurpose(true)  // 同时包含通用Worker
                 .build();
         ModelRetryInterceptor retryInterceptor = ModelRetryInterceptor.builder()
-                .maxAttempts(3)              // 总尝试次数 3（即最多重试 2··· 次）
-                .initialDelay(200)           // 首次重试延迟 200ms
-                .maxDelay(4000)              // 最大延迟 4s
+                .maxAttempts(30)              // 总尝试次数 3（即最多重试 2··· 次）
+                .initialDelay(1000)           // 首次重试延迟 200ms
+                .maxDelay(3 * 60 * 1000)              // 最大延迟
                 .retryableExceptionPredicate((e) -> {
                     // 5xx + 网络/连接异常 + 限流（429）才值得重试
                     if (e instanceof RestClientResponseException restClientException) {
