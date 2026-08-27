@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.io.File;
@@ -52,7 +53,7 @@ public class ReadFileTool {
         2. 路径处理：以"/"开头的路径会自动拼接WORKSPACE_ROOT前缀
         3. 目录递归：自动遍历目录及其所有子目录，跳过.gitignore匹配的文件
         4. 分页读取：通过offset和limit参数控制读取范围，默认读取前500行
-        5. 行号显示：输出格式类似"cat -n"，每行带6位行号
+        5. 行号显示：每行带6位行号
         6. 超长截断：单行超过2000字符自动截断，避免输出爆炸
         7. 容错处理：路径不存在、权限不足、空文件等场景均有友好提示
 
@@ -61,38 +62,25 @@ public class ReadFileTool {
         读取不存在的文件/目录是可以的;将返回错误。
 
         Usage
-            - 支持同时访问多个文件或目录，增加执行效率
-            - file_paths 参数是个list可以同时传多个文件或目录路径，必须是绝对路径，而非相对路径
+        参数是个list,支持同时访问多个文件或目录 增加执行效率 filePath必须是绝对路径，而非相对路径
+        Param Example: [{"filePath": "filePath1","offset":50,"limit":30, "workspaceOnly": true},{"filePath": "filePath2","offset":80,"limit":30, "workspaceOnly": true}]
             - 你应该尽量在一次调用中批量读取多个可能有用的文件或目录。
             - 对于目录：
                 - 会递归读取目录下所有子目录和文件
                 - 每个文件的内容会单独显示，并包含完整路径
                 - 空目录会显示为"Directory is empty"
             - 对于文件：
-                - 默认从文件开头开始最多读取500行
+                - 默认从文件开头开始最多读取100行
                 - 使用offset和limit参数进行分页读取
                 - 任何超过2000字符的行将被截断
                 - 结果采用cat -n格式，行号从1开始
             - 如果读取了存在但内容为空的文件，会收到"File is empty"提示
-            - 建议在使用该工具前先使用list_files工具验证文件/目录路径
             - workspaceOnly参数控制是否仅允许读取工作目录内的文件，默认为true
         """)
-    public Map<String, Object> readFile(
-            @JsonProperty(value = "filePaths", required = true)
-            @JsonPropertyDescription("要读取的文件或目录的绝对路径列表，支持批量传入多个路径")
-            List<String> filePaths,
-            @JsonProperty(value = "offset")
-            @JsonPropertyDescription("起始行偏移量（从0开始计数），默认从文件开头读取")
-            Integer offset,
-            @JsonProperty(value = "limit")
-            @JsonPropertyDescription("最大读取行数，默认500行，防止一次性读取过大文件")
-            Integer limit,
-            @JsonProperty(value = "workspaceOnly")
-            @JsonPropertyDescription("是否仅允许读取工作目录内的文件，默认为true。设为false可读取工作目录之外的文件")
-            Boolean workspaceOnly
-    ) { // @formatter:on
+    public Map<String, Object> readFile(List<FilesReader> filesReaders) {
+        // @formatter:on
         // 参数校验：路径列表不能为空
-        if (filePaths == null || filePaths.isEmpty()) {
+        if (CollectionUtils.isEmpty(filesReaders)) {
             return ToolResult.builder()
                     .error("No file or directory paths provided")
                     .build();
@@ -105,55 +93,54 @@ public class ReadFileTool {
         // 统计成功读取的文件数量（目录递归的不计入）
         int filesRead = 0;
 
-        // workspaceOnly 默认 true：仅允许读取工作目录内的文件
-        boolean restrictToWorkspace = workspaceOnly == null || workspaceOnly;
-
         // 遍历每个传入的路径，逐个处理
-        for (String pathStr : filePaths) {
+        for (FilesReader files : filesReaders) {
+            // workspaceOnly 默认 true：仅允许读取工作目录内的文件
+            boolean restrictToWorkspace = files.workspaceOnly == null || files.workspaceOnly;
             try {
                 // 跳过空字符串路径
-                if (!StringUtils.hasText(pathStr)) {
+                if (!StringUtils.hasText(files.filePath)) {
                     continue;
                 }
                 // 路径转换：以"/"开头的绝对路径，拼接WORKSPACE_ROOT作为工作空间相对路径
                 // 例如："/src/main" -> WORKSPACE_ROOT + "/src/main"
-                if (pathStr.startsWith("/")) {
-                    pathStr = WORKSPACE_ROOT + File.pathSeparator + pathStr.replaceFirst("/", "");
+                if (files.filePath.startsWith("/")) {
+                    files.filePath = WORKSPACE_ROOT + File.pathSeparator + files.filePath.replaceFirst("/", "");
                 }
-                Path path = Paths.get(pathStr).normalize();
+                Path path = Paths.get(files.filePath).normalize();
 
                 // 当 workspaceOnly=true 时，校验路径必须在工作目录内
                 if (restrictToWorkspace) {
                     String pathAbs = path.toAbsolutePath().toString().replace("\\", "/");
                     String workspaceRoot = WORKSPACE_ROOT.replace("\\", "/");
                     if (!pathAbs.startsWith(workspaceRoot)) {
-                        content.append("Path is outside workspace directory: ").append(pathStr).append("\n\n");
+                        content.append("Path is outside workspace directory: ").append(files.filePath).append("\n\n");
                         continue;
                     }
                 }
 
                 if (!Files.exists(path)) {
-                    content.append("Path not found - ").append(pathStr).append("\n\n");
+                    content.append("Path not found - ").append(files.filePath).append("\n\n");
                     continue;
                 }
 
                 // 根据路径类型分发处理：目录递归读取，文件直接读取
                 if (Files.isDirectory(path)) {
-                    processDirectory(path, content, offset, limit, result);
+                    processDirectory(path, content, files.offset, files.limit, result);
                 } else {
-                    processFile(path, content, offset, limit, result);
+                    processFile(path, content, files.offset, files.limit, result);
                     filesRead++;
                 }
             } catch (IOException e) {
                 // IO异常：文件不存在、读取失败等
-                content.append("reading path failed").append(pathStr).append(": ").append(e.getMessage()).append("\n\n");
+                content.append("reading path failed").append(files.filePath).append(": ").append(e.getMessage()).append("\n\n");
             } catch (SecurityException e) {
                 // 安全异常：权限不足（如尝试读取/root目录）
-                content.append("Permission denied when accessing path: ").append(pathStr).append("\n\n");
+                content.append("Permission denied when accessing path: ").append(files.filePath).append("\n\n");
             } catch (Exception e) {
                 // 兜底异常：捕获所有未预期的错误，防止单个路径失败影响其他路径
                 content.append("Unexpected error processing path ")
-                        .append(pathStr)
+                        .append(files.filePath)
                         .append(": ")
                         .append(e.getMessage())
                         .append("\n\n");
@@ -214,11 +201,11 @@ public class ReadFileTool {
             /*
              * 分页参数计算：
              * - start: 起始索引，默认0（第1行），负数保护
-             * - maxLimit: 最大行数，默认500，防止输出过长
+             * - maxLimit: 最大行数，默认100，防止输出过长
              * - end: 实际结束索引，不超过文件总行数
              */
             int start = offset != null ? Math.max(0, offset) : 0;
-            int maxLimit = limit != null ? limit : 500;
+            int maxLimit = limit != null ? limit : 100;
             int end = Math.min(start + maxLimit, allLines.size());
 
             result.append("=== ").append(absolutePath).append(" ===\n");
@@ -270,5 +257,24 @@ public class ReadFileTool {
             // 向上抛出其他异常，确保错误不被静默吞掉
             throw e;
         }
+    }
+
+    public static class FilesReader {
+
+        @JsonProperty(value = "filePath", required = true)
+        @JsonPropertyDescription("要读取的文件或目录的绝对路径列表，支持批量传入多个路径")
+        String filePath;
+
+        @JsonProperty(value = "offset")
+        @JsonPropertyDescription("起始行偏移行（从0开始计数），默认从文件开头读取")
+        Integer offset;
+
+        @JsonProperty(value = "limit")
+        @JsonPropertyDescription("最大读取行数，默认100行，防止一次性读取过大文件")
+        Integer limit;
+
+        @JsonProperty(value = "workspaceOnly")
+        @JsonPropertyDescription("是否仅允许读取工作目录内的文件，默认为true。设为false可读取工作目录之外的文件")
+        Boolean workspaceOnly;
     }
 }
