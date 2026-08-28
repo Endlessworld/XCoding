@@ -35,6 +35,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -107,7 +108,7 @@ public class ShellTools {
 		在支持超时的持久壳会话中执行给定的bash命令。
 	        参数 mode 决定执行方式：
 	            - "once"（默认）：在一次性 shell 中执行单条命令，命令完成或超时后返回结果并销毁会话。
-	            - "interactive"：启动持久后台交互式 shell（Windows: cmd.exe，Unix: bash -i），立即返回 bash_id，之后用 ShellInput 发送命令、BashOutput 读取输出、KillShell 终止。适合在同一个 shell 中连续执行多条命令并保持状态（环境变量、工作目录）的场景。
+	            - "interactive"：启动持久后台交互式 shell（Windows: pwsh，Unix: bash -i），立即返回 bash_id，之后用 ShellInput 发送命令、BashOutput 读取输出、KillShell 终止。适合在同一个 shell 中连续执行多条命令并保持状态（环境变量、工作目录）的场景。
         重要提示：这个工具用于终端操作，比如git、npm、docker等。不要用它来做文件操作（读、写、编辑、搜索、查找文件 （除非查找的文件在工作空间之外））——请使用专门的工具。
         行为：
             - 如果命令在超时时间内完成，结果立即返回，会话关闭。
@@ -137,13 +138,11 @@ public class ShellTools {
         - 不要用换行来分隔命令（引号字符串中换行是可以的）
         - 如果一定要是用Bash写入或读取文件 务必在任何读取或写入文件的命令中指定编码为UTF-8,且写入文件只能使用无BOM UTF-8 其它一切编码或者BOM头都将损坏文件导致无法编译
         <如果当前是Windows系统>
-            禁止使用PowerShell脚本
-            禁止使用PowerShell脚本
-            禁止使用PowerShell脚本
+            win系统下使用pwsh作为Bash（once 模式用临时 .ps1 文件、interactive 模式用 pwsh 持久会话）
             先看当前环境是否存在 GNU coreutils 如果存在优先使用GNU coreutils
             C:\\Program Files\\coreutils\\coreutils.exe
             灵活组合使用C:\\Program Files\\coreutils\\bin中的各种coreutils工具
-            否则使用cmd替代GNU coreutils完成对应功能
+            否则使用PowerShell原生cmdlet（如 Get-ChildItem/Remove-Item/Copy-Item）完成对应功能
         </如果当前是Windows系统>
 			<交互式会话最佳实践（真实环境验证）>
 				- Windows 下直接输入 python 可能解析到 WindowsApps 的 App 执行别名占位（stub），不会真正启动 Python。若环境由 uv 管理，应改用 uv run python 进入虚拟环境（可用 which/where python 排查真实解析路径）。
@@ -236,14 +235,15 @@ public class ShellTools {
             if (interactive) {
                 // Persistent background shell: stay alive, commands are sent via ShellInput
                 if (os.contains("win")) {
-                    shellCommand = new String[]{"cmd.exe"};
+                    shellCommand = new String[]{"pwsh", "-NoProfile"};
                 } else {
                     shellCommand = new String[]{"/bin/bash", "-i"};
                 }
             } else {
                 if (os.contains("win")) {
-                    // Windows once 模式：把命令写入临时 .bat 文件再执行。
-                    // 规避 ProcessBuilder 对 cmd.exe 参数引号的脆弱处理，并正确保留换行与元字符（& | ^ ( )）。
+                    // Windows once 模式：用 pwsh -EncodedCommand 执行（不落盘脚本，避免安全软件告警）。
+                    // pwsh 没有 cmd 的 %VAR% 展开机制（% 原样保留，如 git log --format=%s 无需转义），
+                    // 也没有 cmd 对 & | ^ ( ) 等元字符的脆弱解析；UTF-16LE+Base64 规避中文传参乱码。
                     shellCommand = buildWindowsCommand(command);
                 } else {
                     shellCommand = new String[]{"/bin/bash", "-c", command};
@@ -321,30 +321,23 @@ public class ShellTools {
     }
 
     /**
-     * Windows once 模式：将命令写入临时 .bat 文件再交由 cmd.exe 执行。
-     * 相比直接把命令作为 cmd /c 参数，可规避 ProcessBuilder 对 cmd.exe 参数引号的脆弱处理，
-     * 并正确保留命令中的换行与元字符（& | ^ ( )），避免被 cmd 提前截断或误解释。
-     * .bat 文件使用平台默认字符集编写（中文 Windows 下为 GBK），与 cmd 解析批处理的代码页一致。
+     * Windows once 模式：使用 pwsh -EncodedCommand 执行命令。
+     * 不生成任何临时脚本文件（避免被安全软件识别为“落盘+执行”的可疑行为而频繁告警），
+     * 而是将命令以 UTF-16LE 编码后做 Base64，作为 -EncodedCommand 参数传给 pwsh。
+     * 优点：
+     *  1. Base64 为纯 ASCII，彻底规避 ProcessBuilder 在 Windows 下以 ANSI 编码传参导致的中文乱码；
+     *  2. pwsh 没有 cmd 的 %VAR% 展开机制（% 原样保留，如 git log --format=%s 无需转义）；
+     *  3. 不落盘，无临时文件残留，降低安全软件告警频率。
      */
     private String[] buildWindowsCommand(String command) {
-        File bat = null;
         try {
-            bat = File.createTempFile("fsx_cmd_", ".bat");
-            bat.deleteOnExit();
-            Charset cs = Charset.defaultCharset();
-            try (Writer w = new OutputStreamWriter(new FileOutputStream(bat), cs)) {
-                // @echo off 避免命令回显；末尾确保换行以保证末行命令被完整执行
-                w.write("@echo off\r\n");
-                w.write(command);
-                if (!command.endsWith("\r\n") && !command.endsWith("\n")) {
-                    w.write("\r\n");
-                }
-                w.write("\r\n");
-            }
-            return new String[]{"cmd.exe", "/c", bat.getAbsolutePath()};
-        } catch (IOException e) {
-            log.warn("Failed to create temp batch file for command, falling back to cmd /c: {}", e.getMessage());
-            return new String[]{"cmd.exe", "/c", command};
+            // pwsh -EncodedCommand 要求 UTF-16LE 编码后再 Base64
+            byte[] utf16 = command.getBytes(StandardCharsets.UTF_16LE);
+            String encoded = Base64.getEncoder().encodeToString(utf16);
+            return new String[]{"pwsh", "-NoProfile", "-EncodedCommand", encoded};
+        } catch (Exception e) {
+            log.warn("Failed to encode command for pwsh -EncodedCommand, falling back to pwsh -Command: {}", e.getMessage());
+            return new String[]{"pwsh", "-NoProfile", "-Command", command};
         }
     }
 
@@ -985,7 +978,7 @@ public class ShellTools {
             } catch (IOException e) {
                 // Ignore
             }
-            // On Windows, kill the whole process tree to avoid orphan processes (cmd.exe may spawn children)
+            // On Windows, kill the whole process tree to avoid orphan processes (pwsh may spawn children)
             if (isWindows) {
                 try {
                     new ProcessBuilder("taskkill", "/F", "/T", "/PID", String.valueOf(process.pid()))
