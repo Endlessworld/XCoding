@@ -21,6 +21,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.util.MultiValueMap;
 
 import java.util.List;
 import java.util.Map;
@@ -68,7 +69,7 @@ public class AiModels {
      * @param modelName 模型ID或模型名称
      * @return ChatModel 实例
      */
-    public static ChatModel createChatModelFromJson(String modelName) {
+    public static ChatModel createChatModelFromJson(String modelName,String sessionId) {
         // 先加载最新配置（ModelConfigLoader 内部有缓存，不会重复读磁盘）
         List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
         ModelConfig config = ModelConfigLoader.findConfigByModelName(modelName, configs);
@@ -94,7 +95,7 @@ public class AiModels {
             log.info("模型配置已变更，重建 ChatModel: {}", modelName);
         }
 
-        ChatModel chatModel = buildChatModel(config);
+        ChatModel chatModel = buildChatModel(config,sessionId);
         chatModelCache.put(modelName, chatModel);
         configFingerprints.put(modelName, fingerprint);
         // 同时按 modelId 缓存，方便直接查找
@@ -128,7 +129,7 @@ public class AiModels {
     /**
      * 根据 ModelConfig 构建 ChatModel 实例
      */
-    private static ChatModel buildChatModel(ModelConfig config) {
+    private static ChatModel buildChatModel(ModelConfig config,String sessionId) {
         String effectiveBaseUrl = config.getBaseUrl();
         String effectiveApiKey = config.getApiKey();
         String effectiveModelName = config.getModelId();
@@ -139,6 +140,7 @@ public class AiModels {
 
         OpenAiApi api = OpenAiApi.builder()
                 .baseUrl(effectiveBaseUrl)
+                .headers(MultiValueMap.fromSingleValue(Map.of("x-opencode-session",sessionId)))
                 .completionsPath(completionsPath)
                 .apiKey(effectiveApiKey)
                 .build();

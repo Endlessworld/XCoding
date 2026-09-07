@@ -70,7 +70,7 @@ public class OpenAiApi {
 
     public static final String HTTP_USER_AGENT_HEADER = "User-Agent";
 
-    public static final String SPRING_AI_USER_AGENT = "spring-ai";
+    public static final String SPRING_AI_USER_AGENT = "XAgent";
 
     private OpenAiStreamFunctionCallingHelper chunkMerger = new OpenAiStreamFunctionCallingHelper();
 

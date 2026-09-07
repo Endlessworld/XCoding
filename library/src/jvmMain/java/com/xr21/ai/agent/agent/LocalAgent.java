@@ -17,6 +17,7 @@ package com.xr21.ai.agent.agent;
 
 import com.agentclientprotocol.common.ClientSessionOperations;
 import com.agentclientprotocol.model.McpServer;
+import com.agentclientprotocol.model.SessionId;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
@@ -68,6 +69,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static com.xr21.ai.agent.acp.AgiAgentKt.SESSION_ID_CONTEXT_KEY;
 
 /**
  * LocalAgent 类负责创建和配置本地文件操作智能体。
@@ -163,7 +166,7 @@ public class LocalAgent {
             在当前工作目录 .agents/context/ 目录维护结构化项目上下文，按需读写、控制 token 开销。
             必须**主动、及时、自动**更新：每当任务阶段完成、里程碑达成、关键决策产生、状态变化时，
             立即同步更新对应文件——不要等用户提示或 /context。
-
+            
             ### 目录结构（对象三件套：info=是什么 / state=怎么样 / milestones=演进）
             .agents/context/
             ├── index.md                 # 入口导航 + 场景读取顺序
@@ -189,7 +192,7 @@ public class LocalAgent {
             - 决策 → 追加 adr.md；会话结束 → 写 session-summary/[日期].md
             - base/ 变更须显式更新，禁止静默漂移；history/ 只追加不重写
             - 模块为最小粒度，不做类级拆分；代码文件不入上下文；只维护可复用知识
-
+            
             ### 主动维护时机（自动触发，不等用户）
             - 每次产生持久结论后（新增/修改文件、架构变更、git 提交、里程碑达成）：顺手更新
               state/ 与对应模块 state.md/milestones.md，延迟不超过下一个回复
@@ -263,7 +266,7 @@ public class LocalAgent {
         return new StaticToolCallbackProvider(tools);
     }
 
-    private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel,@NotNull ClientSessionOperations client) {
+    private static @NonNull List<Interceptor> getInterceptors(RunnableConfig runnableConfig, ChatModel chatModel, @NotNull ClientSessionOperations client) {
         ContextEditingInterceptor contextEditingInterceptor = ContextEditingInterceptor.builder().trigger(64 * 1024)  // 优化：降低到21k，提前触发优化
                 .clearAtLeast(10 * 1024)  // 优化：至少清理15k，确保效果明显
                 .keep(5)  // 优化：保留最近5条，平衡上下文完整性
@@ -357,7 +360,7 @@ public class LocalAgent {
 
         ChatModel chatModel = getChatModel(runnableConfig);
         AcpNotifyHelper.sendThoughtChunk(client, "Use model : " + chatModel.getDefaultOptions().getModel());
-        List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel,client));
+        List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel, client));
         // 收集拦截器提供的文件系统工具与 write_todos 工具，供 Groovy 脚本绑定调用
         List<ToolCallback> interceptorTools = new ArrayList<>();
         for (Interceptor interceptor : interceptors) {
@@ -371,7 +374,7 @@ public class LocalAgent {
         }
         List<Hook> hooks = getHooks(runnableConfig, chatModel);
         for (Hook hook : hooks) {
-            AcpNotifyHelper.sendThoughtChunk(client, "Use Hook : " +hook.getName());
+            AcpNotifyHelper.sendThoughtChunk(client, "Use Hook : " + hook.getName());
         }
         // 使用 PromptTemplate 渲染指令
         var instruction = getInstruction(WORKSPACE_ROOT);
@@ -461,19 +464,21 @@ public class LocalAgent {
 
     @NotNull
     private static ChatModel getChatModel(RunnableConfig runnableConfig) {
-        ChatModel chatModel;
-        if (runnableConfig.context().get("model") instanceof String modelId) {
-            try {
-                chatModel = AiModels.createChatModelFromJson(modelId);
-                log.info("Using model from JSON config: {}", modelId);
-            } catch (Exception e) {
-                log.error("Failed to create chat model from config: {}", modelId, e);
-                throw new RuntimeException("Failed to initialize chat model", e);
+        ChatModel chatModel = null;
+        if (runnableConfig.context().get(SESSION_ID_CONTEXT_KEY) instanceof SessionId sessionId) {
+            if (runnableConfig.context().get("model") instanceof String modelId) {
+                try {
+                    chatModel = AiModels.createChatModelFromJson(modelId, sessionId.getValue());
+                    log.info("Using model from JSON config: {}", modelId);
+                } catch (Exception e) {
+                    log.error("Failed to create chat model from config: {}", modelId, e);
+                    throw new RuntimeException("Failed to initialize chat model", e);
+                }
+            } else {
+                String defaultModelId = AiModels.defaultModel();
+                chatModel = AiModels.createChatModelFromJson(defaultModelId, sessionId.getValue());
+                log.info("No specific model configuration found, using default model: {}", defaultModelId);
             }
-        } else {
-            String defaultModelId = AiModels.defaultModel();
-            chatModel = AiModels.createChatModelFromJson(defaultModelId);
-            log.info("No specific model configuration found, using default model: {}", defaultModelId);
         }
         return chatModel;
     }

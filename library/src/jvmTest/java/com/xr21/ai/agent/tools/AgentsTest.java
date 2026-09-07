@@ -9,7 +9,6 @@ import com.xr21.ai.agent.config.AiModels;
 import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
 import com.xr21.ai.agent.interceptors.SummarizationHook;
 import org.apache.commons.lang3.StringUtils;
-import org.junit.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -23,22 +22,12 @@ public class AgentsTest {
 //    @Test
     public void messageSummarization() {
         LocalAgent.WORKSPACE_ROOT = "E:\\local-github\\ai-agents";
-        ChatModel chatModel = AiModels.createChatModelFromJson("volcengine/GLM-5.1");
+        ChatModel chatModel = AiModels.createChatModelFromJson("volcengine/GLM-5.1", "default");
         // 创建消息压缩 Hook
-        SummarizationHook summarizationHook = SummarizationHook.builder()
-                .model(chatModel)
-                .maxTokensBeforeSummary(64 * 1024)
-                .messagesToKeep(20)
-                .build();
+        SummarizationHook summarizationHook = SummarizationHook.builder().model(chatModel).maxTokensBeforeSummary(64 * 1024).messagesToKeep(20).build();
         var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot("E:\\local-github\\ai-agents").readOnly(false).withDefaultSecurity().build();
-
         // 使用
-        ReactAgent agent = ReactAgent.builder()
-                .name("my_agent")
-                .model(chatModel)
-                .interceptors(filesystemInterceptor)
-                .hooks(summarizationHook)
-                .build();
+        ReactAgent agent = ReactAgent.builder().name("my_agent").model(chatModel).interceptors(filesystemInterceptor).hooks(summarizationHook).build();
         try {
 //            Flux<NodeOutput> stream = agent.stream("根据CONTEXT_EDITING_INTERCEPTOR_ANALYSIS.md分析结果 优化ContextEditingInterceptor");
             Flux<NodeOutput> stream = agent.stream("[·S] 是什么意思 你为何要在代码中输出[·S]");

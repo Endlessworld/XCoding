@@ -94,8 +94,8 @@ object SinksUtil {
         flux: Flux<AgentOutput<Any>>, channel: Channel<AgentOutput<Any>>
     ): Disposable {
         return flux.subscribe({ output -> channel.trySend(output) }, { error ->
-            logger.error(error) { "Error in agent flux" }
-            channel.close(error)
+            logger.error( error.cause) { "Error in agent flux" }
+            channel.close(error.cause)
         }, {
             logger.info { "Agent flux completed" }
             channel.close()

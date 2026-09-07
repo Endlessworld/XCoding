@@ -126,24 +126,10 @@ fun main() = runBlocking {
 
     // 3. 创建会话
     info("[3/4] 创建 ACP 会话...")
-    var mcpServers = """
-[
-     {
-      "name": "code-review-graph",
-      "command": "code-review-graph",
-      "args": [
-        "serve"
-      ],
-      "env": []
-    }
-  ]
-    """.trimIndent()
-
-
     val session = acpClient.newSession(
         SessionCreationParameters(
-            cwd = System.getProperty("user.dir"),
-            mcpServers = arrayListOf(McpServer.Stdio("code-review-graph", "code-review-graph", arrayListOf("serve"), emptyList<EnvVariable>()))
+            cwd = System.getProperty("user.dir"), listOf()
+//            mcpServers = arrayListOf(McpServer.Stdio("codegraph", "C:\\nvm4w\\nodejs\\node_modules\\@colbymchenry\\codegraph\\node_modules\\@colbymchenry\\codegraph-win32-x64\\bin\\codegraph.cmd", arrayListOf("--mcp"), emptyList<EnvVariable>()))
         )
     ) { _, _ -> DemoClientOperations() }
     ok("会话 ID: ${Color.CYAN}${session.sessionId}${Color.RESET}")
