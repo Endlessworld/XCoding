@@ -117,9 +117,11 @@ dependencies {
     implementation(libs.acp.ktor.server)
     // Ktor HTTP Client Engine (required by acp-ktor-jvm at runtime)
     implementation(libs.ktor.client.okhttp)
-
+// Source: https://mvnrepository.com/artifact/org.yaml/snakeyaml
+    implementation("org.yaml:snakeyaml:2.7")
     // Ktor HTTP Server Engine (required by acp-ktor-server-jvm for WebSocket server mode)
     implementation(libs.ktor.server.netty)
+    implementation(libs.modelcontextprotocol)
 
     // Kotlin
     implementation(libs.kotlin.stdlib)
@@ -179,9 +181,6 @@ mavenPublishing {
 }
 
 
-repositories {
-    mavenCentral()
-}
 kotlinLombok {
     lombokConfigurationFile(file("lombok.config"))
 }

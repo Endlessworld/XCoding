@@ -13,7 +13,6 @@ import kotlinx.coroutines.channels.Channel
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.UserMessage
 import org.springframework.ai.chat.metadata.DefaultUsage
-import org.springframework.ai.openai.api.OpenAiApi
 import org.springframework.util.StringUtils
 import reactor.core.Disposable
 import reactor.core.publisher.Flux
@@ -47,7 +46,7 @@ object SinksUtil {
                         (output.message() as AssistantMessage).hasToolCalls()
                 if (StringUtils.hasLength(output.message().text)
                     && !isToolCallMessage
-                    && OpenAiApi.ChatCompletionFinishReason.STOP.name != finishReason
+                    &&  "STOP" != finishReason
                 ) {
                     builder.chunk(output.message().text)
                 }

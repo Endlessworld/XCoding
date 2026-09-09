@@ -124,12 +124,30 @@ fun main() = runBlocking {
     }
     println()
 
+    // MCP Stdio 服务器定义
+    val mcpServers = arrayListOf<McpServer>(
+        McpServer.Stdio(
+            "codegraph",
+            "C:\\nvm4w\\nodejs\\node_modules\\@colbymchenry\\codegraph\\node_modules\\@colbymchenry\\codegraph-win32-x64\\bin\\codegraph.cmd",
+            arrayListOf("serve", "--mcp"),
+            emptyList()
+        ),
+        McpServer.Stdio(
+            "IDEA",
+            "E:\\JetBrains\\IntelliJ IDEA 2025.1.3\\bin\\idea64.exe",
+            arrayListOf("stdioMcpServer"),
+            arrayListOf(
+                EnvVariable("IJ_MCP_SERVER_PROJECT_PATH", "E:/local-github/ai-agents"),
+                EnvVariable("IJ_MCP_SERVER_PORT", "64342")
+            )
+        ),
+    )
     // 3. 创建会话
     info("[3/4] 创建 ACP 会话...")
     val session = acpClient.newSession(
         SessionCreationParameters(
-            cwd = System.getProperty("user.dir"), listOf()
-//            mcpServers = arrayListOf(McpServer.Stdio("codegraph", "C:\\nvm4w\\nodejs\\node_modules\\@colbymchenry\\codegraph\\node_modules\\@colbymchenry\\codegraph-win32-x64\\bin\\codegraph.cmd", arrayListOf("--mcp"), emptyList<EnvVariable>()))
+            cwd = System.getProperty("user.dir"),
+            mcpServers = mcpServers
         )
     ) { _, _ -> DemoClientOperations() }
     ok("会话 ID: ${Color.CYAN}${session.sessionId}${Color.RESET}")

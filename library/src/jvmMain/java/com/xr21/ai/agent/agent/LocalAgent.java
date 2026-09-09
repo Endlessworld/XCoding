@@ -359,7 +359,7 @@ public class LocalAgent {
         log.info("Building LocalAgent for context: {}", runnableConfig.context());
 
         ChatModel chatModel = getChatModel(runnableConfig);
-        AcpNotifyHelper.sendThoughtChunk(client, "Use model : " + chatModel.getDefaultOptions().getModel());
+        AcpNotifyHelper.sendThoughtChunk(client, "Use model : " + chatModel.getOptions().getModel());
         List<Interceptor> interceptors = new ArrayList<>(getInterceptors(runnableConfig, chatModel, client));
         // 收集拦截器提供的文件系统工具与 write_todos 工具，供 Groovy 脚本绑定调用
         List<ToolCallback> interceptorTools = new ArrayList<>();
@@ -378,7 +378,7 @@ public class LocalAgent {
         }
         // 使用 PromptTemplate 渲染指令
         var instruction = getInstruction(WORKSPACE_ROOT);
-        var chatOptions = OpenAiChatOptions.builder().streamUsage(true);
+        var chatOptions = ((OpenAiChatOptions) chatModel.getOptions()).mutate();
         String thoughtLevel = SessionConfigOptionsFactory.ThoughtLevel.LOW.getValueId();
         if (runnableConfig.context().get("thought_level") instanceof String level) {
             log.info("thought_level: {}", level);
@@ -417,6 +417,8 @@ public class LocalAgent {
                 .description("本地文件操作智能体，主要负责文件创建，编辑,命令执行")
                 .systemPrompt(instruction)
                 .outputKey("agent_output")
+                .wrapSyncToolsAsAsync(true)
+                .maxParallelTools(8)
                 .returnReasoningContents(true)
                 .build();
         log.info("LocalAgent built successfully with {} tools and {} interceptors", tools.size(), interceptors.size());

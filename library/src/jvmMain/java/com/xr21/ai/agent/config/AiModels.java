@@ -20,8 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.util.MultiValueMap;
 
 import java.util.List;
 import java.util.Map;
@@ -69,7 +67,7 @@ public class AiModels {
      * @param modelName 模型ID或模型名称
      * @return ChatModel 实例
      */
-    public static ChatModel createChatModelFromJson(String modelName,String sessionId) {
+    public static ChatModel createChatModelFromJson(String modelName, String sessionId) {
         // 先加载最新配置（ModelConfigLoader 内部有缓存，不会重复读磁盘）
         List<ModelConfig> configs = ModelConfigLoader.loadConfigs();
         ModelConfig config = ModelConfigLoader.findConfigByModelName(modelName, configs);
@@ -95,7 +93,7 @@ public class AiModels {
             log.info("模型配置已变更，重建 ChatModel: {}", modelName);
         }
 
-        ChatModel chatModel = buildChatModel(config,sessionId);
+        ChatModel chatModel = buildChatModel(config, sessionId);
         chatModelCache.put(modelName, chatModel);
         configFingerprints.put(modelName, fingerprint);
         // 同时按 modelId 缓存，方便直接查找
@@ -111,44 +109,24 @@ public class AiModels {
      * 覆盖所有影响 ChatModel 构建的关键字段
      */
     private static int configFingerprint(ModelConfig config) {
-        return Objects.hash(
-                config.getModelId(),
-                config.getModelName(),
-                config.getBaseUrl(),
-                config.getApiKey(),
-                config.getTemperature(),
-                config.getMaxTokens(),
-                config.getReasoningEffort(),
-                config.getParallelToolCalls(),
-                config.getStreamUsage(),
-                config.getToolChoice(),
-                config.getExtraBody()
-        );
+        return Objects.hash(config.getModelId(), config.getModelName(), config.getBaseUrl(), config.getApiKey(), config.getTemperature(), config.getMaxTokens(), config.getReasoningEffort(), config.getParallelToolCalls(), config.getStreamUsage(), config.getToolChoice(), config.getExtraBody());
     }
 
     /**
      * 根据 ModelConfig 构建 ChatModel 实例
      */
-    private static ChatModel buildChatModel(ModelConfig config,String sessionId) {
-        String effectiveBaseUrl = config.getBaseUrl();
+    private static ChatModel buildChatModel(ModelConfig config, String sessionId) {
+        String effectiveBaseUrl = determineBaseUrl(config.getBaseUrl());
         String effectiveApiKey = config.getApiKey();
-        String effectiveModelName = config.getModelId();
+        String model = config.getModelId();
         Double temperature = config.getTemperature();
-
-        // 根据 URL 结构自动判断 completions 路径
-        String completionsPath = determineCompletionsPath(effectiveBaseUrl);
-
-        OpenAiApi api = OpenAiApi.builder()
-                .baseUrl(effectiveBaseUrl)
-                .headers(MultiValueMap.fromSingleValue(Map.of("x-opencode-session",sessionId)))
-                .completionsPath(completionsPath)
-                .apiKey(effectiveApiKey)
-                .build();
-
         OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
-                .model(effectiveModelName)
-                .temperature(temperature);
-
+                .apiKey(effectiveApiKey)
+                .baseUrl(effectiveBaseUrl)
+                .streamUsage(true)
+                .maxRetries(3)
+                .customHeaders(Map.of("x-opencode-session", sessionId))
+                .model(model).temperature(temperature);
         // 应用可选的配置字段
         if (config.getReasoningEffort() != null) {
             optionsBuilder.reasoningEffort(config.getReasoningEffort());
@@ -162,30 +140,19 @@ public class AiModels {
         if (config.getToolChoice() != null) {
             optionsBuilder.toolChoice(config.getToolChoice());
         }
-        return OpenAiChatModel.builder()
-                .defaultOptions(optionsBuilder.build())
-                .openAiApi(api)
-                .build();
+        return OpenAiChatModel.builder().options(optionsBuilder.build()).build();
     }
 
     /**
-     * 根据 baseUrl 自动判断 completions 路径
+     * 根据 baseUrl 自动判断 路径
      * 兼容不同供应商的 URL 格式
      */
-    private static String determineCompletionsPath(String baseUrl) {
-        if (baseUrl == null) {
-            return "v1/chat/completions";
-        }
-        // 火山引擎格式: /api/v3 -> /chat/completions
-        if (baseUrl.contains("/v3")) {
-            return "/chat/completions";
-        }
-        // OpenRouter 格式: /api -> /v1/chat/completions
-        if (baseUrl.endsWith("/api")) {
-            return "v1/chat/completions";
+    private static String determineBaseUrl(String baseUrl) {
+        if (baseUrl.endsWith("/v1")) {
+            return baseUrl;
         }
         // 默认 OpenAI 兼容格式
-        return "v1/chat/completions";
+        return baseUrl + "v1";
     }
 
     /**

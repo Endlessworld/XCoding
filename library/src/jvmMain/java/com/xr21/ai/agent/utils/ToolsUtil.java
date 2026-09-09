@@ -15,11 +15,7 @@
  */
 package com.xr21.ai.agent.utils;
 
-import com.agentclientprotocol.model.ContentBlock;
-import com.agentclientprotocol.model.EnvVariable;
-import com.agentclientprotocol.model.McpServer;
-import com.agentclientprotocol.model.ToolCallContent;
-import com.agentclientprotocol.model.ToolCallLocation;
+import com.agentclientprotocol.model.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xr21.ai.agent.bridge.BridgeKt;
@@ -30,12 +26,13 @@ import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.client.transport.ServerParameters;
 import io.modelcontextprotocol.client.transport.StdioClientTransport;
-import io.modelcontextprotocol.json.McpJsonMapper;
+import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.mcp.McpToolUtils;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -100,7 +97,7 @@ public class ToolsUtil {
             }
         }
         ServerParameters serverParameters = builder.build();
-        StdioClientTransport transport = new StdioClientTransport(serverParameters, McpJsonMapper.getDefault());
+        StdioClientTransport transport = new StdioClientTransport(serverParameters, new JacksonMcpJsonMapper(new JsonMapper()));
         // Native Image 中进程启动和 stdio 通信可能较慢，增加初始化超时时间
         McpSyncClient mcpClient = McpClient.sync(transport)
                 .initializationTimeout(Duration.ofSeconds(3))

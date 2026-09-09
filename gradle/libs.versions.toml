@@ -1,11 +1,12 @@
 [versions]
 vanniktechMavenPublish = "0.34.0"
-springAi = "2.0.0-M1"
-springAiAlibaba = "2.0.0-M1.1"
+springAi = "2.0.0"
+springAiAlibaba = "2.0.0.0-RC1-20260901"
 reactor = "3.6.0"
 jackson = "2.17.0"
 lombok = "1.18.38"
 agentclientprotocol = "0.23.0"
+modelcontextprotocol = "2.0.0"
 ktor = "3.1.3"
 jsoup = "1.18.3"
 kotlinxCoroutines = "1.9.0"
@@ -20,6 +21,7 @@ jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-datab
 spring-ai-alibaba-graph = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-graph-core", version.ref = "springAiAlibaba" }
 spring-ai-alibaba-agent = { group = "com.alibaba.cloud.ai", name = "spring-ai-alibaba-agent-framework", version.ref = "springAiAlibaba" }
 lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
+modelcontextprotocol = { group = "io.modelcontextprotocol.sdk", name = "mcp", version.ref = "modelcontextprotocol" }
 # ACP SDK
 acp-jvm = { group = "com.agentclientprotocol", name = "acp-jvm", version.ref = "agentclientprotocol" }
 acp-model-jvm = { group = "com.agentclientprotocol", name = "acp-model-jvm", version.ref = "agentclientprotocol" }
