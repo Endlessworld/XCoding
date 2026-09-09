@@ -16,6 +16,7 @@
 package com.xr21.ai.agent;
 
 import com.xr21.ai.agent.acp.AgiAgent;
+import com.xr21.ai.agent.acp.AgiV2AgentSupport;
 import com.xr21.ai.agent.acp.AcpAgentLauncher;
 
 /**
@@ -58,7 +59,12 @@ public class AgentApplication {
                 Thread serverThread = new Thread(() -> {
                     try {
                         System.out.println("Starting WebSocket server on port " + finalPort + "...");
-                        AcpAgentLauncher.launchWebSocketServer(new AgiAgent(), "127.0.0.1", finalPort);
+                        // 单端点 /acp：按客户端协议版本自动提供 v1 / v2
+                        AcpAgentLauncher.launchWebSocketServer(
+                                new AgiAgent(),
+                                new AgiV2AgentSupport(new AgiAgent()),
+                                "127.0.0.1",
+                                finalPort);
                     } catch (Exception e) {
                         System.err.println("Failed to start WebSocket server: " + e.getMessage());
                         e.printStackTrace();
@@ -113,7 +119,12 @@ public class AgentApplication {
             } catch (NumberFormatException e) {
                 System.err.println("Invalid port number: " + acpArgs[1] + ", using default port 8080");
             }
-            AcpAgentLauncher.launchWebSocketServer(new AgiAgent(), "0.0.0.0", port);
+            // 单端点入口：同一 /acp 端点按客户端协议版本自动提供 v1 / v2
+            AcpAgentLauncher.launchWebSocketServer(
+                    new AgiAgent(),
+                    new AgiV2AgentSupport(new AgiAgent()),
+                    "0.0.0.0",
+                    port);
         } else {
             // 默认：ACP 标准 I/O 模式
             AcpAgentLauncher.launchStdioAgent(new AgiAgent());

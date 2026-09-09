@@ -53,12 +53,11 @@ dependencies {
     implementation(project(":library"))
     implementation(project(":tui"))
 
-    // ACP SDK（AgentApplication 直接调用 AcpAgentLauncher.launchWebSocketServer）
-    implementation("com.agentclientprotocol:acp-jvm:0.23.0")
-    implementation("com.agentclientprotocol:acp-model-jvm:0.23.0")
-    implementation("com.agentclientprotocol:acp-ktor-jvm:0.23.0")
-    implementation("com.agentclientprotocol:acp-ktor-server-jvm:0.23.0")
-    implementation("com.agentclientprotocol:acp-ktor-server:0.23.0")
+    // ACP SDK 0.32.0（来自 vendor-repo：com.agentclientprotocol:*-jvm）
+    implementation("com.agentclientprotocol:acp-jvm:0.32.0")
+    implementation("com.agentclientprotocol:acp-model-jvm:0.32.0")
+    implementation("com.agentclientprotocol:acp-ktor-jvm:0.32.0")
+    implementation("com.agentclientprotocol:acp-ktor-server-jvm:0.32.0")
     // Ktor HTTP Server Engine (required by acp-ktor-server-jvm)
     implementation("io.ktor:ktor-server-netty:3.1.3")
     // Ktor HTTP Client Engine

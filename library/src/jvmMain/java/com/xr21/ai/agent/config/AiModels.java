@@ -21,6 +21,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -123,8 +124,9 @@ public class AiModels {
         OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
                 .apiKey(apiKey)
                 .baseUrl(baseUrl)
+                .timeout(Duration.ofMinutes(10))
                 .streamUsage(true)
-                .maxRetries(3)
+                .maxRetries(30)
                 .customHeaders(Map.of("x-opencode-session", sessionId))
                 .model(model).temperature(temperature);
         // 应用可选的配置字段

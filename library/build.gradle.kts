@@ -113,8 +113,6 @@ dependencies {
     implementation(libs.acp.ktor.jvm)
     implementation(libs.acp.ktor.client.jvm)
     implementation(libs.acp.ktor.server.jvm)
-// Source: https://mvnrepository.com/artifact/com.agentclientprotocol/acp-ktor-server
-    implementation(libs.acp.ktor.server)
     // Ktor HTTP Client Engine (required by acp-ktor-jvm at runtime)
     implementation(libs.ktor.client.okhttp)
 // Source: https://mvnrepository.com/artifact/org.yaml/snakeyaml

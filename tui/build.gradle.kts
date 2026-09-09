@@ -88,10 +88,10 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.14.0")
 
     // ACP SDK（TUI 侧直接使用 ACP 客户端类型）
-    implementation("com.agentclientprotocol:acp-jvm:0.23.0")
-    implementation("com.agentclientprotocol:acp-model-jvm:0.23.0")
-    implementation("com.agentclientprotocol:acp-ktor-jvm:0.23.0")
-    implementation("com.agentclientprotocol:acp-ktor-client-jvm:0.23.0")
+    implementation("com.agentclientprotocol:acp-jvm:0.32.0")
+    implementation("com.agentclientprotocol:acp-model-jvm:0.32.0")
+    implementation("com.agentclientprotocol:acp-ktor-jvm:0.32.0")
+    implementation("com.agentclientprotocol:acp-ktor-client-jvm:0.32.0")
     // Ktor HTTP Client Engine (required by acp-ktor-jvm at runtime)
     implementation("io.ktor:ktor-client-okhttp:3.1.3")
 

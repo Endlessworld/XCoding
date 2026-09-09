@@ -26,6 +26,7 @@ import com.xr21.ai.agent.tui.AppState as JavaAppState
  * 将 Kotlin 协程的 ACP SDK 封装为 Java 友好的回调接口，
  * 供 [TuiApp] 使用。
  */
+@OptIn(UnstableApi::class)
 class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridge {
 
     private val ktAppState = AppState()
@@ -366,7 +367,6 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
         val javaEvent = when (event) {
             is Event.SessionUpdateEvent -> AcpEventAdapter(event.update)
             is Event.PromptResponseEvent -> PromptResponseEventAdapter(event.response)
-            else -> null
         }
         javaEvent?.let { callback?.onEvent(it) }
     }
@@ -450,6 +450,15 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
                 }
             }
 
+            is SessionUpdate.PlanUpdateV2 -> {
+                // 0.30.1 新增：多格式 plan 更新（含 id 的 PlanVariant），TUI 仅记录日志
+                println("[ACP] PlanUpdateV2 id=${update.plan.id}")
+            }
+
+            is SessionUpdate.PlanRemoved -> {
+                println("[ACP] PlanRemoved id=${update.id}")
+            }
+
             is SessionUpdate.AvailableCommandsUpdate -> {
                 val cmds = update.availableCommands.map { c ->
                     val hint = (c.input as? AvailableCommandInput.Unstructured)
@@ -524,6 +533,8 @@ class AcpEventAdapter(private val update: SessionUpdate) : TuiApp.AcpEvent {
             is SessionUpdate.ToolCall -> null  // SDK 未为 ToolCall 定义 messageId
             is SessionUpdate.ToolCallUpdate -> null  // SDK 未为 ToolCallUpdate 定义 messageId
             is SessionUpdate.PlanUpdate -> null  // SDK 未为 PlanUpdate 定义 messageId
+            is SessionUpdate.PlanUpdateV2 -> null  // 0.30.1 新增
+            is SessionUpdate.PlanRemoved -> null  // 0.30.1 新增
             is SessionUpdate.AvailableCommandsUpdate -> null
             is SessionUpdate.CurrentModeUpdate -> null
             is SessionUpdate.ConfigOptionUpdate -> null

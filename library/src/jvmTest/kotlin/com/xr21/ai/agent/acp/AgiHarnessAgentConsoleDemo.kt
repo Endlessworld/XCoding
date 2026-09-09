@@ -93,7 +93,7 @@ fun main() = runBlocking {
 
     @Suppress("UNUSED")
     val serverThread = Thread {
-        launchWebSocketServer(agentSupport, "127.0.0.1", DEMO_PORT)
+        launchWebSocketServer(agentSupport,AgiV2AgentSupport(AgiAgent()), "127.0.0.1", DEMO_PORT)
     }.apply {
         isDaemon = true
         start()
@@ -111,6 +111,7 @@ fun main() = runBlocking {
     val acpClient = Client(protocol)
     val agentInfo = acpClient.initialize(
         ClientInfo(
+            protocolVersion = LATEST_PROTOCOL_VERSION,
             implementation = Implementation(
                 "AgiHarnessAgentConsoleDemo", "1.0.0", "ACP console demo"
             )
