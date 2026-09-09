@@ -116,13 +116,13 @@ public class AiModels {
      * 根据 ModelConfig 构建 ChatModel 实例
      */
     private static ChatModel buildChatModel(ModelConfig config, String sessionId) {
-        String effectiveBaseUrl = determineBaseUrl(config.getBaseUrl());
-        String effectiveApiKey = config.getApiKey();
+        String baseUrl = determineBaseUrl(config.getBaseUrl());
+        String apiKey = config.getApiKey();
         String model = config.getModelId();
         Double temperature = config.getTemperature();
         OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
-                .apiKey(effectiveApiKey)
-                .baseUrl(effectiveBaseUrl)
+                .apiKey(apiKey)
+                .baseUrl(baseUrl)
                 .streamUsage(true)
                 .maxRetries(3)
                 .customHeaders(Map.of("x-opencode-session", sessionId))
@@ -148,11 +148,14 @@ public class AiModels {
      * 兼容不同供应商的 URL 格式
      */
     private static String determineBaseUrl(String baseUrl) {
-        if (baseUrl.endsWith("/v1")) {
+        if (baseUrl.endsWith("/v1") | baseUrl.endsWith("/v1/")) {
             return baseUrl;
         }
+        if (baseUrl.endsWith("/")) {
+            return baseUrl + "v1";
+        }
         // 默认 OpenAI 兼容格式
-        return baseUrl + "v1";
+        return baseUrl + "/v1";
     }
 
     /**

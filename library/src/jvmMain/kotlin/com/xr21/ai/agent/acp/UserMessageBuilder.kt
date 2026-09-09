@@ -304,13 +304,12 @@ object UserMessageBuilder {
             val inferredMime = inferMimeTypeFromPath(filePath)
             val isText =
                 inferredMime != null && inferredMime.startsWith("text/") || filePath.extension.lowercase() in TEXT_EXTENSIONS
-
             if (isText) {
-                // Read and inline text content
                 val fileContent = readFileText(uri)
                 if (fileContent != null) {
-                    textParts.append(fileContent)
-                    textParts.append("\n--- End of file: $name ---")
+                    val lines = fileContent.lines();
+                    val length = fileContent.length;
+                    textParts.append("---$name lines : ${lines.size} length : $length ---")
                 } else {
                     textParts.append("[Unable to read file: $uri]")
                 }

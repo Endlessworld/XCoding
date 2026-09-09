@@ -696,7 +696,7 @@ class AgiAgent : AgentSupport {
             capabilities = AgentCapabilities(
                 loadSession = true,
                 promptCapabilities = PromptCapabilities(
-                    audio = false, image = false, embeddedContext = true
+                    audio = false, image = true, embeddedContext = true
                 ),
                 mcpCapabilities = McpCapabilities(http = true, sse = true),
                 sessionCapabilities = SessionCapabilities(

@@ -132,16 +132,15 @@ fun main() = runBlocking {
             arrayListOf("serve", "--mcp"),
             emptyList()
         ),
-        McpServer.Stdio(
+        McpServer.Http(
             "IDEA",
-            "E:\\JetBrains\\IntelliJ IDEA 2025.1.3\\bin\\idea64.exe",
-            arrayListOf("stdioMcpServer"),
+            "http://127.0.0.1:64342/stream",
             arrayListOf(
-                EnvVariable("IJ_MCP_SERVER_PROJECT_PATH", "E:/local-github/ai-agents"),
-                EnvVariable("IJ_MCP_SERVER_PORT", "64342")
+                HttpHeader("IJ_MCP_SERVER_PROJECT_PATH", "E:/local-github/ai-agents")
             )
-        ),
+        )
     )
+
     // 3. 创建会话
     info("[3/4] 创建 ACP 会话...")
     val session = acpClient.newSession(
