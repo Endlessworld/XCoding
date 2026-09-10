@@ -316,6 +316,7 @@ public class LocalAgent {
                     // 连接超时、IO 异常等暂时性网络错误也应重试
                     return e instanceof IOException || e.getCause() instanceof SocketException;
                 })
+                .runnableConfig(runnableConfig)
                 .backoffMultiplier(2.0)      // 指数退避倍数
                 .build();
         List<Interceptor> interceptors = new ArrayList<>();
