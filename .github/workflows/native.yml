@@ -32,7 +32,6 @@ jobs:
     
     env:
       GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Xmx6g'
-      NATIVE_IMAGE_ARGS: '--memory-limit=6g'
     
     steps:
     - name: Checkout code
@@ -43,6 +42,7 @@ jobs:
       with:
         version: ${{ env.GRAALVM_VERSION }}
         distribution: 'graalvm-community'
+        components: 'native-image'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
@@ -89,7 +89,6 @@ jobs:
     
     env:
       GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Xmx8g'
-      NATIVE_IMAGE_ARGS: '--memory-limit=8g'
     
     steps:
     - name: Checkout code
@@ -100,6 +99,7 @@ jobs:
       with:
         version: ${{ env.GRAALVM_VERSION }}
         distribution: 'graalvm-community'
+        components: 'native-image'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
@@ -141,7 +141,6 @@ jobs:
     
     env:
       GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Xmx4g'
-      NATIVE_IMAGE_ARGS: '-H:MaximumHeapSize=4g'
     
     steps:
     - name: Checkout code
@@ -152,6 +151,7 @@ jobs:
       with:
         version: ${{ env.GRAALVM_VERSION }}
         distribution: 'graalvm-community'
+        components: 'native-image'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation

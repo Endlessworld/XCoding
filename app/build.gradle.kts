@@ -273,7 +273,20 @@ graalvmNative {
             // 会把 Logger 对象写入镜像堆并报 UnsupportedFeatureException。按 GraalVM 官方建议固定为 build-time。
             buildArgs.add("--initialize-at-build-time=ch.qos.logback,org.slf4j,org.xml.sax.helpers.LocatorImpl")
             buildArgs.add("--trace-object-instantiation=java.io.FileDescriptor")
-            buildArgs.add("-H:ConfigurationFileDirectories=${project.projectDir}/src/jvmMain/resources/META-INF/native-image")
+            // 关键：本地打包正常、CI 失败正是因为这里使用了硬编码的 ${project.projectDir}
+            // 路径拼接的字符串参数。Gradle 脚本执行阶段该字符串被直接求值后传入 buildArgs，
+            // 而 nativeCompile 任务实际执行时（含 CI 上的 -x test / --no-daemon 场景）
+            // 的 projectDir 与配置阶段可能不一致，导致 native-image 命令行中该目录指向
+            // 不存在的路径，META-INF/native-image（reachability-metadata.json、
+            // resource-config.json）从未被加载。改为 Provider 懒加载，确保在
+            // nativeCompile 真正执行时基于当时的 project.projectDir 求值。
+            buildArgs.addAll(project.providers.provider {
+                val cfgDir = layout.projectDirectory.dir("src/jvmMain/resources/META-INF/native-image")
+                check(cfgDir.asFile.isDirectory) {
+                    "native-image 配置目录不存在: ${cfgDir.asFile.absolutePath}"
+                }
+                listOf("-H:ConfigurationFileDirectories=${cfgDir.asFile.absolutePath.replace('\\', '/')}")
+            })
             val initArgsProvider = provider {
                 val scriptFile = layout.buildDirectory.file("init-at-run-time.args").get().asFile
                 if (scriptFile.exists()) {

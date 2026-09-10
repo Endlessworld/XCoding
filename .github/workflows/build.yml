@@ -9,7 +9,7 @@ on:
 
 env:
   GRAALVM_VERSION: '24.0.2'
-  JAVA_VERSION: '17'
+  JAVA_VERSION: '21'
 
 jobs:
   # 常规构建测试
@@ -71,9 +71,10 @@ jobs:
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        graalvm-version: ${{ env.GRAALVM_VERSION }}
-        java-version: ${{ env.JAVA_VERSION }}
+        version: ${{ env.GRAALVM_VERSION }}
+        distribution: 'graalvm-community'
         components: 'native-image'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
       run: |
@@ -123,9 +124,10 @@ jobs:
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        graalvm-version: ${{ env.GRAALVM_VERSION }}
-        java-version: ${{ env.JAVA_VERSION }}
+        version: ${{ env.GRAALVM_VERSION }}
+        distribution: 'graalvm-community'
         components: 'native-image'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
       run: |
@@ -170,9 +172,10 @@ jobs:
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
-        graalvm-version: ${{ env.GRAALVM_VERSION }}
-        java-version: ${{ env.JAVA_VERSION }}
+        version: ${{ env.GRAALVM_VERSION }}
+        distribution: 'graalvm-community'
         components: 'native-image'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
       run: |
@@ -191,6 +194,9 @@ jobs:
           ${{ runner.os }}-gradle-
           ${{ runner.os }}-gradle-native-
           
+    - name: Add MSVC build environment
+      uses: ilammy/msvc-dev-cmd@v1
+      
     - name: Build native executable
       run: ./gradlew.bat :app:nativeCompile
       
