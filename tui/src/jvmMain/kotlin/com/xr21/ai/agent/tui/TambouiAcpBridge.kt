@@ -67,7 +67,7 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
 
     @OptIn(UnstableApi::class)
     private fun notifyInitialConfig() {
-        val models = acpClient.availableModels?.map { ModelInfo(it.modelId.value, it.name) } ?: emptyList()
+        val models = buildModelsWithGroup()
         val modes = acpClient.availableModes?.map { ModeInfo(it.id.value, it.name) } ?: emptyList()
         val configOpts = acpClient.configOptions?.map { opt ->
             when (opt) {
@@ -101,6 +101,24 @@ class TambouiAcpBridge(private val javaAppState: JavaAppState) : TuiApp.AcpBridg
                 }
             }
         })
+    }
+
+    /**
+     * 构建带厂商分组信息的模型列表。
+     * 优先从 configOptions 的 model 选择项解析分组结构；缺失时回退到扁平模型列表。
+     */
+    private fun buildModelsWithGroup(): List<ModelInfo> {
+        val modelOpt = acpClient.configOptions
+            ?.filterIsInstance<SessionConfigOption.Select>()
+            ?.find { it.id.value == "model" }
+        return when (val opts = modelOpt?.options) {
+            is SessionConfigSelectOptions.Grouped ->
+                opts.groups.flatMap { g -> g.options.map { ModelInfo(it.value.value, it.name, g.name) } }
+            is SessionConfigSelectOptions.Flat ->
+                opts.options.map { ModelInfo(it.value.value, it.name, "") }
+            else ->
+                acpClient.availableModels?.map { ModelInfo(it.modelId.value, it.name, "") } ?: emptyList()
+        }
     }
 
     override fun sendMessage(message: String) {

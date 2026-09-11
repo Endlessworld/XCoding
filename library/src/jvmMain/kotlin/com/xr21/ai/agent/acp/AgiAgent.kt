@@ -29,6 +29,7 @@ import com.alibaba.cloud.ai.graph.action.InterruptionMetadata
 import com.alibaba.cloud.ai.graph.agent.Agent
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory.AgentMode
 import com.xr21.ai.agent.agent.LocalAgent
+import com.xr21.ai.agent.agent.LocalAgent.FILE_SYSTEM_SAVER
 import com.xr21.ai.agent.agent.LocalAgent.FILE_SYSTEM_SAVER_FOLDER
 import com.xr21.ai.agent.bridge.BridgeKt
 import com.xr21.ai.agent.config.AiModels
@@ -36,10 +37,7 @@ import com.xr21.ai.agent.config.ModelConfigLoader
 import com.xr21.ai.agent.entity.AgentOutput
 import com.xr21.ai.agent.entity.CancellableRequest
 import com.xr21.ai.agent.tools.ToolKindFind
-import com.xr21.ai.agent.utils.Json
-import com.xr21.ai.agent.utils.PermissionSettings
-import com.xr21.ai.agent.utils.SinksUtil
-import com.xr21.ai.agent.utils.ToolsUtil
+import com.xr21.ai.agent.utils.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
@@ -57,7 +55,6 @@ import org.springframework.ai.chat.messages.ToolResponseMessage
 import org.springframework.ai.chat.messages.UserMessage
 import org.springframework.ai.chat.metadata.EmptyUsage
 import reactor.core.publisher.Flux
-import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -229,10 +226,15 @@ class AgiAgentSession(
             )
             emit(
                 Event.SessionUpdateEvent(
-                    SessionUpdate.UsageUpdate(contextUsedTokens(), contextWindowSize(), Cost(calculateCost(tokenUsageRef.get()), "CNY"))
+                    SessionUpdate.UsageUpdate(
+                        contextUsedTokens(),
+                        contextWindowSize(),
+                        Cost(calculateCost(tokenUsageRef.get()), "CNY")
+                    )
                 )
             )
             val executionThread = Thread.currentThread()
+            runnableConfig.context().put("requestId", requestId)
             runnableConfig.context().put("requestId", requestId)
             runnableConfig.context().put(SESSION_ID_CONTEXT_KEY, sessionId)
             runnableConfig.context().put("executionThread", executionThread)
@@ -244,7 +246,7 @@ class AgiAgentSession(
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
             runnableConfig.context().putIfAbsent("mode", defaultMode.value)
             runnableConfig.context().putIfAbsent("thought_level", SessionConfigOptionsFactory.ThoughtLevel.LOW.valueId)
-            val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig,currentCoroutineContext().client)
+            val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig, currentCoroutineContext().client)
             agent.setSystemPrompt(LocalAgent.getInstruction(cwd))
             val recursiveFlux = recursiveAgentFlux(agent, userMessage)
             val channel = Channel<AgentOutput<Any>>(Channel.UNLIMITED)
@@ -286,7 +288,11 @@ class AgiAgentSession(
             )
             emit(
                 Event.SessionUpdateEvent(
-                    SessionUpdate.UsageUpdate(contextUsedTokens(), contextWindowSize(), Cost(calculateCost(tokenUsageRef.get()), "CNY"))
+                    SessionUpdate.UsageUpdate(
+                        contextUsedTokens(),
+                        contextWindowSize(),
+                        Cost(calculateCost(tokenUsageRef.get()), "CNY")
+                    )
                 )
             )
             logger.info { "events END_TURN" }
@@ -534,7 +540,7 @@ class AgiAgentSession(
      */
     private suspend fun FlowCollector<Event>.emitOutput(output: AgentOutput<Any>) {
         // Text chunks -> AgentMessageChunk events
-        if (output.tokenUsage !is EmptyUsage &&  output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
+        if (output.tokenUsage !is EmptyUsage && output.tokenUsage != null && output.tokenUsage.totalTokens != null) {
             // Publish the live input-token count of the latest model call so the
             // SummarizationHook can decide compaction from real provider-reported usage
             // instead of a rough character estimate.
@@ -561,8 +567,8 @@ class AgiAgentSession(
                     cachedWriteTokens = prev.cachedWriteTokens
                 )
             )
-        }else{
-            runnableConfig.context().put("lastInputTokens",  0)
+        } else {
+            runnableConfig.context().put("lastInputTokens", 0)
         }
         if (output.chunk != null) {
             emit(
@@ -607,7 +613,11 @@ class AgiAgentSession(
                 }
                 emit(
                     Event.SessionUpdateEvent(
-                        SessionUpdate.UsageUpdate(contextUsedTokens(), contextWindowSize(), Cost(calculateCost(tokenUsageRef.get()), "CNY"))
+                        SessionUpdate.UsageUpdate(
+                            contextUsedTokens(),
+                            contextWindowSize(),
+                            Cost(calculateCost(tokenUsageRef.get()), "CNY")
+                        )
                     )
                 )
             }
@@ -654,7 +664,7 @@ class AgiAgentSession(
         val input = args.string("input")
         val description = args.string("description")
 
-        val suffix = listOf(command, script,description).filter { it.isNotBlank() }.joinToString("")
+        val suffix = listOf(command, script, description).filter { it.isNotBlank() }.joinToString("")
 
         // arguments 中不包含任何特定字段时，返回 arguments 本身
         if (suffix.isBlank() && input.isBlank()) return toolCall.name
@@ -718,23 +728,18 @@ class AgiAgent : AgentSupport {
     override suspend fun listSessions(
         cwd: String?, additionalDirectories: List<String>?, _meta: JsonElement?
     ): Sequence<SessionInfo> {
-        if (!Files.isDirectory(FILE_SYSTEM_SAVER_FOLDER)) return emptySequence()
-        val stream = Files.list(FILE_SYSTEM_SAVER_FOLDER)
-        try {
-            return stream.map { it.fileName.toString() }
-                .filter { it.startsWith("thread-") && it.endsWith(".saver") }
-                .map { it.removePrefix("thread-").removeSuffix(".saver") }
-                .map { sessionIdStr ->
-                    SessionInfo(
-                        SessionId(sessionIdStr),
-                        cwd = cwd ?: ""
-                    )
-                }
-                .toList()
-                .asSequence()
-        } finally {
-            stream.close()
-        }
+        return SessionHelper.listSessionIds(FILE_SYSTEM_SAVER_FOLDER).toList().map {
+            val runnableConfig = RunnableConfig.builder().threadId(it).build();
+            val list = FILE_SYSTEM_SAVER.list(runnableConfig)
+            list.last().state
+        }.map {
+            SessionInfo(
+                SessionId(it.get(SESSION_ID_CONTEXT_KEY) as String),
+                cwd = cwd ?: "",
+                title = (it["input"] as String).let { it -> if (it.length > 12) it.take(12) + "..." else it },
+                updatedAt = it["updatedAt"] as String
+            )
+        }.asSequence()
     }
 
     override suspend fun createSession(sessionParameters: SessionCreationParameters): AgentSession {

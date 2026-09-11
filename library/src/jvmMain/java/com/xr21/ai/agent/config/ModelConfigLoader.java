@@ -225,21 +225,6 @@ public class ModelConfigLoader {
             }
         });
 
-        // 检查重复的 providerId
-        if (rawConfig.getProviders() != null) {
-            Map<String, Integer> providerCounts = new LinkedHashMap<>();
-            for (ProviderConfig provider : rawConfig.getProviders()) {
-                if (provider != null && provider.getProviderId() != null) {
-                    providerCounts.merge(provider.getProviderId(), 1, Integer::sum);
-                }
-            }
-            providerCounts.forEach((id, count) -> {
-                if (count > 1) {
-                    errors.add("重复的 providerId '" + id + "' 出现了 " + count + " 次");
-                }
-            });
-        }
-
         // 检查是否至少有一个启用的模型
         if (configs.isEmpty()) {
             errors.add("配置中没有启用的模型");
@@ -249,89 +234,39 @@ public class ModelConfigLoader {
     }
 
     /**
-     * 解析模型配置，将 providerId 引用解析为实际的 baseUrl 和 apiKey
+     * 从供应商配置构建模型配置列表
+     * 供应商下的每个模型名称会转换为一个 ModelConfig
      *
      * @param modelsConfig 模型配置容器
      * @return 解析后的模型配置列表
      */
     private static List<ModelConfig> resolveModelConfigs(Config modelsConfig) {
         List<ModelConfig> resolvedConfigs = new ArrayList<>();
-        if (modelsConfig.getModels() == null) {
+        Map<String, ProviderConfig> providers = modelsConfig.getProviders();
+        if (providers == null || providers.isEmpty()) {
             return resolvedConfigs;
         }
-        for (ModelConfig model : modelsConfig.getModels()) {
-            if (model != null) {
-                ModelConfig resolved = resolveModelConfig(model, modelsConfig.getProviders());
-                if (resolved.getDisabled() == null || !resolved.getDisabled()) {
-                    resolvedConfigs.add(resolved);
+        String defaultProvider = modelsConfig.getDefaultProvider();
+        String defaultModel = modelsConfig.getDefaultModel();
+        for (Map.Entry<String, ProviderConfig> entry : providers.entrySet()) {
+            String providerId = entry.getKey();
+            ProviderConfig provider = entry.getValue();
+            if (provider == null || provider.getModels() == null) {
+                continue;
+            }
+            for (String modelName : provider.getModels()) {
+                if (modelName == null || modelName.isBlank()) {
+                    continue;
                 }
+                boolean isDefault = modelName.equals(defaultModel)
+                        && (defaultProvider == null || providerId.equals(defaultProvider));
+                resolvedConfigs.add(new ModelConfig(
+                        modelName, modelName, 0.65, null, providerId,
+                        provider.getBaseUrl(), provider.getApiKey(),
+                        isDefault, false, null, null, null, null, null, null));
             }
         }
         return resolvedConfigs;
-    }
-
-    /**
-     * 解析单个模型配置，将 providerId 引用解析为实际的 baseUrl 和 apiKey
-     *
-     * @param model     模型配置
-     * @param providers 供应商配置列表
-     * @return 解析后的模型配置
-     */
-    private static ModelConfig resolveModelConfig(ModelConfig model, List<ProviderConfig> providers) {
-        // 如果没有 providerId，直接返回原配置
-        if (model.getProviderId() == null || model.getProviderId().isEmpty()) {
-            return model;
-        }
-
-        // 查找供应商配置
-        ProviderConfig provider = findProvider(model.getProviderId(), providers);
-        if (provider == null) {
-            log.warn("供应商未找到: {}，使用模型自身的 baseUrl 和 apiKey", model.getProviderId());
-            return model;
-        }
-
-        // 创建新的配置，使用供应商的 baseUrl 和 apiKey
-        String baseUrl = model.getBaseUrl() != null ? model.getBaseUrl() : provider.getBaseUrl();
-        String apiKey = model.getApiKey() != null ? model.getApiKey() : provider.getApiKey();
-
-        return new ModelConfig(
-                model.getModelId(),
-                model.getModelName(),
-                model.getTemperature(),
-                model.getMaxTokens(),
-                model.getProviderId(),
-                baseUrl,
-                apiKey,
-                model.isDefault(),
-                model.getDisabled(),
-                model.getReasoningEffort(),
-                model.getParallelToolCalls(),
-                model.getStreamUsage(),
-                model.getToolChoice(),
-                model.getExtraBody(),
-                model.getContextWindow()
-        );
-    }
-
-    /**
-     * 根据 providerId 查找供应商配置
-     *
-     * @param providerId 供应商标识符
-     * @param providers  供应商配置列表
-     * @return 找到的供应商配置，未找到返回 null
-     */
-    private static ProviderConfig findProvider(String providerId, List<ProviderConfig> providers) {
-        if (providers == null || providerId == null) {
-            return null;
-        }
-
-        for (ProviderConfig provider : providers) {
-            if (providerId.equals(provider.getProviderId())) {
-                return provider;
-            }
-        }
-
-        return null;
     }
 
     /**

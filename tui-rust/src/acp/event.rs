@@ -1,5 +1,7 @@
 //! 事件定义：TuiEvent（聚合所有输入源）与 AcpEvent（ACP 层投递到 UI 的动作）
 
+use crate::state::ModelOption;
+
 /// ACP 层解析出的事件（由 UI 线程应用到 AppState）
 #[derive(Debug, Clone)]
 pub enum AcpEvent {
@@ -25,8 +27,8 @@ pub enum AcpEvent {
     Usage { input: u64, output: u64 },
     /// 当前模型更新
     CurrentModel(String),
-    /// 可用模型列表
-    AvailableModels(Vec<String>),
+    /// 可用模型列表（含厂商分组）
+    AvailableModels(Vec<ModelOption>),
     /// 当前模式更新
     CurrentMode(String),
     /// 可用模式列表（会话建立后一次性推送）

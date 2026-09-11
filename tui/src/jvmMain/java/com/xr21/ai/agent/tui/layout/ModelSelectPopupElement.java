@@ -41,9 +41,15 @@ public class ModelSelectPopupElement {
 
     public Element build() {
         List<Element> items = new ArrayList<>();
+        String lastGroup = null;
         for (int i = 0; i < appState.availableModels.size(); i++) {
             int index = i; // 用于 lambda 捕获
             ModelInfo model = appState.availableModels.get(i);
+            // 厂商分组标题（同一分组只显示一次）
+            if (model.group != null && !model.group.isEmpty() && !model.group.equals(lastGroup)) {
+                items.add(text("  ── " + model.group + " ──"));
+                lastGroup = model.group;
+            }
             boolean isSelected = i == appState.modelSelectIndex;
             boolean isHovered = i == hoverIndex;
             boolean isCurrent = model.id.equals(appState.currentModelId);

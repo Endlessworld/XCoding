@@ -145,13 +145,20 @@ class AgiV2AgentSupport(private val v1: AgiAgent) : AgentSupport {
                 is com.agentclientprotocol.model.SessionConfigOption.Select ->
                     SessionConfigKind.Select(
                         currentValue = currentValue,
-                        options = SessionConfigSelectOptions.Ungrouped(
-                            options = when (val opts = options) {
-                                is com.agentclientprotocol.model.SessionConfigSelectOptions.Flat -> opts.options
-                                is com.agentclientprotocol.model.SessionConfigSelectOptions.Grouped ->
-                                    opts.groups.flatMap { it.options }
-                            }
-                        )
+                        options = when (val opts = options) {
+                            is com.agentclientprotocol.model.SessionConfigSelectOptions.Flat ->
+                                SessionConfigSelectOptions.Ungrouped(opts.options)
+                            is com.agentclientprotocol.model.SessionConfigSelectOptions.Grouped ->
+                                SessionConfigSelectOptions.Grouped(
+                                    opts.groups.map { g ->
+                                        com.agentclientprotocol.model.v2.SessionConfigSelectGroup(
+                                            groupId = g.group,
+                                            name = g.name ?: "",
+                                            options = g.options
+                                        )
+                                    }
+                                )
+                        }
                     )
                 is com.agentclientprotocol.model.SessionConfigOption.BooleanOption ->
                     SessionConfigKind.Boolean(currentValue = currentValue)

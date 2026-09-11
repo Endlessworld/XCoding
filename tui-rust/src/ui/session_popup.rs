@@ -87,22 +87,36 @@ fn render_model_mode(frame: &mut Frame, area: Rect, app: &AppState, theme: &TuiT
         theme.bold(theme.assistant_message),
     )));
     let models = if app.available_models.is_empty() {
-        vec![app.current_model.clone().unwrap_or_else(|| "默认".to_string())]
+        vec![crate::state::ModelOption {
+            value: app.current_model.clone().unwrap_or_else(|| "默认".to_string()),
+            group: None,
+        }]
     } else {
         app.available_models.clone()
     };
+    let mut last_group: Option<String> = None;
     for (i, m) in models.iter().enumerate() {
+        // 厂商分组标题（同一分组只显示一次）
+        if let Some(g) = &m.group {
+            if last_group.as_deref() != Some(g.as_str()) {
+                rows.push(Line::from(Span::styled(
+                    format!("  ── {g} ──"),
+                    theme.text_secondary,
+                )));
+                last_group = Some(g.clone());
+            }
+        }
         let selected = app.popup.visible
             && app.popup.tab_index == 1
             && app.popup.selected == i;
         let style = if selected {
             theme.bold(theme.selected_text).add_modifier(Modifier::REVERSED)
-        } else if Some(m.clone()) == app.current_model {
+        } else if Some(m.value.clone()) == app.current_model {
             theme.bold(theme.assistant_message)
         } else {
             Style::default().fg(theme.text_primary)
         };
-        rows.push(Line::from(Span::styled(format!("  {m}"), style)));
+        rows.push(Line::from(Span::styled(format!("  {}", m.value), style)));
     }
 
     rows.push(Line::from(""));

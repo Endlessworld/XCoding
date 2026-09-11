@@ -108,7 +108,7 @@ public class ShellTools {
 		在支持超时的持久壳会话中执行给定的bash命令。
 	        参数 mode 决定执行方式：
 	            - "once"（默认）：在一次性 shell 中执行单条命令，命令完成或超时后返回结果并销毁会话。
-	            - "interactive"：启动持久后台交互式 shell（Windows: pwsh，Unix: bash -i），立即返回 bash_id，之后用 ShellInput 发送命令、BashOutput 读取输出、KillShell 终止。适合在同一个 shell 中连续执行多条命令并保持状态（环境变量、工作目录）的场景。
+	            - "interactive"：启动持久后台交互式 shell（自动探测：nushell/pwsh/powershell.exe/bash -i），立即返回 bash_id，之后用 ShellInput 发送命令、BashOutput 读取输出、KillShell 终止。适合在同一个 shell 中连续执行多条命令并保持状态（环境变量、工作目录）的场景。
         重要提示：这个工具用于终端操作，比如git、npm、docker等。不要用它来做文件操作（读、写、编辑、搜索、查找文件 （除非查找的文件在工作空间之外））——请使用专门的工具。
         行为：
             - 如果命令在超时时间内完成，结果立即返回，会话关闭。
@@ -138,7 +138,7 @@ public class ShellTools {
         - 不要用换行来分隔命令（引号字符串中换行是可以的）
         - 如果一定要是用Bash写入或读取文件 务必在任何读取或写入文件的命令中指定编码为UTF-8,且写入文件只能使用无BOM UTF-8 其它一切编码或者BOM头都将损坏文件导致无法编译
         <如果当前是Windows系统>
-            win系统下使用pwsh作为Bash（once 模式用临时 .ps1 文件、interactive 模式用 pwsh 持久会话）
+            shell 自动探测：优先 nushell(nu)，其次 pwsh(powershell7)，无则 powershell.exe(powershell5)（once 用 -EncodedCommand，interactive 用持久会话）
             先看当前环境是否存在 GNU coreutils 如果存在优先使用GNU coreutils
             C:\\Program Files\\coreutils\\coreutils.exe
             灵活组合使用C:\\Program Files\\coreutils\\bin中的各种coreutils工具
@@ -229,26 +229,10 @@ public class ShellTools {
             // Determine execution mode: 'interactive' (persistent background shell) or 'once' (default single command)
             boolean interactive = "interactive".equalsIgnoreCase(mode);
 
-            // Determine the shell to use based on OS and mode
-            String[] shellCommand;
-            String os = System.getProperty("os.name").toLowerCase();
-            if (interactive) {
-                // Persistent background shell: stay alive, commands are sent via ShellInput
-                if (os.contains("win")) {
-                    shellCommand = new String[]{"pwsh", "-NoProfile"};
-                } else {
-                    shellCommand = new String[]{"/bin/bash", "-i"};
-                }
-            } else {
-                if (os.contains("win")) {
-                    // Windows once 模式：用 pwsh -EncodedCommand 执行（不落盘脚本，避免安全软件告警）。
-                    // pwsh 没有 cmd 的 %VAR% 展开机制（% 原样保留，如 git log --format=%s 无需转义），
-                    // 也没有 cmd 对 & | ^ ( ) 等元字符的脆弱解析；UTF-16LE+Base64 规避中文传参乱码。
-                    shellCommand = buildWindowsCommand(command);
-                } else {
-                    shellCommand = new String[]{"/bin/bash", "-c", command};
-                }
-            }
+            // 智能探测并选择可用 shell：优先 nushell(nu)，其次 Windows 下 pwsh/powershell.exe，类 Unix 用 /bin/bash
+            String[] shellCommand = interactive
+                    ? buildInteractiveShellCommand()
+                    : buildOnceShellCommand(command);
 
             ProcessBuilder processBuilder = new ProcessBuilder(shellCommand);
             processBuilder.redirectErrorStream(false);
@@ -320,24 +304,104 @@ public class ShellTools {
         return timeout;
     }
 
+    // ---- 智能 shell 探测：优先 nushell(nu)，其次 Windows pwsh/powershell.exe，类 Unix /bin/bash ----
+    private static final String SHELL_NU = "nu";
+    private static final String SHELL_PWSH = "pwsh";
+    private static final String SHELL_POWERSHELL = "powershell.exe";
+    private static final String SHELL_BASH = "/bin/bash";
+
+    /** 探测到的 shell 可执行文件名（进程内缓存，避免每次调用都探测） */
+    private static volatile String cachedShellExecutable;
+
+    private static boolean isWindowsOs() {
+        return System.getProperty("os.name").toLowerCase().contains("win");
+    }
+
+    /** 判断命令是否存在于 PATH（通过实际启动进程探测，IOException 表示未找到） */
+    private static boolean isCommandAvailable(String executable) {
+        try {
+            Process p = new ProcessBuilder(executable, "--version")
+                    .redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            if (!p.waitFor(5, TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 智能探测首选 shell：nu > (win) pwsh > powershell.exe / (unix) /bin/bash */
+    private static String detectShellExecutable() {
+        if (isCommandAvailable(SHELL_NU)) {
+            return SHELL_NU;
+        }
+        if (isWindowsOs()) {
+            return isCommandAvailable(SHELL_PWSH) ? SHELL_PWSH : SHELL_POWERSHELL;
+        }
+        return SHELL_BASH;
+    }
+
+    private static String shellExecutable() {
+        String exec = cachedShellExecutable;
+        if (exec == null) {
+            synchronized (ShellTools.class) {
+                exec = cachedShellExecutable;
+                if (exec == null) {
+                    exec = detectShellExecutable();
+                    cachedShellExecutable = exec;
+                    log.info("Detected shell executable: {}", exec);
+                }
+            }
+        }
+        return exec;
+    }
+
+    /** interactive 模式：启动持久后台交互式 shell */
+    private String[] buildInteractiveShellCommand() {
+        String exec = shellExecutable();
+        if (SHELL_NU.equals(exec)) {
+            return new String[]{SHELL_NU};
+        }
+        if (SHELL_BASH.equals(exec)) {
+            return new String[]{SHELL_BASH, "-i"};
+        }
+        return new String[]{exec, "-NoProfile"};
+    }
+
+    /** once 模式：执行单条命令 */
+    private String[] buildOnceShellCommand(String command) {
+        String exec = shellExecutable();
+        if (SHELL_NU.equals(exec)) {
+            // nushell：-c 直接执行命令串
+            return new String[]{SHELL_NU, "-c", command};
+        }
+        if (SHELL_PWSH.equals(exec) || SHELL_POWERSHELL.equals(exec)) {
+            return buildPowerShellEncodedCommand(exec, command);
+        }
+        return new String[]{exec, "-c", command};
+    }
+
     /**
-     * Windows once 模式：使用 pwsh -EncodedCommand 执行命令。
+     * PowerShell once 模式：使用 -EncodedCommand 执行命令。
      * 不生成任何临时脚本文件（避免被安全软件识别为“落盘+执行”的可疑行为而频繁告警），
-     * 而是将命令以 UTF-16LE 编码后做 Base64，作为 -EncodedCommand 参数传给 pwsh。
+     * 而是将命令以 UTF-16LE 编码后做 Base64，作为 -EncodedCommand 参数传给 powershell。
      * 优点：
      *  1. Base64 为纯 ASCII，彻底规避 ProcessBuilder 在 Windows 下以 ANSI 编码传参导致的中文乱码；
-     *  2. pwsh 没有 cmd 的 %VAR% 展开机制（% 原样保留，如 git log --format=%s 无需转义）；
+     *  2. 没有 cmd 的 %VAR% 展开机制（% 原样保留，如 git log --format=%s 无需转义）；
      *  3. 不落盘，无临时文件残留，降低安全软件告警频率。
      */
-    private String[] buildWindowsCommand(String command) {
+    private String[] buildPowerShellEncodedCommand(String exe, String command) {
         try {
-            // pwsh -EncodedCommand 要求 UTF-16LE 编码后再 Base64
+            // -EncodedCommand 要求 UTF-16LE 编码后再 Base64
             byte[] utf16 = command.getBytes(StandardCharsets.UTF_16LE);
             String encoded = Base64.getEncoder().encodeToString(utf16);
-            return new String[]{"pwsh", "-NoProfile", "-EncodedCommand", encoded};
+            return new String[]{exe, "-NoProfile", "-EncodedCommand", encoded};
         } catch (Exception e) {
-            log.warn("Failed to encode command for pwsh -EncodedCommand, falling back to pwsh -Command: {}", e.getMessage());
-            return new String[]{"pwsh", "-NoProfile", "-Command", command};
+            log.warn("Failed to encode command for {} -EncodedCommand, falling back to -Command: {}", exe, e.getMessage());
+            return new String[]{exe, "-NoProfile", "-Command", command};
         }
     }
 

@@ -2,7 +2,7 @@
 
 use crate::acp::client::AcpRequest;
 use crate::acp::event::{AcpEvent, TuiEvent, TodoEventPriority, TodoEventStatus};
-use crate::state::{AppState, FocusPanel};
+use crate::state::{AppState, FocusPanel, ModelOption};
 use crate::theme::TuiTheme;
 use crate::ui;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -84,8 +84,11 @@ fn handle_acp(app: &mut AppState, ev: &AcpEvent) {
         }
         AcpEvent::CurrentModel(model) => {
             app.current_model = Some(model.clone());
-            if !app.available_models.contains(model) {
-                app.available_models.push(model.clone());
+            if !app.available_models.iter().any(|m| &m.value == model) {
+                app.available_models.push(ModelOption {
+                    value: model.clone(),
+                    group: None,
+                });
             }
         }
         AcpEvent::AvailableModels(models) => {
@@ -264,7 +267,7 @@ fn handle_popup_key(
                 }
                 1 => {
                     if app.popup.selected < app.available_models.len() {
-                        let m = app.available_models[app.popup.selected].clone();
+                        let m = app.available_models[app.popup.selected].value.clone();
                         app.current_model = Some(m.clone());
                         // 通过 v2 set_config_option("model") 真正切换后端模型
                         let _ = acp_tx.send(AcpRequest::SetModel(m));

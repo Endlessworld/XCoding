@@ -436,7 +436,9 @@ public class LocalAgent {
 
     @NotNull
     private static List<Hook> getHooks(RunnableConfig runnableConfig, ChatModel chatModel) {
-        List<Hook> hooks = new ArrayList<>(3);
+        List<Hook> hooks = new ArrayList<>(4);
+        // 每轮模型请求结束后，把 context 中可持久化的条目合入 OverAllState（随 FileSystemSaver 快照持久化）
+        hooks.add(new PersistedStateHook());
         String currentMode = runnableConfig.context().get("mode") instanceof String m ? m : "accept_edits";
         log.info("getHooks: currentMode {}", currentMode);
         if (!"yolo".equalsIgnoreCase(currentMode)) {

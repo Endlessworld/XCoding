@@ -12,82 +12,55 @@
 
 ## 配置文件格式
 
-配置文件使用供应商（Provider）和模型（Model）分离的方式，避免在多个模型中重复配置 `baseUrl` 和 `apiKey`：
+配置文件使用供应商（Provider）分组的方式，在供应商下直接列出其支持的模型名称，最大程度简化模型配置：
 
 ```json
 {
-  "providers": [
-    {
-      "providerId": "volcengine",
-      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
-      "apiKey": "your-volcengine-api-key-here"
+  "default_provider": "Go",
+  "default_model": "deepseek-v4-flash",
+  "providers": {
+    "Zen": {
+      "base_url": "https://opencode.ai/zen/v1",
+      "api_key": "public",
+      "models": [
+        "mimo-v2.5-free",
+        "ling-3.0-flash-fin-free"
+      ]
     },
-    {
-      "providerId": "deepseek",
-      "baseUrl": "https://api.deepseek.com/v1",
-      "apiKey": "your-deepseek-api-key-here"
+    "Go": {
+      "base_url": "https://opencode.ai/zen/go/v1",
+      "api_key": "sk-xxxxx",
+      "models": [
+        "minimax-m3",
+        "kimi-k3",
+        "deepseek-v4-flash"
+      ]
     }
-  ],
-  "models": [
-    {
-      "modelId": "kimi-k2-5",
-      "modelName": "kimi-k2.5",
-      "temperature": 0.65,
-      "maxTokens": 3000,
-      "providerId": "volcengine",
-      "isDefault": true
-    },
-    {
-      "modelId": "kimi-k2-1",
-      "modelName": "kimi-k2.1",
-      "temperature": 0.65,
-      "maxTokens": 3000,
-      "providerId": "volcengine",
-      "isDefault": false
-    },
-    {
-      "modelId": "deepseek-v3-2",
-      "modelName": "deepseek-v3.2",
-      "temperature": 0.75,
-      "maxTokens": 4000,
-      "providerId": "deepseek",
-      "isDefault": false
-    }
-  ]
+  }
 }
 ```
 
 ## 配置字段说明
 
+### 顶层字段
+
+| 字段 | 类型 | 必需 | 说明 |
+|------|------|------|------|
+| `default_provider` | String | 否 | 默认供应商名称（对应 `providers` 的 key） |
+| `default_model` | String | 否 | 默认模型名称 |
+
 ### Provider 配置字段
 
 | 字段 | 类型 | 必需 | 说明 |
 |------|------|------|------|
-| `providerId` | String | 是 | 供应商标识符，用于模型引用 |
-| `baseUrl` | String | 是 | API 域础 URL |
-| `apiKey` | String | 是 | API 密钥 |
-
-### Model 配置字段
-
-| 字段 | 类型 | 必需 | 说明 |
-|------|------|------|------|
-| `modelId` | String | 是 | 模型ID，用于客户端标识和选择模型（推荐使用） |
-| `modelName` | String | 是 | 模型名称（实际发送给API的模型名称） |
-| `temperature` | Double | 否 | 温度参数，控制输出的随机性（默认 0.65） |
-| `maxTokens` | Integer | 否 | 最大令牌数（可选） |
-| `contextWindow` | Long | 否 | 模型上下文窗口大小（token 数）。用于 ACP `usage_update` 的 `size` 字段；未配置时默认 128K |
-| `providerId` | String | 否 | 引用的供应商标识符（推荐使用） |
-| `baseUrl` | String | 否 | API 基础 URL（如果不使用 providerId） |
-| `apiKey` | String | 否 | API 密钥（如果不使用 providerId） |
-| `isDefault` | Boolean | 否 | 是否为默认模型（默认 false） |
+| `base_url` | String | 是 | API 基础 URL |
+| `api_key` | String | 是 | API 密钥 |
+| `models` | String[] | 是 | 该供应商支持的模型名称列表 |
 
 **注意**：
-- `modelId` 和 `modelName` 的区别：
-  - `modelId`：用于客户端标识和选择模型，可以是简洁的标识符（如 `kimi-k2-5`）
-  - `modelName`：实际发送给API的模型名称，需要符合API规范（如 `kimi-k2.5`）
-- 如果使用 `providerId`，`baseUrl` 和 `apiKey` 可以省略（会从 provider 配置中获取）
-- 如果同时提供 `providerId` 和 `baseUrl`/`apiKey`，则使用模型自身的配置（覆盖 provider 配置）
-- 如果不使用 `providerId`，则必须提供 `baseUrl` 和 `apiKey`
+- `providers` 是以供应商名称为 key 的对象（map），其 key 即 `providerId`
+- `models` 中每个名称会生成一个模型配置：`modelId` 与 `modelName` 均等于该名称，`baseUrl`/`apiKey` 继承所属供应商
+- `temperature` 统一使用默认值 0.65；`default_model` 指定默认模型，若同时提供 `default_provider` 则需匹配所属供应商
 
 ## 工作原理
 
@@ -147,36 +120,20 @@ vim ~/.agi_working/models.json
 
 ```json
 {
-  "providers": [
-    {
-      "providerId": "volcengine",
-      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
-      "apiKey": "your-volc-api-key"
+  "default_provider": "volcengine",
+  "default_model": "kimi-k2.5",
+  "providers": {
+    "volcengine": {
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "api_key": "your-volc-api-key",
+      "models": ["kimi-k2.5", "kimi-k2.1"]
     },
-    {
-      "providerId": "deepseek",
-      "baseUrl": "https://api.deepseek.com/v1",
-      "apiKey": "your-deepseek-api-key"
+    "deepseek": {
+      "base_url": "https://api.deepseek.com/v1",
+      "api_key": "your-deepseek-api-key",
+      "models": ["deepseek-v3.2"]
     }
-  ],
-  "models": [
-    {
-      "modelId": "kimi-k2-5",
-      "modelName": "kimi-k2.5",
-      "temperature": 0.65,
-      "maxTokens": 3000,
-      "providerId": "volcengine",
-      "isDefault": true
-    },
-    {
-      "modelId": "deepseek-v3-2",
-      "modelName": "deepseek-v3.2",
-      "temperature": 0.75,
-      "maxTokens": 4000,
-      "providerId": "deepseek",
-      "isDefault": false
-    }
-  ]
+  }
 }
 ```
 
@@ -200,50 +157,31 @@ INFO  ChatModel initialized successfully
 
 你可以配置多个模型，并通过 ACP 协议动态切换。
 
-**使用新格式（推荐）**：
+**配置格式**：
 
 ```json
 {
-  "providers": [
-    {
-      "providerId": "volcengine",
-      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
-      "apiKey": "your-volc-api-key"
+  "default_provider": "volcengine",
+  "default_model": "kimi-k2.5",
+  "providers": {
+    "volcengine": {
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "api_key": "your-volc-api-key",
+      "models": ["kimi-k2.5", "kimi-k2.1"]
     },
-    {
-      "providerId": "deepseek",
-      "baseUrl": "https://api.deepseek.com/v1",
-      "apiKey": "your-deepseek-api-key"
+    "deepseek": {
+      "base_url": "https://api.deepseek.com/v1",
+      "api_key": "your-deepseek-api-key",
+      "models": ["deepseek-v3.2"]
     }
-  ],
-  "models": [
-    {
-      "modelId": "kimi-k2-5",
-      "modelName": "kimi-k2.5",
-      "providerId": "volcengine",
-      "isDefault": true
-    },
-    {
-      "modelId": "kimi-k2-1",
-      "modelName": "kimi-k2.1",
-      "providerId": "volcengine",
-      "isDefault": false
-    },
-    {
-      "modelId": "deepseek-v3-2",
-      "modelName": "deepseek-v3.2",
-      "providerId": "deepseek",
-      "isDefault": false
-    }
-  ]
+  }
 }
 ```
 
 **优势**：
-- 只需配置一次 `baseUrl` 和 `apiKey`
-- 新增同一供应商的模型时，只需添加模型配置，无需重复 API 信息
+- 只需配置一次 `base_url` 和 `api_key`
+- 新增同一供应商的模型时，只需在 `models` 列表中添加名称
 - 更容易管理和维护多个供应商的配置
-- `modelId` 和 `modelName` 分离，便于客户端使用和API调用
 
 ### 客户端切换模型
 

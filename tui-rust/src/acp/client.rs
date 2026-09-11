@@ -186,16 +186,24 @@ fn emit_config_options(
         let id = opt.id.to_string();
         match opt.kind {
             SessionConfigKind::Select(select) => {
-                // 收集可选项
-                let options: Vec<String> = match select.options {
+                // 收集可选项（保留厂商分组）
+                let model_options: Vec<crate::state::ModelOption> = match select.options {
                     SessionConfigSelectOptions::Ungrouped(list) => list
                         .into_iter()
-                        .map(|o| o.value.to_string())
+                        .map(|o| crate::state::ModelOption {
+                            value: o.value.to_string(),
+                            group: None,
+                        })
                         .collect(),
                     SessionConfigSelectOptions::Grouped(groups) => groups
                         .into_iter()
-                        .flat_map(|g| g.options.into_iter())
-                        .map(|o| o.value.to_string())
+                        .flat_map(|g| {
+                            let gname = g.name.clone();
+                            g.options.into_iter().map(move |o| crate::state::ModelOption {
+                                value: o.value.to_string(),
+                                group: Some(gname.clone()),
+                            })
+                        })
                         .collect(),
                     _ => vec![],
                 };
@@ -203,11 +211,13 @@ fn emit_config_options(
                 match id.as_str() {
                     "model" => {
                         let _ = event_tx.send(AcpEvent::CurrentModel(current));
-                        let _ = event_tx.send(AcpEvent::AvailableModels(options));
+                        let _ = event_tx.send(AcpEvent::AvailableModels(model_options));
                     }
                     "mode" => {
+                        let modes: Vec<String> =
+                            model_options.into_iter().map(|m| m.value).collect();
                         let _ = event_tx.send(AcpEvent::CurrentMode(current));
-                        let _ = event_tx.send(AcpEvent::AvailableModes(options));
+                        let _ = event_tx.send(AcpEvent::AvailableModes(modes));
                     }
                     _ => {}
                 }

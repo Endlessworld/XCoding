@@ -24,14 +24,23 @@ import lombok.NoArgsConstructor
 
 class Config {
     /**
-     * 供应商配置列表
+     * 默认供应商名称（对应 providers 的 key）
      */
-    val providers: MutableList<ProviderConfig?> = ArrayList()
+    @get:JsonGetter("default_provider")
+    @set:JsonSetter("default_provider")
+    var defaultProvider: String? = null
 
     /**
-     * 模型配置列表
+     * 默认模型名称
      */
-    val models: MutableList<ModelConfig?> = ArrayList()
+    @get:JsonGetter("default_model")
+    @set:JsonSetter("default_model")
+    var defaultModel: String? = null
+
+    /**
+     * 供应商配置，key 为供应商名称
+     */
+    val providers: MutableMap<String, ProviderConfig> = linkedMapOf()
 
 
     /**
@@ -42,19 +51,23 @@ class Config {
     @AllArgsConstructor
     class ProviderConfig {
         /**
-         * 供应商标识符（如 "volcengine", "deepseek", "openai"）
-         */
-        var providerId: String? = null
-
-        /**
          * API 基础 URL
          */
+        @get:JsonGetter("base_url")
+        @set:JsonSetter("base_url")
         var baseUrl: String? = null
 
         /**
          * API 密钥
          */
+        @get:JsonGetter("api_key")
+        @set:JsonSetter("api_key")
         var apiKey: String? = null
+
+        /**
+         * 该供应商支持的模型名称列表
+         */
+        var models: MutableList<String> = ArrayList()
     }
 
     /**

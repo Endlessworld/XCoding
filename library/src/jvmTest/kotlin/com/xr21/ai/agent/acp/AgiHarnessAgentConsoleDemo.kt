@@ -93,7 +93,7 @@ fun main() = runBlocking {
 
     @Suppress("UNUSED")
     val serverThread = Thread {
-        launchWebSocketServer(agentSupport,AgiV2AgentSupport(AgiAgent()), "127.0.0.1", DEMO_PORT)
+        launchWebSocketServer(agentSupport, AgiV2AgentSupport(AgiAgent()), "127.0.0.1", DEMO_PORT)
     }.apply {
         isDaemon = true
         start()
@@ -141,7 +141,10 @@ fun main() = runBlocking {
             )
         )
     )
-
+    val listSessions = acpClient.listSessions("E:\\local-github\\ai-agents", arrayListOf(), null)
+    for ((sessionId, cwd, title, updatedAt, additionalDirectories, _meta) in listSessions.toList()) {
+        println("listSessions $sessionId $cwd $title $updatedAt $additionalDirectories $_meta")
+    }
     // 3. 创建会话
     info("[3/4] 创建 ACP 会话...")
     val session = acpClient.newSession(

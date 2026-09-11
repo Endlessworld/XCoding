@@ -1,99 +1,60 @@
 {
-  "providers": [
-    {
-      "providerId": "volcengine",
-      "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
-      "apiKey": "${AI_VOLC_API_KEY}"
+  "default_provider": "Go",
+  "default_model": "deepseek-v4-flash",
+  "providers": {
+    "Zen": {
+      "base_url": "https://opencode.ai/zen/v1",
+      "api_key": "public",
+      "models": [
+        "mimo-v2.5-free",
+        "ling-3.0-flash-fin-free",
+        "nemotron-3-ultra-free",
+        "nemotron-3.5-lightning-free",
+        "muse-spark-1.3-contributor-free",
+        "muse-spark-1.2-contributor-free"
+      ]
     },
-    {
-      "providerId": "deepseek",
-      "baseUrl": "https://api.deepseek.com",
-      "apiKey": "${AI_DEEPSEEK_API_KEY}"
-    },
-    {
-      "providerId": "xiaomi",
-      "baseUrl": "https://api.xiaomimimo.com",
-      "apiKey": "${AI_XIAOMI_API_KEY}"
-    },
-    {
-      "providerId": "openrouter",
-      "baseUrl": "https://openrouter.ai/api",
-      "apiKey": "${AI_OPEN_ROUTER_API_KEY}"
-    },
-    {
-      "providerId": "siliconflow",
-      "baseUrl": "https://api.siliconflow.cn",
-      "apiKey": "${AI_SILICONFLOW_API_KEY}"
-    },
-    {
-      "providerId": "cucloud",
-      "baseUrl": "https://aigw-gzgy2.cucloud.cn:8443",
-      "apiKey": "${AI_CUCLOUD_API_KEY}"
+    "Go": {
+      "base_url": "https://opencode.ai/zen/go/v1",
+      "api_key": "sk-xxxxx",
+      "models": [
+        "minimax-m3",
+        "minimax-m2.7",
+        "minimax-m2.5",
+        "kimi-k3",
+        "kimi-k2.7-code",
+        "kimi-k2.6",
+        "longcat-2.0",
+        "kimi-k2.5",
+        "glm-5.2",
+        "glm-5.3-flash",
+        "glm-5.3",
+        "glm-5.1",
+        "glm-5",
+        "deepseek-flash",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash",
+        "deepseek-v4-flash-vision-exp",
+        "qwen3.7-max",
+        "qwen3.8-max",
+        "qwen3.8-flash",
+        "qwen3.7-plus",
+        "qwen3.6-plus",
+        "qwen3.5-plus",
+        "mimo-v2-pro",
+        "mimo-v2-omni",
+        "mimo-v2.5-pro",
+        "mimo-v2.5",
+        "hy4-preview",
+        "hy3",
+        "hy3-preview",
+        "gpt-5.6-luna",
+        "grok-4.5",
+        "grok-4.6",
+        "muse-spark-1.3-contributor",
+        "muse-spark-1.2-contributor",
+        "omen-alpha"
+      ]
     }
-  ],
-  "models": [
-    {
-      "modelId": "deepseek-v3.2",
-      "modelName": "deepseek-v3.2",
-      "temperature": 0.75,
-      "maxTokens": 8000,
-      "providerId": "volcengine",
-      "isDefault": true,
-      "disabled": false
-    },
-    {
-      "modelId": "doubao-seed-2.0-code",
-      "modelName": "doubao-seed-2.0-code",
-      "temperature": 0.75,
-      "maxTokens": 8000,
-      "providerId": "volcengine",
-      "isDefault": false,
-      "disabled": true
-    },
-    {
-      "modelId": "kimi-k2.5",
-      "modelName": "kimi-k2.5",
-      "temperature": 0.75,
-      "maxTokens": 8000,
-      "providerId": "volcengine",
-      "isDefault": false,
-      "disabled": true
-    },
-    {
-      "modelId": "glm-4.7",
-      "modelName": "glm-4.7",
-      "temperature": 0.75,
-      "maxTokens": 8000,
-      "providerId": "volcengine",
-      "isDefault": false,
-      "disabled": true
-    },
-    {
-      "modelId": "deepseek-v3-2",
-      "modelName": "deepseek-v3.2",
-      "temperature": 0.75,
-      "maxTokens": 8000,
-      "providerId": "deepseek",
-      "isDefault": false,
-      "disabled": true
-    },
-    {
-      "modelId": "mimo-v2-flash",
-      "modelName": "mimo-v2-flash",
-      "temperature": 0.75,
-      "maxTokens": 8000,
-      "providerId": "xiaomi",
-      "isDefault": false,
-      "disabled": true
-    },
-    {
-      "modelId": "MiniMax-M2.5",
-      "modelName": "MiniMax-M2.5",
-      "temperature": 0.75,
-      "maxTokens": 8000,
-      "providerId": "cucloud",
-      "isDefault": false,
-      "disabled": true
-    }
-  ]
+  }
 }

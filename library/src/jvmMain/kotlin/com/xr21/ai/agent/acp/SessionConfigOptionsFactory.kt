@@ -87,19 +87,45 @@ object SessionConfigOptionsFactory {
                     category = SessionConfigOptionCategory.MODEL
                 )
             )
+        } else {
             options.add(
                 SessionConfigOption.select(
-                    id = "mode",
-                    name = "mode",
-                    currentValue = "accept_edits",
+                    id = "model",
+                    name = "model",
+                    currentValue = AiModels.defaultModel(),
                     description = "model",
-                    options = SessionConfigSelectOptions.Flat(
-                        AgentMode.entries.map { it.toSelectOption() }),
+                    options = SessionConfigSelectOptions.Grouped(
+                        AiModels.availableModels()
+                            .filter { !it.modelId.isNullOrBlank() }
+                            .groupBy { it.providerId?.takeIf { p -> p.isNotBlank() } ?: "未分类" }
+                            .map { (providerId, models) ->
+                                SessionConfigSelectGroup(
+                                    group = SessionConfigGroupId(providerId),
+                                    name = providerId,
+                                    options = models.map { model ->
+                                        SessionConfigSelectOption(
+                                            SessionConfigValueId(model.modelId!!),
+                                            model.modelName ?: "",
+                                            model.modelName ?: ""
+                                        )
+                                    }
+                                )
+                            }),
                     category = SessionConfigOptionCategory.MODEL
                 )
             )
         }
-
+        options.add(
+            SessionConfigOption.select(
+                id = "mode",
+                name = "mode",
+                currentValue = "accept_edits",
+                description = "model",
+                options = SessionConfigSelectOptions.Flat(
+                    AgentMode.entries.map { it.toSelectOption() }),
+                category = SessionConfigOptionCategory.MODE
+            )
+        )
         return options
     }
 

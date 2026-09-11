@@ -182,6 +182,13 @@ pub struct ConfigOption {
     pub value: String,
 }
 
+/// 模型选项（含厂商分组名，group 为 None 表示未分组）
+#[derive(Debug, Clone)]
+pub struct ModelOption {
+    pub value: String,
+    pub group: Option<String>,
+}
+
 /// AppState
 #[derive(Debug, Default)]
 pub struct AppState {
@@ -196,7 +203,7 @@ pub struct AppState {
     pub agent_version: String,
     pub current_model: Option<String>,
     pub current_mode: Option<String>,
-    pub available_models: Vec<String>,
+    pub available_models: Vec<ModelOption>,
     pub available_modes: Vec<String>,
     pub config_options: Vec<ConfigOption>,
     pub todos: Vec<TodoItem>,

@@ -45,9 +45,8 @@ object ProviderConfigManager {
             val content = Files.readString(configPath, StandardCharsets.UTF_8)
             val config = Json.to(content, Config::class.java)
             config.providers
-                .filterNotNull()
-                .filter { it.providerId != null && it.baseUrl != null }
-                .associate { it.providerId!! to it.baseUrl!! }
+                .mapNotNull { (id, provider) -> provider.baseUrl?.let { id to it } }
+                .toMap()
         } catch (e: Exception) {
             logger.error(e) { "Failed to load provider configs" }
             emptyMap()
@@ -80,11 +79,10 @@ object ProviderConfigManager {
             val content = Files.readString(configPath, StandardCharsets.UTF_8)
             val config = Json.to(content, Config::class.java)
 
-            var provider = config.providers.find { it?.providerId == id }
+            var provider = config.providers[id]
             if (provider == null) {
                 provider = Config.ProviderConfig()
-                provider.providerId = id
-                config.providers.add(provider)
+                config.providers[id] = provider
             }
             provider.baseUrl = baseUrl
             if (headers != null && headers.containsKey("Authorization")) {
@@ -109,12 +107,7 @@ object ProviderConfigManager {
             val content = Files.readString(configPath, StandardCharsets.UTF_8)
             val config = Json.to(content, Config::class.java)
 
-            config.providers.removeAll { it?.providerId == id }
-            config.models.forEach { model ->
-                if (model?.providerId == id) {
-                    model.disabled = true
-                }
-            }
+            config.providers.remove(id)
 
             val updatedJson = Json.toPrettyJson(config)
             Files.writeString(configPath, updatedJson, StandardCharsets.UTF_8)
