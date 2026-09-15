@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  GRAALVM_VERSION: '24.0.2'
+  GRAALVM_VERSION: '21'
   JAVA_VERSION: '21'
 
 jobs:
@@ -73,7 +73,6 @@ jobs:
       with:
         version: ${{ env.GRAALVM_VERSION }}
         distribution: 'graalvm-community'
-        components: 'native-image'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
@@ -126,7 +125,6 @@ jobs:
       with:
         version: ${{ env.GRAALVM_VERSION }}
         distribution: 'graalvm-community'
-        components: 'native-image'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
@@ -174,7 +172,6 @@ jobs:
       with:
         version: ${{ env.GRAALVM_VERSION }}
         distribution: 'graalvm-community'
-        components: 'native-image'
         github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
