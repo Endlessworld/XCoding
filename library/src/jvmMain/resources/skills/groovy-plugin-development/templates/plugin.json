@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "your-plugin-name",
+  "version": "1.0.0",
+  "description": "插件功能说明",
+  "keywords": ["example", "groovy"],
+  "extensions": {
+    "com.xr21.agent": {
+      "groovy": {
+        "entrypoints": ["./entry.groovy"]
+      }
+    }
+  }
+}

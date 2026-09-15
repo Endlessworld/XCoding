@@ -245,6 +245,7 @@ class AgiAgentSession(
             // Store client session operations in context so tools running on non-coroutine threads can use it
             runnableConfig.context().putIfAbsent(CLIENT_SESSION_CONTEXT_KEY, currentCoroutineContext().client)
             runnableConfig.context().putIfAbsent("mode", defaultMode.value)
+            runnableConfig.context().putIfAbsent("cwd", cwd)
             runnableConfig.context().putIfAbsent("thought_level", SessionConfigOptionsFactory.ThoughtLevel.LOW.valueId)
             val agent = LocalAgent.createAgent(cwd, mcpServers, runnableConfig, currentCoroutineContext().client)
             agent.setSystemPrompt(LocalAgent.getInstruction(cwd))
@@ -731,10 +732,12 @@ class AgiAgent : AgentSupport {
         return SessionHelper.listSessionIds(FILE_SYSTEM_SAVER_FOLDER).toList().map {
             val runnableConfig = RunnableConfig.builder().threadId(it).build();
             val list = FILE_SYSTEM_SAVER.list(runnableConfig)
-            list.last().state
-        }.map {
+            list.first { it.nextNodeId.equals("__END__") || it.state.containsKey(SESSION_ID_CONTEXT_KEY) }.state
+        }.filter { it.containsKey(SESSION_ID_CONTEXT_KEY) }.map {
+            val session = it.get(SESSION_ID_CONTEXT_KEY) as? LinkedHashMap<*, *>
+            val sessionId = session?.get("value") as? String ?: ""
             SessionInfo(
-                SessionId(it.get(SESSION_ID_CONTEXT_KEY) as String),
+                SessionId(sessionId),
                 cwd = cwd ?: "",
                 title = (it["input"] as String).let { it -> if (it.length > 12) it.take(12) + "..." else it },
                 updatedAt = it["updatedAt"] as String

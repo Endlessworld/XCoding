@@ -56,7 +56,7 @@ public class PersistedStateHook extends ModelHook {
     /**
      * 需要从 context 合入 OverAllState（随快照持久化）的 key 白名单
      */
-    public static final Set<String> PERSISTED_KEYS = Set.of("mode", "thought_level", "requestId", "sessionTotalTokens", "sessionCompletionTokens", "totalTokens", "completionTokens", SESSION_ID_CONTEXT_KEY);
+    public static final Set<String> PERSISTED_KEYS = Set.of("cwd","model","mode", "thought_level", "requestId", "sessionTotalTokens", "sessionCompletionTokens", "totalTokens", "completionTokens", SESSION_ID_CONTEXT_KEY);
 
     private static final Map<String, KeyStrategy> KEY_STRATEGIES = buildKeyStrategies();
 

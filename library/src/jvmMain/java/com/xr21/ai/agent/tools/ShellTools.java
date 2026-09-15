@@ -105,95 +105,9 @@ public class ShellTools {
 
     // @formatter:off
 	@Tool(name = "Bash", description = """
-		在支持超时的持久壳会话中执行给定的bash命令。
-	        参数 mode 决定执行方式：
-	            - "once"（默认）：在一次性 shell 中执行单条命令，命令完成或超时后返回结果并销毁会话。
-	            - "interactive"：启动持久后台交互式 shell（自动探测：nushell/pwsh/powershell.exe/bash -i），立即返回 bash_id，之后用 ShellInput 发送命令、BashOutput 读取输出、KillShell 终止。适合在同一个 shell 中连续执行多条命令并保持状态（环境变量、工作目录）的场景。
-        重要提示：这个工具用于终端操作，比如git、npm、docker等。不要用它来做文件操作（读、写、编辑、搜索、查找文件 （除非查找的文件在工作空间之外））——请使用专门的工具。
-        行为：
-            - 如果命令在超时时间内完成，结果立即返回，会话关闭。
-            - 如果命令在超时时间内未完成，则返回交互式shell会话，允许你继续使用ShellInput和BashOutput工具与之交互。
-        在执行命令前，请遵循以下步骤：
-        1. 目录验证：
-            - 如果命令会创建新的目录或文件，首先使用“ls”来验证父目录的存在及其正确位置
-            - 例如，在运行“mkdir foo/bar”之前，首先使用“ls foo”来确认“foo”是否存在且是指定的父目录
-        2. 命令执行：
-		- 总是引用包含双引号空格的文件路径（例如 cd “带空格/file.txt的路径”）
-		- 正确引用的示例：
-		    - cd "/Users/[REDACTED]/My Documents" (correct)
-			- cd /Users/[REDACTED]/My Documents (incorrect - will fail)
-			- python "/path/with spaces/script.py" (correct)
-			- python /path/with spaces/script.py" (incorrect - will fail)
-		- 确保引用正确后，执行命令。
-		- 捕获命令的输出。
-
-		Usage notes:
-        - 命令参数是必需的。
-		- 需要超时参数，且至少1000毫秒（1秒），最多600000毫秒（10分钟）。
-		- 如果你能用5到10个单词清晰简洁地描述这个命令的作用，会非常有帮助。
-		- 如果输出超过30000字符，输出会被截断后再返回给你。
-        - 使用 Bash 命令时，Windows 平台支持 CRLF，但建议生成文件内容时使用 LF，以确保跨平台兼容性
-        - 在用 Bash 编译项目时，只输出编译错误或成功消息
-        - 务必注意多个命令之间的串行/并行顺序和依赖关系
-        - 不要用换行来分隔命令（引号字符串中换行是可以的）
-        - 如果一定要是用Bash写入或读取文件 务必在任何读取或写入文件的命令中指定编码为UTF-8,且写入文件只能使用无BOM UTF-8 其它一切编码或者BOM头都将损坏文件导致无法编译
-        <如果当前是Windows系统>
-            shell 自动探测：优先 nushell(nu)，其次 pwsh(powershell7)，无则 powershell.exe(powershell5)（once 用 -EncodedCommand，interactive 用持久会话）
-            先看当前环境是否存在 GNU coreutils 如果存在优先使用GNU coreutils
-            C:\\Program Files\\coreutils\\coreutils.exe
-            灵活组合使用C:\\Program Files\\coreutils\\bin中的各种coreutils工具
-            否则使用PowerShell原生cmdlet（如 Get-ChildItem/Remove-Item/Copy-Item）完成对应功能
-        </如果当前是Windows系统>
-			<交互式会话最佳实践（真实环境验证）>
-				- Windows 下直接输入 python 可能解析到 WindowsApps 的 App 执行别名占位（stub），不会真正启动 Python。若环境由 uv 管理，应改用 uv run python 进入虚拟环境（可用 which/where python 排查真实解析路径）。
-				- 进入 REPL 类程序（如 python/node）时，推荐带 -i 强制交互模式，例如 uv run python -i，否则可能停留在启动阶段而不进入交互式提示符。
-				- 因本工具是管道连接（非真实 TTY），REPL 不会显示提示符（如 python 的 >>> ），但命令仍会被正常解析执行、输出也会被捕获；切勿因无提示符而误判为未进入。
-				- 首次启动 REPL（如 uv run python）常有初始化/建环境延迟，务必先等待程序就绪（出现版本或欢迎输出）后再用 ShellInput 发送命令，否则命令可能被程序启动前已排空的 stdin 消耗而丢失。
-				- REPL 的版本/欢迎信息通常打印到 stderr，命令结果打印到 stdout，两者分开展示属正常现象，均应读取确认。
-			</交互式会话最佳实践>
-		# Committing changes with git
-		只有在用户请求时才创建提交。如果不清楚，先问清楚。当用户要求你创建新的 git 提交时，请仔细遵循以下步骤：
-        git安全协议：
-            - 绝不要更新 git 配置
-            - 除非用户明确请求，否则绝不要运行破坏性/不可逆的 git 命令（如 push --force、hard reset 等）
-            - 除非用户明确请求，切勿跳过钩子（--no-verify、--no-gpg-sign 等）
-            - 绝不要强制推送到主主机/主控，若用户请求时警告
-            - 避免git提交——修正。 只有在（1）用户明确请求修改，或（2）从提交前钩子添加编辑（以下补充说明）时，才使用 --amend。
-            - 修改前：务必检查作者身份（git log -1 --format='%an %ae'）
-            - 除非用户明确要求，否则绝不要提交更改。非常重要的是，只有在明确要求时才承诺，否则用户会觉得你太主动了。
-        1. 当所有命令都可能成功时，你可以在一次响应中调用多个工具，并行运行多个 Bash 工具调用以获得最佳性能。并行运行以下bash命令，分别使用Bash工具：
-            - 运行 git 状态命令查看所有未被追踪的文件。
-            - 运行git diff命令，查看将提交的分阶段和非分阶段变更。
-            - 运行 git 日志命令查看最近的提交消息，以便遵循该仓库的提交消息样式。
-        2. 分析所有分阶段的更改（包括之前的和新添加的），并起草提交消息：
-            - 总结变更的性质（例如新功能、现有功能的增强、修复错误、重构、文档等）。确保消息准确反映变更及其目的（例如“添加”表示全新功能，“更新”表示对现有功能的增强，“修正”表示修复错误等）。
-            - 不要提交可能包含秘密的文件（.env、credentials.json 等）。如果用户特别请求提交这些文件，请警告他们
-            - 起草一条简洁（1-2句）的提交信息，重点关注“为什么”而非“什么”
-            - 确保其准确反映变更及其目的
-        3. 当所有命令都可能成功时，你可以在同一响应中调用多个工具，并行运行以下bash命令：
-		- 将相关的未追踪文件添加到备用区域。
-		- 创建提交，邮件结尾为：
-		- 提交完成后运行 git 状态以验证成功。
-		注意：git状态取决于提交完成，所以提交后顺序运行。
-		4. 如果提交失败，原因是提交前的钩子变更，请重试一次。如果成功了但文件被钩子修改，请确认修改是否安全：
-		- 检查作者身份：git log -1 --format='%an %ae'
-		- 检查未推送：git状态显示“您的分支领先”
-		- 如果两者都成立：修改你的提交。否则：创建新提交（切勿修改其他开发者的提交）
-        重要说明：
-		- 除非用户明确要求，否则不要向远程仓库推送
-		- 如果提交内容无更改（即无未追踪文件且无修改），则不要创建空提交
-        # 创建拉取请求
-		通过 Bash 工具使用gh命令处理所有与 GitHub 相关的任务，包括问题处理、拉取请求、检查和发布。如果给了你一个 Github URL，可以用 gh 命令获取所需信息。
-        重要提示：当用户要求你创建拉取请求时，请仔细按照以下步骤操作：
-        1. 你可以在一个响应中调用多个工具，以了解分支自主分支分岔以来的当前状态：
-            - 运行 git status 命令查看所有未被追踪的文件
-            - 运行git diff命令，查看将提交的分阶段和非分阶段更改
-            - 检查当前分支是否跟踪远程分支并与远程节点保持同步，以便知道是否需要推送到远程节点
-            - 运行 git log 命令，然后 'git diff [base-branch]...HEAD“，以理解当前分支的完整提交历史
-		2. 分析所有将包含在拉取请求中的变更，并起草拉取请求摘要
-		3. 当所有命令都可能成功时，你可以在同一响应中调用多个工具，并行运行以下bash命令：
-		- 如有需要，创建新分支
-		- 如有需要，带 -u 标志推送至远程
+		在支持超时的持久 shell 会话中执行命令（如 git、npm、docker）。
+		支持一次性执行（once）与持久交互式会话（interactive，配套 ShellInput/BashOutput/KillShell/ShellSessions）。
+		详细用法、参数说明与运行环境（平台、shell、已安装开发工具）见系统提示。
 		""")
 	public Map<String, Object> bash(
             @ToolParam(description = "he command to execute")
@@ -342,6 +256,11 @@ public class ShellTools {
             return isCommandAvailable(SHELL_PWSH) ? SHELL_PWSH : SHELL_POWERSHELL;
         }
         return SHELL_BASH;
+    }
+
+    /** 获取探测到的 shell 可执行文件名（供环境探测与提示词生成使用）。 */
+    public static String getShellExecutable() {
+        return shellExecutable();
     }
 
     private static String shellExecutable() {

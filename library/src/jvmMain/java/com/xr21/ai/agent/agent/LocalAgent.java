@@ -39,11 +39,11 @@ import com.xr21.ai.agent.interceptors.*;
 import com.xr21.ai.agent.plugins.GroovyPluginLoader;
 import com.xr21.ai.agent.plugins.GroovyPluginRegistry;
 import com.xr21.ai.agent.plugins.PluginContext;
-import com.xr21.ai.agent.tools.*;
-import com.xr21.ai.agent.utils.AcpNotifyHelper;
-import com.xr21.ai.agent.utils.DefaultTokenCounter;
-import com.xr21.ai.agent.utils.Json;
-import com.xr21.ai.agent.utils.ToolsUtil;
+import com.xr21.ai.agent.tools.ConversationCompactionTool;
+import com.xr21.ai.agent.tools.GroovyScriptTool;
+import com.xr21.ai.agent.tools.SleepTool;
+import com.xr21.ai.agent.tools.WebTool;
+import com.xr21.ai.agent.utils.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -233,6 +233,8 @@ public class LocalAgent {
                 log.error("create agent with cwd tmpdir: {} ", cwd);
             }
             WORKSPACE_ROOT = cwd;
+            // 释放 classpath 内置 skills 到工作目录 .agents/skills，使其由 FileSystemSkillRegistry 统一加载
+            SkillResourceReleaser.release(Path.of(WORKSPACE_ROOT, ".agents", "skills"));
             return buildAgent(cwd, mcpServers, runnableConfig, client);
         } catch (Exception e) {
             log.error("Failed to create agent with cwd: {}, mcpServers: {}", cwd, mcpServers != null ? mcpServers.size() : 0, e);
@@ -241,7 +243,7 @@ public class LocalAgent {
     }
 
     private static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers, List<ToolCallback> interceptorTools) {
-        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new SleepTool(), new ConversationCompactionTool()).build();
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(new WebTool(), new SleepTool(), new ConversationCompactionTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
         log.debug("Loaded {} base tools", tools.size());
         // 添加 MCP 工具
@@ -288,8 +290,11 @@ public class LocalAgent {
         String currentMode = runnableConfig.context().get("mode") instanceof String mode ? mode : "accept_edits";
         boolean readOnly = "plan".equalsIgnoreCase(currentMode);
         var filesystemInterceptor = FilesystemInterceptor.builder().withWorkspaceRoot(WORKSPACE_ROOT).readOnly(readOnly).withDefaultSecurity().build();
-        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(ShellTools.builder().build(), new WebTool(), new SleepTool(), new ConversationCompactionTool()).build();
+        var shellInterceptor = ShellInterceptor.builder().build();
+        var toolCallbackProvider = MethodToolCallbackProvider.builder().toolObjects(new WebTool(), new SleepTool(), new ConversationCompactionTool()).build();
         List<ToolCallback> tools = new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
+        // Shell 工具（Bash/BashOutput/ShellInput/ShellSessions/KillShell）经 ShellInterceptor 注入，此处并入以作为 Worker 默认工具
+        tools.addAll(shellInterceptor.getTools());
         // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
         GroovyScriptTool groovyScriptTool = new GroovyScriptTool(tools);
         ToolCallback groovyCallback = MethodToolCallbackProvider.builder().toolObjects(groovyScriptTool).build().getToolCallbacks()[0];
@@ -324,6 +329,7 @@ public class LocalAgent {
         interceptors.add(largeResultEvictionInterceptor);
         interceptors.add(toolRetryInterceptor);
         interceptors.add(filesystemInterceptor);
+        interceptors.add(shellInterceptor);
         interceptors.add(workerInterceptor);
         interceptors.add(retryInterceptor);
         interceptors.add(new ToolErrorInterceptor());
@@ -332,9 +338,9 @@ public class LocalAgent {
         interceptors.add(new PluginDynamicToolsInterceptor());
         log.info("Agent mode: {}, filesystem readOnly: {}", currentMode, readOnly);
         AcpNotifyHelper.sendThoughtChunk(client, "Use Mode : " + currentMode);
-        for (Interceptor interceptor : interceptors) {
-            AcpNotifyHelper.sendThoughtChunk(client, "Use Interceptor : " + interceptor.getName());
-        }
+//        for (Interceptor interceptor : interceptors) {
+//            AcpNotifyHelper.sendThoughtChunk(client, "Use Interceptor : " + interceptor.getName());
+//        }
         return interceptors;
     }
 
@@ -371,6 +377,8 @@ public class LocalAgent {
                 interceptorTools.addAll(todo.getTools());
             } else if (interceptor instanceof WorkerInterceptor worker) {
                 interceptorTools.addAll(worker.getTools());
+            } else if (interceptor instanceof ShellInterceptor shell) {
+                interceptorTools.addAll(shell.getTools());
             }
         }
         List<Hook> hooks = getHooks(runnableConfig, chatModel);

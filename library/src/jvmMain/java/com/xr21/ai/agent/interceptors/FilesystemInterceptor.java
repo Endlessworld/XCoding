@@ -52,7 +52,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
         this.backend = builder.backend;
         this.allowedPrefixes = builder.allowedPrefixes != null ? new ArrayList<>(builder.allowedPrefixes) : Collections.emptyList();
 
-        this.systemPrompt = builder.systemPrompt != null ? builder.systemPrompt : createDefaultSystemPrompt();
+        this.systemPrompt = builder.systemPrompt != null ? builder.systemPrompt : createDefaultSystemPrompt(readOnly);
         this.customToolDescriptions = builder.customToolDescriptions != null ? new HashMap<>(builder.customToolDescriptions) : new HashMap<>();
 
         List<ToolCallback> toolList = createTools();
@@ -124,7 +124,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
         return sanitized;
     }
 
-    private String createDefaultSystemPrompt() {
+    private String createDefaultSystemPrompt(boolean readOnly) {
         return """
                  ## 文件系统访问工具
                     你可以访问一个文件系统，可以通过这些工具进行交互。
@@ -152,7 +152,7 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         2. 对于大文件使用带有偏移/限制的“read_file”
                         3. 在重大编辑前创建备份
                         4. 使用描述性路径，避免歧义名称
-                        6. 创建文件时写入的文件内容务必小于500字符，未完成的部分使用 smart_edit 的 insert_at_line（每次2000字符以内） 继续添加 
+                        6. 创建文件时写入的文件内容务必小于3000字符，未完成的部分使用 smart_edit 的 insert_at_line（每次2000字符以内） 继续添加
                         7. 通过并行工具调用write_file实现同时写入多个文件加快执行效率
                         8. 编辑或创建文件时使用当前系统的默认换行符（Windows默认使用CRLF换行符，Unix/Linux 使用LF换行符,旧版 Mac OS 使用CR换行符）
                     ### 路径验证：
@@ -160,8 +160,8 @@ public class FilesystemInterceptor extends ModelInterceptor {
                         - 路径穿越尝试被阻断
                         - 危险系统路径受限
                         - 路径会自动归一化
-                    记住：你正在${readonly？“只读”：“读写”} 模式。
-                """;
+                    记住：你正在 %s 模式。
+                """.formatted(readOnly ? "只读" : "读写");
     }
 
     private List<ToolCallback> createTools() {
