@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
+import com.xr21.ai.agent.utils.Prompts;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
@@ -63,19 +64,7 @@ public class GrepTool {
     private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
 
     // @formatter:off
-    @Tool(name = "grep", description = """
-        Search for a pattern in files.
-
-        Usage:
-        - The pattern parameter is the text to search for (literal string, not regex)
-        - The path parameter filters which directory to search in
-        - The glob parameter accepts a glob pattern to filter which files to search
-        - Real-time progress and matches are pushed via ACP protocol during search
-
-        Examples:
-        - Search all files: `grep(pattern="TODO")`
-        - The search is case-sensitive by default.
-        """)
+    @Tool(name = "grep", description = Prompts.TOOL_GREP_DESCRIPTION)
     public Map<String, Object> grep(
             @JsonProperty(value = "pattern", required = true)
             @JsonPropertyDescription("The text pattern to search for")

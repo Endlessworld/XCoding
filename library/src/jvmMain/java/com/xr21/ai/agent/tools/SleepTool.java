@@ -18,6 +18,7 @@ package com.xr21.ai.agent.tools;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.utils.Prompts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 
@@ -34,15 +35,7 @@ public class SleepTool {
     private static final int MAX_SLEEP_SECONDS = 600;
 
     // @formatter:off
-    @Tool(name = "Sleep", description = """
-            休眠指定秒数后唤醒，使智能体具备休眠/等待能力。
-            在智能体执行长耗时任务时（例如项目编译、依赖下载、构建打包等）可以自主休眠等待进度，
-            从而减少反复调用工具读取输出的循环，让任务执行更高效。
-            Usage:
-                - seconds 参数为休眠秒数（必填，正整数）
-                - 最长休眠 600 秒（10 分钟）
-                - 调用后智能体会在指定时间内暂停执行，随后自动唤醒继续
-            """)
+    @Tool(name = "Sleep", description = Prompts.TOOL_SLEEP_DESCRIPTION)
     public Map<String, Object> sleep(
             @JsonProperty(value = "seconds", required = true)
             @JsonPropertyDescription("The number of seconds to sleep. Must be a positive integer, maximum 600 seconds (10 minutes) default 30s")

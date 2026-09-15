@@ -17,6 +17,7 @@ package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.utils.Prompts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -135,11 +136,7 @@ public class ContextCacheTool {
     }
 
     // @formatter:off
-    @Tool(name = "contextCacheTool", description = """
-        指针数据读取器，上下文编辑器会将你超长的工具调用参数或工具调用执行结果转换成指针,
-        指针地址格式：$ref+arg:工具调用id（参数引用）或 $ref+resp:工具调用id（响应引用），
-        你可以在需要的时候重新根据指针地址重新获取具体内容
-        """)
+    @Tool(name = "contextCacheTool", description = Prompts.TOOL_CONTEXT_CACHE_DESCRIPTION)
     public static Map<String, Object> retrieveRef(
             @JsonProperty(value = "refs", required = true)
             @JsonPropertyDescription("指针地址列表，指针格式：$ref+arg:工具调用id 或 $ref+resp:工具调用id，根据指针地址重新获取具体内容")

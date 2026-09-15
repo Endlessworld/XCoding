@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.utils.Prompts;
 import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
@@ -104,13 +105,9 @@ public class ShellTools {
     }
 
     // @formatter:off
-	@Tool(name = "Bash", description = """
-		在支持超时的持久 shell 会话中执行命令（如 git、npm、docker）。
-		支持一次性执行（once）与持久交互式会话（interactive，配套 ShellInput/BashOutput/KillShell/ShellSessions）。
-		详细用法、参数说明与运行环境（平台、shell、已安装开发工具）见系统提示。
-		""")
+	@Tool(name = "Bash", description = Prompts.TOOL_SHELL_BASH_DESCRIPTION)
 	public Map<String, Object> bash(
-            @ToolParam(description = "he command to execute")
+            @ToolParam(description = Prompts.TOOL_PARAM_SHELL_COMMAND_DESCRIPTION)
 			@JsonProperty(value = "command", required = true)
 					@JsonPropertyDescription("The command to execute")
 					String command,
@@ -120,7 +117,7 @@ public class ShellTools {
 			@JsonProperty(value = "mode")
 					@JsonPropertyDescription("Execution mode: 'once' (default) runs a single command in a temporary shell and returns when it finishes or times out. 'interactive' starts a persistent background shell that stays alive so you can send multiple commands via ShellInput and keep state (env vars, working directory) across commands. Use 'interactive' when you need to run several sequential commands in the same shell.")
 					String mode,
-            @ToolParam(description = "Clear, concise description of what this command does in 5-10 words, in active voice. Examples:\nInput: ls\nOutput: List files in current directory\n\nInput: git status\nOutput: Show working tree status\n\nInput: npm install\nOutput: Install package dependencies\n\nInput: mkdir foo\nOutput: Create directory 'foo'")
+            @ToolParam(description = Prompts.TOOL_PARAM_SHELL_TITLE_DESCRIPTION)
 			        @JsonProperty(value = "title")
                     String title,
 		    @JsonProperty(value = "cwd")
@@ -451,15 +448,7 @@ public class ShellTools {
     }
 
     // @formatter:off
-	@Tool(name = "BashOutput", description = """
-		- Retrieves output from a running or completed interactive bash shell
-		- Takes a shell_id parameter identifying the shell
-		- Always returns only new output since the last check
-		- Returns stdout and stderr output along with shell status
-		- Supports optional regex filtering to show only lines matching a pattern
-		- Use this tool to monitor or check the output of a shell session
-		- Shell IDs can be found using the ShellSessions tool
-		""")
+	@Tool(name = "BashOutput", description = Prompts.TOOL_SHELL_BASH_OUTPUT_DESCRIPTION)
 	public Map<String, Object> bashOutput(
 			@JsonProperty(value = "bash_id", required = true)
 					@JsonPropertyDescription("The ID of the shell to retrieve output from")
@@ -520,13 +509,7 @@ public class ShellTools {
     }
 
     // @formatter:off
-	@Tool(name = "KillShell", description = """
-		- Kills a running bash shell by its ID
-		- Takes a shell_id parameter identifying the shell to kill
-		- Returns a success or failure status
-		- Use this tool to terminate a long-running shell session
-		- Shell IDs can be found using the ShellSessions tool
-		""")
+	@Tool(name = "KillShell", description = Prompts.TOOL_SHELL_KILL_DESCRIPTION)
 	public Map<String, Object> killShell(
 			@JsonProperty(value = "bash_id", required = true)
 					@JsonPropertyDescription("The ID of the shell to kill")
@@ -557,14 +540,7 @@ public class ShellTools {
     }
 
     // @formatter:off
-	@Tool(name = "ShellInput", description = """
-		- Sends input (commands) to an interactive shell session
-		- Takes a shell_id parameter identifying the shell to send input to
-		- Takes an input parameter containing the command to send
-		- Use this tool to interact with a running shell session
-		- After sending input, use BashOutput to read the response
-		- Shell IDs can be found using the ShellSessions tool
-		""")
+	@Tool(name = "ShellInput", description = Prompts.TOOL_SHELL_INPUT_DESCRIPTION)
 	public Map<String, Object> shellInput(
 			@JsonProperty(value = "shell_id", required = true)
 					@JsonPropertyDescription("The ID of the shell session to send input to")
@@ -601,11 +577,7 @@ public class ShellTools {
     }
 
     // @formatter:off
-	@Tool(name = "ShellSessions", description = """
-		- Lists all active shell sessions
-		- Returns information about each shell including ID, status, and command
-		- Use this to find shell IDs for BashOutput, KillShell, or ShellInput operations
-		""")
+	@Tool(name = "ShellSessions", description = Prompts.TOOL_SHELL_SESSIONS_DESCRIPTION)
 	public Map<String, Object> shellSessions() { // @formatter:on
 
         cleanupIdleSessions();

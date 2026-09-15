@@ -17,6 +17,7 @@ package com.xr21.ai.agent.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.utils.Prompts;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -47,7 +48,7 @@ public class WebTool {
     private static final Logger log = LoggerFactory.getLogger(WebTool.class);
 
     // @formatter:off
-    @Tool(name = "web_search", description = "使用Bing搜索引擎检索网络信息,该工具返回摘要和网址 你需要搭配web_fetch进一步获取网页详情")
+    @Tool(name = "web_search", description = Prompts.TOOL_WEB_SEARCH_DESCRIPTION)
     public Map<String, Object> webSearch(
             @JsonProperty(value = "queryList", required = true)
             @JsonPropertyDescription("Search query List (required) Up to 5 queries")
@@ -166,16 +167,7 @@ public class WebTool {
 
 
     // @formatter:off
-    @Tool(name = "web_fetch", description = """
-        请求指定网页并返回清洗之后的网页 innerText 内容（最大 1000 字符）
-        功能：抓取指定URL的网页内容，去除HTML标签、样式、脚本等，提取纯文本内容。
-
-        使用场景：
-        1. 获取实时天气、新闻等动态信息
-        2. 查看网页正文内容
-        3. 抓取 API 文档或帮助页面
-        4. 获取搜索结果详情页内容
-        """)
+    @Tool(name = "web_fetch", description = Prompts.TOOL_WEB_FETCH_DESCRIPTION)
     public Map<String, Object> fetchWeb(
             @JsonProperty(value = "url", required = true)
             @JsonPropertyDescription("要抓取的网页 URL（必须是以 http:// 或 https:// 开头的完整 URL）")

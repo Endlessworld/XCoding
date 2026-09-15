@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.xr21.ai.agent.agent.LocalAgent;
 import com.xr21.ai.agent.utils.Json;
+import com.xr21.ai.agent.utils.Prompts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -53,13 +54,7 @@ public class MsgTool implements BiFunction<MsgTool.MsgRequest, ToolContext, Stri
      * 创建 msg 工具的 ToolCallback，供注入到 worker 的工具列表中。
      */
     public static ToolCallback createMsgToolCallback() {
-        return FunctionToolCallback.builder("msg", new MsgTool()).description("""
-                将 worker 的执行成果回传给主智能体。当 worker 完成任务时，由你自行决定如何上报最终结果：
-                - result_type 可选：text(默认)/boolean/json/file，决定回传结果的格式；
-                - 若决定将成果写入文件，请指定 file_name（文件名或路径）或将 result_type 设为 file，工具会写入工作目录下文件并只返回文件路径；
-                - 若内容过大（超过阈值），工具会自动写入文件并只返回文件路径。
-                回传结果以 JSON 形式返回：{success, worker_type, result_type, content 或 filePath}，主智能体可据此进行分支或并行编排。
-                """).inputType(MsgRequest.class).toolMetadata(ToolMetadata.builder().returnDirect(true).build()).build();
+        return FunctionToolCallback.builder("msg", new MsgTool()).description(Prompts.TOOL_MSG_DESCRIPTION).inputType(MsgRequest.class).toolMetadata(ToolMetadata.builder().returnDirect(true).build()).build();
     }
 
     @Override

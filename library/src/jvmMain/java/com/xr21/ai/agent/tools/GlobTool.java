@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
+import com.xr21.ai.agent.utils.Prompts;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.ai.chat.model.ToolContext;
@@ -56,20 +57,7 @@ public class GlobTool {
     );
 
     // @formatter:off
-    @Tool(name = "glob", description = """
-        Find files matching glob patterns.
-
-        Usage:
-        - Supports standard glob patterns: `*` (any characters), `**` (any directories), `?` (single character)
-        - Returns a list of absolute file paths that match the pattern (maximum 25 results)
-        - Real-time progress is pushed via ACP protocol during search
-        - Supports multiple patterns — files matching any pattern are included
-
-        Examples:
-        - `**/*.java` - Find all Java files
-        - `*.txt` - Find all text files in root
-        - `/src/**/*.xml` - Find all XML files under /src
-        """)
+    @Tool(name = "glob", description = Prompts.TOOL_GLOB_DESCRIPTION)
     public Map<String, Object> glob(
             @JsonProperty(value = "patterns", required = true)
             @JsonPropertyDescription("The glob patterns to match files")

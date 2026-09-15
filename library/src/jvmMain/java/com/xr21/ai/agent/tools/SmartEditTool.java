@@ -18,6 +18,7 @@ package com.xr21.ai.agent.tools;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.utils.Prompts;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -52,39 +53,7 @@ public class SmartEditTool {
     private static final int MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
     // @formatter:off
-    @Tool(name = "smart_edit", description = """
-        高效智能文件编辑工具。支持两种编辑策略，一次调用可执行多个编辑操作。
-        【两种编辑模式】
-        =================
-
-        2. search_replace — 按唯一搜索文本替换（推荐用于局部精确修改）
-            - filePath: 绝对路径
-            - searchText: 要查找的文本（必须在文件中唯一出现，否则会报错并返回所有匹配位置）
-            - replaceText: 替换后的新文本
-            - 特点：searchText 只需足够具体确保唯一性，不需要 surrounding context
-            - 适合：修改变量名、方法调用、单行修改等
-
-        3. insert_at_line — 在指定行插入（推荐用于新增代码）
-            - filePath: 绝对路径
-            - line: 目标行号（1-based）
-            - newContent: 要插入的内容
-            - position: "before" 或 "after"（默认 before，即在指定行前插入）
-            - 适合：添加 import、新增方法、在方法内添加语句等，配合write_file 进行新文件编写
-
-        【批量编辑】
-        ============
-        - 可传入 edits 数组，一次执行多个编辑操作
-        - 编辑按顺序执行，自动处理行号偏移
-        - 如果某个编辑失败，后续编辑不会执行，返回已成功的编辑结果
-
-        【Usage:】
-        ============
-        - 小范围精确修改使用 search_replace（根据不含前导空白的唯一文本
-        - 新增内容使用 insert_at_line
-        - 编辑前先使用 read_file 查看文件内容（带行号）
-        - 批量编辑同一文件时，按从后到前的顺序排列可避免行号偏移问题
-        - 需要注意该工具参数大小，一次调用参数的总字符长度不可超过6000字符
-        """)
+    @Tool(name = "smart_edit", description = Prompts.TOOL_SMART_EDIT_DESCRIPTION)
     public Map<String, Object> smartEdit(
             @JsonProperty(value = "edits", required = true)
             @JsonPropertyDescription("List of edit operations to perform in order. Each edit must specify a mode.")

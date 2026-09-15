@@ -18,6 +18,7 @@ package com.xr21.ai.agent.tools;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.utils.Prompts;
 import org.springframework.ai.tool.annotation.Tool;
 
 import java.io.IOException;
@@ -38,18 +39,8 @@ public class WriteFileTool {
     private static final int MAX_CONTENT_LENGTH = 500;
     private static final String WORKSPACE_ROOT_NORMALIZED = Paths.get(WORKSPACE_ROOT).normalize().toString();
 
-    private static final String DESCRIPTION = """
-            创建一个简短的纯文本类型新文件,写入到当前文件系统。
-            Usage:
-                - file_path参数必须是绝对路径，且必须在workspace范围内
-                - 如果文件包含多级目录将自动创建所有父级目录,所以无需创建父级目录可直接写入文件
-                - 内容参数必须是字符串
-                - 文件内容严格限制500字符以内，未完成的部分使用smart_edit工具的insert_at_line模式继续添加
-                - workspaceOnly参数控制是否仅允许写入工作目录内的文件，默认true。设为false可写入工作目录之外的文件
-            """;
-
     // @formatter:off
-    @Tool(name = "write_file", description = DESCRIPTION)
+    @Tool(name = "write_file", description = Prompts.TOOL_WRITE_FILE_DESCRIPTION)
     public Map<String, Object> writeFile(
             @JsonProperty(value = "filePath", required = true)
             @JsonPropertyDescription("The absolute path of the file to create")

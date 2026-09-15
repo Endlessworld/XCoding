@@ -24,6 +24,7 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.fasterxml.jackson.annotation.JsonClassDescription;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.xr21.ai.agent.utils.Prompts;
 import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
@@ -49,35 +50,7 @@ public class AcpWriteTodosTool {
     public AcpWriteTodosTool() {
     }
 
-    @Tool(name = "write_todos", description = """
-            Use this tool to create and manage a structured task list using ACP protocol.
-            This sends real-time Plan updates to the client showing your progress.
-            
-            When to use:
-            1. Complex multi-step tasks (3+ steps)
-            2. Non-trivial tasks requiring planning
-            3. User explicitly requests todo list
-            4. User provides multiple tasks
-            5. Plan may need revisions based on results
-            
-            How to use:
-            1. Mark tasks as IN_PROGRESS before starting
-            2. Mark as COMPLETED immediately after finishing
-            3. Update tasks as needed (add/remove/change)
-            4. Each update sends ACP Plan update
-            
-            Task States (Must be uppercase):
-            - PENDING: Not started
-            - IN_PROGRESS: Currently working
-            - COMPLETED: Finished
-            
-            Task Priorities (Must be uppercase):
-            - HIGH: Critical
-            - MEDIUM: Important
-            - LOW: Nice-to-have
-            
-            Important: Don't use for simple tasks (<3 steps). Update status immediately.
-            """)
+    @Tool(name = "write_todos", description = Prompts.TOOL_WRITE_TODOS_DESCRIPTION)
     public Map<String, Object> writeTodos(
             @JsonProperty(value = "entries", required = true)
             @JsonPropertyDescription("List of todo entries with content, status and priority")

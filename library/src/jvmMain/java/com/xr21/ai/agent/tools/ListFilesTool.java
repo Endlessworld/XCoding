@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
+import com.xr21.ai.agent.utils.Prompts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
@@ -48,17 +49,7 @@ import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 public class ListFilesTool {
 
     // @formatter:off
-    @Tool(name = "ls", description = """
-            Lists all files in the filesystem, filtering by directory and .gitignore rules.
-            
-            Usage:
-            - The path parameter must be an absolute path, not a relative path
-            - The list_files tool will return a list of all files in the specified directory.
-            - Files and directories listed in .gitignore will be excluded.
-            - This is very useful for exploring the file system and finding the right file to read or edit.
-            - You should almost ALWAYS use this tool before using the Read or Edit tools.
-            - workspaceOnly parameter controls whether to only list files within the workspace directory, default is true.
-            """)
+    @Tool(name = "ls", description = Prompts.TOOL_LS_DESCRIPTION)
     public Map<String, Object> listDirectory(@JsonProperty(value = "directory",required = true)
                                          @JsonPropertyDescription("The directory path to list files from default: (current working directory absolute path)")
                                              String directory,

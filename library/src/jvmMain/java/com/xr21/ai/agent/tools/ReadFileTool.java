@@ -19,6 +19,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
 import com.xr21.ai.agent.utils.GitignoreUtil;
+import com.xr21.ai.agent.utils.Prompts;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -44,39 +45,7 @@ import static com.xr21.ai.agent.agent.LocalAgent.WORKSPACE_ROOT;
 public class ReadFileTool {
 
     // @formatter:off
-    @Tool(name = "read_file", description = """
-        【文件读取工具】
-        功能：从文件系统读取文件内容或递归读取目录下所有文件。
-
-        核心能力：
-        1. 批量读取：支持一次传入多个文件/目录路径，提升执行效率
-        2. 路径处理：以"/"开头的路径会自动拼接WORKSPACE_ROOT前缀
-        3. 目录递归：自动遍历目录及其所有子目录，跳过.gitignore匹配的文件
-        4. 分页读取：通过offset和limit参数控制读取范围，默认读取前500行
-        5. 行号显示：每行带6位行号
-        6. 超长截断：单行超过2000字符自动截断，避免输出爆炸
-        7. 容错处理：路径不存在、权限不足、空文件等场景均有友好提示
-
-        你可以使用这个工具直接访问任何文件或目录、且一次性可以读取多个文件或目录。
-        假设这个工具能够读取机器上的所有文件。如果用户提供了文件/目录路径，则假设该路径有效。
-        读取不存在的文件/目录是可以的;将返回错误。
-
-        Usage
-        参数是个list,支持同时访问多个文件或目录 增加执行效率 filePath必须是绝对路径，而非相对路径
-        Param Example: [{"filePath": "filePath1","offset":50,"limit":30, "workspaceOnly": true},{"filePath": "filePath2","offset":80,"limit":30, "workspaceOnly": true}]
-            - 你应该尽量在一次调用中批量读取多个可能有用的文件或目录。
-            - 对于目录：
-                - 会递归读取目录下所有子目录和文件
-                - 每个文件的内容会单独显示，并包含完整路径
-                - 空目录会显示为"Directory is empty"
-            - 对于文件：
-                - 默认从文件开头开始最多读取100行
-                - 使用offset和limit参数进行分页读取
-                - 任何超过2000字符的行将被截断
-                - 结果采用cat -n格式，行号从1开始
-            - 如果读取了存在但内容为空的文件，会收到"File is empty"提示
-            - workspaceOnly参数控制是否仅允许读取工作目录内的文件，默认为true
-        """)
+    @Tool(name = "read_file", description = Prompts.TOOL_READ_FILE_DESCRIPTION)
     public Map<String, Object> readFile(List<FilesReader> filesReaders) {
         // @formatter:on
         // 参数校验：路径列表不能为空

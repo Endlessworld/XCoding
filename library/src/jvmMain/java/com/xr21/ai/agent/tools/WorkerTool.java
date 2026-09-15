@@ -26,6 +26,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.AgentOutput;
 import com.xr21.ai.agent.utils.AcpNotifyHelper;
+import com.xr21.ai.agent.utils.Prompts;
 import com.xr21.ai.agent.utils.SinksUtil;
 import com.xr21.ai.agent.utils.SuspendKt;
 import lombok.extern.slf4j.Slf4j;
@@ -163,10 +164,7 @@ public class WorkerTool implements BiFunction<WorkerTool.WorkerRequest, ToolCont
     public static class WorkerRequest {
 
         @JsonProperty(required = true, value = "task_id")
-        @JsonPropertyDescription("""
-                此工作程序调用的唯一任务ID，示例：task-001
-                用于在多个工作程序并发运行时，将此工作程序的实时进度路由到其自己的ACP SessionUpdate
-                """)
+        @JsonPropertyDescription(Prompts.TOOL_WORKER_PARAM_TASK_ID_DESCRIPTION)
         public String taskId;
 
         @JsonProperty(required = true)

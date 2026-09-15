@@ -15,6 +15,8 @@
  */
 package com.xr21.ai.agent.config;
 
+import com.agentclientprotocol.model.SessionId;
+import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.xr21.ai.agent.model.Config.ModelConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -26,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static com.xr21.ai.agent.acp.AgiAgentKt.SESSION_ID_CONTEXT_KEY;
 
 /**
  * AI 模型工厂，负责从 JSON 配置创建 ChatModel 实例
@@ -178,5 +182,33 @@ public class AiModels {
         chatModelCache.remove(modelName);
         configFingerprints.remove(modelName);
         log.info("ChatModel 缓存已失效: {}", modelName);
+    }
+
+    /**
+     * 根据运行配置解析出智能体使用的 ChatModel。
+     * <p>
+     * 优先使用会话上下文中指定的模型，否则回退到默认模型。
+     *
+     * @param runnableConfig 运行配置
+     * @return 解析得到的模型；当上下文中缺少会话 ID 时返回 {@code null}
+     */
+    public static ChatModel resolveChatModel(RunnableConfig runnableConfig) {
+        ChatModel chatModel = null;
+        if (runnableConfig.context().get(SESSION_ID_CONTEXT_KEY) instanceof SessionId sessionId) {
+            if (runnableConfig.context().get("model") instanceof String modelId) {
+                try {
+                    chatModel = createChatModelFromJson(modelId, sessionId.getValue());
+                    log.info("Using model from JSON config: {}", modelId);
+                } catch (Exception e) {
+                    log.error("Failed to create chat model from config: {}", modelId, e);
+                    throw new RuntimeException("Failed to initialize chat model", e);
+                }
+            } else {
+                String defaultModelId = defaultModel();
+                chatModel = createChatModelFromJson(defaultModelId, sessionId.getValue());
+                log.info("No specific model configuration found, using default model: {}", defaultModelId);
+            }
+        }
+        return chatModel;
     }
 }

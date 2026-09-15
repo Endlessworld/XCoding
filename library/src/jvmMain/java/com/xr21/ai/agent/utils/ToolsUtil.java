@@ -16,10 +16,20 @@
 package com.xr21.ai.agent.utils;
 
 import com.agentclientprotocol.model.*;
+import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xr21.ai.agent.bridge.BridgeKt;
 import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
+import com.xr21.ai.agent.interceptors.FilesystemInterceptor;
+import com.xr21.ai.agent.interceptors.ShellInterceptor;
+import com.xr21.ai.agent.interceptors.WorkerInterceptor;
+import com.xr21.ai.agent.plugins.GroovyPluginRegistry;
+import com.xr21.ai.agent.tools.ContextCompactTool;
+import com.xr21.ai.agent.tools.GroovyScriptTool;
+import com.xr21.ai.agent.tools.SleepTool;
+import com.xr21.ai.agent.tools.WebTool;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
@@ -30,7 +40,9 @@ import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.mcp.McpToolUtils;
+import org.springframework.ai.tool.StaticToolCallbackProvider;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import reactor.util.annotation.Nullable;
@@ -240,6 +252,81 @@ public class ToolsUtil {
         }
 
         return result;
+    }
+
+    /**
+     * 构建内置基础工具（WebTool / SleepTool / ContextCompactTool）。
+     *
+     * @return 可变的工具列表
+     */
+    public static List<ToolCallback> baseTools() {
+        var toolCallbackProvider = MethodToolCallbackProvider.builder()
+                .toolObjects(new WebTool(), new SleepTool(), new ContextCompactTool())
+                .build();
+        return new ArrayList<>(List.of(toolCallbackProvider.getToolCallbacks()));
+    }
+
+    /**
+     * 将指定工具集合包装为 Groovy 脚本工具，使脚本内可编排调用这些工具。
+     *
+     * @param boundTools 脚本内可调用的工具集合
+     * @return Groovy 脚本工具回调
+     */
+    public static ToolCallback groovyScriptTool(List<ToolCallback> boundTools) {
+        GroovyScriptTool groovyScriptTool = new GroovyScriptTool(boundTools);
+        return MethodToolCallbackProvider.builder().toolObjects(groovyScriptTool).build().getToolCallbacks()[0];
+    }
+
+    /**
+     * 构建智能体最终暴露的静态工具提供者。
+     *
+     * @param mcpServers       MCP 服务器列表（可空）
+     * @param interceptorTools 拦截器提供的宿主工具（可空）
+     * @return 静态工具提供者
+     */
+    public static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers, List<ToolCallback> interceptorTools) {
+        List<ToolCallback> tools = baseTools();
+        log.debug("Loaded {} base tools", tools.size());
+        // 添加 MCP 工具
+        if (!CollectionUtils.isEmpty(mcpServers)) {
+            List<ToolCallback> mcpTools = getMcpTools(mcpServers);
+            tools.addAll(mcpTools);
+            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
+        }
+        // 将拦截器提供的文件系统工具（ls/read_file/write_file 等）与 write_todos 工具一并暴露给 Groovy 脚本绑定
+        if (interceptorTools != null && !interceptorTools.isEmpty()) {
+            tools.addAll(interceptorTools);
+            log.info("Added {} interceptor tools to Groovy script bindings", interceptorTools.size());
+        }
+        // 插件工具并入（loader 已在 buildAgent 中以完整 PluginContext 触发；此处幂等并入已注册插件工具）
+        List<ToolCallback> pluginTools = GroovyPluginRegistry.get().toolCallbacks();
+        tools.addAll(pluginTools);
+        log.info("Loaded {} plugin tools", pluginTools.size());
+        // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
+        tools.add(groovyScriptTool(tools));
+        return new StaticToolCallbackProvider(tools);
+    }
+
+    /**
+     * 收集拦截器提供的宿主工具（文件系统 / todos / worker / shell），供 Groovy 脚本绑定与插件使用。
+     *
+     * @param interceptors 拦截器列表
+     * @return 宿主工具列表
+     */
+    public static List<ToolCallback> collectHostTools(List<Interceptor> interceptors) {
+        List<ToolCallback> interceptorTools = new ArrayList<>();
+        for (Interceptor interceptor : interceptors) {
+            if (interceptor instanceof FilesystemInterceptor fs) {
+                interceptorTools.addAll(fs.getTools());
+            } else if (interceptor instanceof AcpTodoListInterceptor todo) {
+                interceptorTools.addAll(todo.getTools());
+            } else if (interceptor instanceof WorkerInterceptor worker) {
+                interceptorTools.addAll(worker.getTools());
+            } else if (interceptor instanceof ShellInterceptor shell) {
+                interceptorTools.addAll(shell.getTools());
+            }
+        }
+        return interceptorTools;
     }
 
     /**

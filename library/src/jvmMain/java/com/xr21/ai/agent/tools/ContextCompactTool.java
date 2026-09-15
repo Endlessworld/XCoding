@@ -21,6 +21,7 @@ import com.alibaba.cloud.ai.graph.state.ReplaceAllWith;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.xr21.ai.agent.entity.ToolResult;
+import com.xr21.ai.agent.utils.Prompts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -48,30 +49,14 @@ import java.util.*;
  * @author Endless
  */
 @Slf4j
-public class ConversationCompactionTool {
+public class ContextCompactTool {
 
-    private static final String TOOL_NAME = "compact_conversation";
+    private static final String TOOL_NAME = "context_compact";
     private static final int DEFAULT_KEEP_LAST = 3;
     private static final int MAX_KEEP_LAST = 20;
 
     // @formatter:off
-    @Tool(name = TOOL_NAME, description = """
-            会话压缩/回退工具。当你判断当前上下文过大（token 或消息数超过阈值）、
-            或者你进入了错误的分支、或者你探索了某条解决问题的路径但无法解决时，
-            可调用本工具回退到某个决策分叉点，并主动丢弃/压缩掉此前的一批消息以节省上下文。
-
-            Usage:
-                - summary（必填）：对被压缩/丢弃掉的这段消息的摘要，将作为上下文保留下来，
-                  使你在回退后仍不丢失关键信息（探索结论、失败原因、已确认事实、关键标识符等）。
-                - keep_last（可选，默认 3）：回退后保留的最近消息条数（不含 system 前缀）。
-                - checkpoint（可选）：对本决策分叉点的简要描述，说明当前正在放弃的分支。
-
-            效果：
-                - 本工具调用记录与返回结果会作为正常对话记录保留，不会消失。
-                - 从下一个模型调用起，被压缩掉的历史消息将被截断，仅保留固定前缀（含系统提示词）
-                  + 最近的 keep_last 条消息，从而显著节省 token。
-                - 这样你可以放心地探索多种解决路径：失败的路径被压缩为摘要保留，再继续尝试新路径。
-            """)
+    @Tool(name = TOOL_NAME, description = Prompts.TOOL_CONTEXT_COMPACT_DESCRIPTION)
     public Map<String, Object> compactConversation(
             @JsonProperty(value = "summary", required = true)
             @JsonPropertyDescription("对被压缩/丢弃掉的这段消息的摘要，回退后作为上下文保留，需保留关键信息（结论、失败原因、已确认事实、关键标识符、路径等）")
@@ -101,7 +86,6 @@ public class ConversationCompactionTool {
                     .error("无法获取工作流状态，压缩指令未生效（当前运行环境不支持）")
                     .build();
         }
-
         @SuppressWarnings("unchecked")
         List<Message> messages = state.value("messages", List.class).orElse(List.of());
         if (messages.isEmpty()) {
