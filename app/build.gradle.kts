@@ -323,6 +323,12 @@ tasks.named("nativeCompile") {
     dependsOn("generateInitAtRunTime")
     doFirst {
         println("Starting native compilation...")
+        // 诊断输出：确认懒加载 args 已就绪（CI 上若为 0，说明参数链路断了）
+        val argsFile = layout.buildDirectory.file("init-at-run-time.args").get().asFile
+        val initCount = if (argsFile.exists()) {
+            argsFile.readLines().count { it.startsWith("--initialize-at-run-time=") }
+        } else 0
+        println("init-at-run-time.args exists=${argsFile.exists()}, entries=${initCount}")
     }
 }
 

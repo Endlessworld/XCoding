@@ -17,7 +17,9 @@ on:
         default: false
 
 env:
-  GRAALVM_VERSION: '21'
+  # 与本地一致：GraalVM Community 25.0.2（JDK 25）。勿改回 21：统一格式 reachability-metadata.json
+  # 在 GraalVM for JDK 21(23.1.2) 的 native-image 上不会被读取，只有旧的 *-config.json 生效。
+  GRAALVM_VERSION: '25.0.2'
   JAVA_VERSION: '21'
 
 jobs:
@@ -75,11 +77,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
+    - name: Set up JDK 21 (Gradle toolchain / build JVM)
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+
     - name: Set up GraalVM
       uses: graalvm/setup-graalvm@v1
       with:
         version: ${{ env.GRAALVM_VERSION }}
         distribution: 'graalvm-community'
+        # native-image 自 JDK 21 起随发行版内置（gu 已移除），不要再用 components 参数
+        set-java-home: 'false'   # 保留 JAVA_HOME=JDK21 给 Gradle toolchain，native-image 由 GRAALVM_HOME 提供
         github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Verify GraalVM installation
