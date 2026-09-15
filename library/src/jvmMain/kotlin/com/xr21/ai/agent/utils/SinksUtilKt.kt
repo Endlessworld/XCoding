@@ -42,12 +42,9 @@ object SinksUtil {
                 // 排除携带工具调用的 AssistantMessage：其文本（工具调用前的说明）会被
                 // ToolCall 事件独立承载，且 graph 框架原生 chunk 也会跳过它；若此处再
                 // 作为 AgentMessageChunk 发送，会造成工具调用前后出现重复消息。
-                val isToolCallMessage = output.message() is AssistantMessage &&
-                        (output.message() as AssistantMessage).hasToolCalls()
-                if (StringUtils.hasLength(output.message().text)
-                    && !isToolCallMessage
-                    &&  "STOP" != finishReason
-                ) {
+                val isToolCallMessage =
+                    output.message() is AssistantMessage && (output.message() as AssistantMessage).hasToolCalls()
+                if (StringUtils.hasLength(output.message().text) && !isToolCallMessage && "STOP" != finishReason) {
                     builder.chunk(output.message().text)
                 }
                 builder.originData(output.originData)
@@ -93,7 +90,7 @@ object SinksUtil {
         flux: Flux<AgentOutput<Any>>, channel: Channel<AgentOutput<Any>>
     ): Disposable {
         return flux.subscribe({ output -> channel.trySend(output) }, { error ->
-            logger.error( error.cause) { "Error in agent flux" }
+            logger.error(error.cause) { "Error in agent flux" }
             channel.close(error.cause)
         }, {
             logger.info { "Agent flux completed" }
@@ -107,8 +104,16 @@ object SinksUtil {
      * 包含 GraphRunnerException 重试逻辑（与 Java 版 toFlux 一致）。
      */
     fun agentToFlux(
-        agent: Agent, input: UserMessage, runnableConfig: RunnableConfig
+        agent: Agent, message: UserMessage, runnableConfig: RunnableConfig
     ): Flux<AgentOutput<Any>> {
+        val input = HashMap<String, Any>()
+        input["messages"] = listOf(message)
+        input["input"] = message.text ?: ""
+        try{
+             input.putAll(runnableConfig.context().filter {  it.key != "executionThread" && it.key != "AcpClientSession"})
+        }catch (e: Throwable){
+            e.printStackTrace()
+        }
         val nodeOutputFlux = try {
             agent.stream(input, runnableConfig)
         } catch (e: GraphRunnerException) {

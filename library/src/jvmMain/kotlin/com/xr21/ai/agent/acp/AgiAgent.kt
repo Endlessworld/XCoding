@@ -729,18 +729,16 @@ class AgiAgent : AgentSupport {
     override suspend fun listSessions(
         cwd: String?, additionalDirectories: List<String>?, _meta: JsonElement?
     ): Sequence<SessionInfo> {
-        return SessionHelper.listSessionIds(FILE_SYSTEM_SAVER_FOLDER).toList().map {
-            val runnableConfig = RunnableConfig.builder().threadId(it).build();
+        return SessionHelper.listSessionIds(FILE_SYSTEM_SAVER_FOLDER).toList().mapNotNull { sessionId ->
+            val runnableConfig = RunnableConfig.builder().threadId(sessionId).build();
             val list = FILE_SYSTEM_SAVER.list(runnableConfig)
-            list.first { it.nextNodeId.equals("__END__") || it.state.containsKey(SESSION_ID_CONTEXT_KEY) }.state
-        }.filter { it.containsKey(SESSION_ID_CONTEXT_KEY) }.map {
-            val session = it.get(SESSION_ID_CONTEXT_KEY) as? LinkedHashMap<*, *>
-            val sessionId = session?.get("value") as? String ?: ""
+            val state = list.firstOrNull { it.nextNodeId.equals("__END__") || it.state.containsKey(SESSION_ID_CONTEXT_KEY) }?.state
+            if (state == null || !state.containsKey(SESSION_ID_CONTEXT_KEY)) return@mapNotNull null
             SessionInfo(
                 SessionId(sessionId),
                 cwd = cwd ?: "",
-                title = (it["input"] as String).let { it -> if (it.length > 12) it.take(12) + "..." else it },
-                updatedAt = it["updatedAt"] as String
+                title = (state["input"] as String).let { it -> if (it.length > 12) it.take(12) + "..." else it },
+                updatedAt = state["updatedAt"] as? String
             )
         }.asSequence()
     }

@@ -25,8 +25,11 @@ import com.alibaba.cloud.ai.graph.agent.hook.Hook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.file.FileSystemSaver;
 import com.alibaba.cloud.ai.graph.serializer.plain_text.jackson.SpringAIJacksonStateSerializer;
+import com.alibaba.cloud.ai.graph.store.StoreItem;
+import com.alibaba.cloud.ai.graph.store.stores.FileSystemStore;
 import com.xr21.ai.agent.acp.SessionConfigOptionsFactory;
 import com.xr21.ai.agent.config.AiModels;
+import com.xr21.ai.agent.interceptors.DynamicOptionsInterceptor;
 import com.xr21.ai.agent.plugins.GroovyPluginLoader;
 import com.xr21.ai.agent.plugins.GroovyPluginRegistry;
 import com.xr21.ai.agent.plugins.PluginContext;
@@ -46,6 +49,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -146,24 +150,12 @@ public class LocalAgent {
         // 收集拦截器提供的文件系统工具与 write_todos 工具，供 Groovy 脚本绑定调用
         List<ToolCallback> interceptorTools = ToolsUtil.collectHostTools(interceptors);
         List<Hook> hooks = AgentHelper.createHooks(runnableConfig, WORKSPACE_ROOT);
-        for (Hook hook : hooks) {
-            AcpNotifyHelper.sendThoughtChunk(client, "Use Hook : " + hook.getName());
-        }
+//        for (Hook hook : hooks) {
+//            AcpNotifyHelper.sendThoughtChunk(client, "Use Hook : " + hook.getName());
+//        }
         // 使用 PromptTemplate 渲染指令
         var instruction = getInstruction(WORKSPACE_ROOT);
         var chatOptions = ((OpenAiChatOptions) chatModel.getOptions()).mutate();
-        String thoughtLevel = SessionConfigOptionsFactory.ThoughtLevel.LOW.getValueId();
-        if (runnableConfig.context().get("thought_level") instanceof String level) {
-            log.info("thought_level: {}", level);
-            thoughtLevel = level;
-        }
-        AcpNotifyHelper.sendThoughtChunk(client, "Use thought_level : " + thoughtLevel);
-        if (SessionConfigOptionsFactory.ThoughtLevel.DISABLED.getValueId().equals(thoughtLevel)) {
-            chatOptions.extraBody(Map.of("thinking", Map.of("type", "disabled")));
-        } else {
-            chatOptions.extraBody(Map.of("thinking", Map.of("type", "enabled")));
-            chatOptions.reasoningEffort(thoughtLevel);
-        }
         // Groovy 插件加载（阶段二）：以完整 PluginContext（client/chatModel）触发，随后并入插件工具
         PluginContext pluginCtx = PluginContext.builder()
                 .toolContext(null)
@@ -177,6 +169,7 @@ public class LocalAgent {
         // 插件 hooks / interceptors 并入（默认追加到内置之后）
         hooks.addAll(GroovyPluginRegistry.get().hooks());
         interceptors.addAll(GroovyPluginRegistry.get().interceptors());
+        interceptors.add(new DynamicOptionsInterceptor());
 //        AcpNotifyHelper.sendThoughtChunk(client, "Use tools : " + tools.stream().map(ToolCallback::getToolDefinition).map(ToolDefinition::name).distinct().collect(Collectors.joining(",")));
         var agent = ReactAgent.builder().name("agent")
                 .tools(tools)
@@ -191,6 +184,7 @@ public class LocalAgent {
                 .systemPrompt(instruction)
                 .outputKey("agent_output")
                 .wrapSyncToolsAsAsync(true)
+                .toolExecutionTimeout(Duration.ofMinutes(10))
                 .maxParallelTools(8)
                 .returnReasoningContents(true)
                 .build();

@@ -142,9 +142,9 @@ fun main() = runBlocking {
         )
     )
     val listSessions = acpClient.listSessions("E:\\local-github\\ai-agents", arrayListOf(), null)
-    for ((sessionId, cwd, title, updatedAt, additionalDirectories, _meta) in listSessions.toList()) {
-        println("listSessions $sessionId $cwd $title $updatedAt $additionalDirectories $_meta")
-    }
+//    for ((sessionId, cwd, title, updatedAt, additionalDirectories, _meta) in listSessions.toList()) {
+//        println("listSessions $sessionId $cwd $title $updatedAt $additionalDirectories $_meta")
+//    }
     // 3. 创建会话
     info("[3/4] 创建 ACP 会话...")
     val session = acpClient.newSession(
@@ -157,7 +157,8 @@ fun main() = runBlocking {
     ok("可用模型: ${session.availableModels.size} 个")
     ok("可用模式: ${session.availableModes.size} 个")
     println()
-
+    session.setModel(modelId = ModelId("deepseek-v4.1-flash"))
+    session.setConfigOption(configId = SessionConfigId("thought_level"),SessionConfigOptionValue.of("medium"))
     // 4. REPL 循环
     info("[4/4] 进入交互模式")
     println("  输入消息发送给 Agent，输入 ${Color.YELLOW}/help${Color.RESET} 查看命令")

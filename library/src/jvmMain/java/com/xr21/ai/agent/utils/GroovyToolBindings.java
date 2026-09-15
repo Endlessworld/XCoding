@@ -34,6 +34,9 @@ public class GroovyToolBindings implements GroovyObject {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, List<String>> schemaPropsCache = new ConcurrentHashMap<>();
 
+    /** tools.listTools() 单条工具描述的最大长度，超出截断以控制上下文开销。 */
+    private static final int MAX_LIST_DESCRIPTION_CHARS = 200;
+
     public GroovyToolBindings(List<ToolCallback> tools, ToolContext toolContext) {
         this(tools, toolContext, null);
     }
@@ -59,6 +62,10 @@ public class GroovyToolBindings implements GroovyObject {
         // 内置方法：返回指定工具的工具信息（名称/描述/输入schema）
         if ("inspect".equals(name)) {
             return inspect(resolveToolName(args));
+        }
+        // 内置方法：返回全部工具的 名称+描述 清单（不含 schema），用于低成本挑选工具
+        if ("listTools".equals(name)) {
+            return listTools();
         }
         // 阶段二：白名单能力注入（client/chatModel/conversation/workers/sharedCache/hostTools）
         if ("inject".equals(name)) {
@@ -342,7 +349,7 @@ public class GroovyToolBindings implements GroovyObject {
         ToolCallback callback = toolsByName.get(toolName);
         if (callback == null) {
             return Map.of("success", false, "error", "未找到工具: " + toolName
-                    + "（可用 tools.names 查看全部工具）");
+                    + "（可用 tools.listTools() 查看全部工具）");
         }
         var def = callback.getToolDefinition();
         Map<String, Object> info = new LinkedHashMap<>();
@@ -357,6 +364,33 @@ public class GroovyToolBindings implements GroovyObject {
             info.put("inputSchemaParseError", e.getMessage());
         }
         return info;
+    }
+
+    /**
+     * 内置方法：返回全部可用工具的 名称+描述 清单。
+     * 用于在不加载完整 schema 的前提下挑选工具，完整信息用 tools.inspect('name') 获取。
+     */
+    private Object listTools() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map.Entry<String, ToolCallback> entry : toolsByName.entrySet()) {
+            var def = entry.getValue().getToolDefinition();
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("name", def.name());
+            item.put("description", summarize(def.description()));
+            out.add(item);
+        }
+        return out;
+    }
+
+    /** 压缩空白并截断描述，避免多行长描述耗尽上下文。 */
+    private static String summarize(String description) {
+        if (description == null) {
+            return "";
+        }
+        String text = description.replaceAll("\\s+", " ").trim();
+        return text.length() <= MAX_LIST_DESCRIPTION_CHARS
+                ? text
+                : text.substring(0, MAX_LIST_DESCRIPTION_CHARS) + "...";
     }
 
     /**

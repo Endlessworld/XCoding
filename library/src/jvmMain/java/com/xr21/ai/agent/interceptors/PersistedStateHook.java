@@ -79,6 +79,27 @@ public class PersistedStateHook extends ModelHook {
     }
 
     @Override
+    public CompletableFuture<Map<String, Object>> beforeModel(OverAllState state, RunnableConfig config) {
+        Map<String, Object> context = config.context();
+        if (context == null || context.isEmpty()) {
+            return CompletableFuture.completedFuture(Map.of());
+        }
+        Map<String, Object> updates = new LinkedHashMap<>();
+        for (String key : PERSISTED_KEYS) {
+            Object value = context.get(key);
+            if (value != null) {
+                updates.put(key, value);
+            }
+        }
+        var updatedAt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withLocale(Locale.CHINESE).format(LocalDateTime.now());
+        updates.put("updatedAt", updatedAt);
+        log.debug("PersistedStateHook merging context entries into state: {}", updates.keySet());
+        // 返回值由框架经 OverAllState.updateState(state, values, channels) 合入，
+        // 下一个 Checkpoint（addCheckpoint -> cloneState(overallState.data())）即包含这些 key
+        return CompletableFuture.completedFuture(updates);
+    }
+
+    @Override
     public CompletableFuture<Map<String, Object>> afterModel(OverAllState state, RunnableConfig config) {
         Map<String, Object> context = config.context();
         if (context == null || context.isEmpty()) {

@@ -516,6 +516,8 @@ public final class Prompts {
             groovy脚本引擎，内部注入了tools对象，tools包含了一套coding agent专属工具，
             可通过tools系列方法简化脚本编写，优先使用tools系列工具，无法满足的再使用自定义脚本
             tools中的可用工具是动态注入的 你需要先探索一下可用工具
+            【外部工具（MCP）】外部 MCP 工具**不会出现**在你的工具列表中，它们只能通过本工具的 tools 对象调用。
+            当现有工具无法满足需求（需要第三方/外部系统能力）时，先用 tools.listTools() 确认是否存在可用的 MCP 工具，再调用。
             【重要·返回值类型】tools.xxx(...) 的返回值都是【已解析的 Java 对象】，不是 JSON 字符串：
             - 能解析为 JSON 的工具返回 LinkedHashMap/List/基本类型；否则原样返回字符串。
             - 切勿再对返回值调用 JsonSlurper.parseText(...) / objectMapper.readTree(...) 二次解析（会抛 MissingMethodException）。
@@ -526,9 +528,9 @@ public final class Prompts {
                 文本：String.valueOf(r.content)
             - 工具失败时返回 {success:false, error:...}，用 r.success==false 判断，不依赖抛异常。
             用法：
-            - 查看可用工具: tools.names 返回工具名称列表
+            - 查看可用工具: tools.listTools() 返回 [{name, description}] 清单（推荐，含描述，可用于挑选工具）；tools.names 返回纯工具名列表
             - 查看工具信息: tools.inspect('read_file') 返回 工具名称/描述/入参schema JSON
-            - 调用工具传参：
+            - 调用工具传参（**优先用 Map 命名参数**；位置参数依赖 schema 属性顺序，易错位）：
                 - Map命名参数 : tools.read_file([filePaths: ['/a.txt']])
                 - 位置参数(按工具 schema 属性顺序): tools.read_file(['/a.txt'], 0, 100)
                 - 单参数工具: tools.Sleep([seconds: 3]) 或 tools.Sleep(3)

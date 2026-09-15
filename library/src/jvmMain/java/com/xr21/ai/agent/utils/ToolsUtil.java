@@ -279,6 +279,9 @@ public class ToolsUtil {
 
     /**
      * 构建智能体最终暴露的静态工具提供者。
+     * <p>
+     * MCP 工具不直接注册给模型，仅绑定到 Groovy 脚本的 tools 对象，避免其 schema 常驻上下文；
+     * 模型通过 run_groovy_script 内的 tools.listTools()/tools.inspect() 按需发现并调用。
      *
      * @param mcpServers       MCP 服务器列表（可空）
      * @param interceptorTools 拦截器提供的宿主工具（可空）
@@ -287,23 +290,27 @@ public class ToolsUtil {
     public static StaticToolCallbackProvider staticToolCallbackProvider(List<McpServer> mcpServers, List<ToolCallback> interceptorTools) {
         List<ToolCallback> tools = baseTools();
         log.debug("Loaded {} base tools", tools.size());
-        // 添加 MCP 工具
+        // 脚本内可见的工具集：模型可见工具 + MCP 工具（MCP 工具不直接暴露给模型）
+        List<ToolCallback> scriptTools = new ArrayList<>(tools);
+        // MCP 工具仅绑定到 Groovy 脚本：其 schema 不常驻上下文，由脚本按需 tools.listTools()/tools.inspect() 发现
         if (!CollectionUtils.isEmpty(mcpServers)) {
             List<ToolCallback> mcpTools = getMcpTools(mcpServers);
-            tools.addAll(mcpTools);
-            log.info("Added {} MCP tools from {} servers", mcpTools.size(), mcpServers.size());
+            scriptTools.addAll(mcpTools);
+            log.info("Bound {} MCP tools from {} servers to Groovy script bindings only", mcpTools.size(), mcpServers.size());
         }
         // 将拦截器提供的文件系统工具（ls/read_file/write_file 等）与 write_todos 工具一并暴露给 Groovy 脚本绑定
         if (interceptorTools != null && !interceptorTools.isEmpty()) {
             tools.addAll(interceptorTools);
+            scriptTools.addAll(interceptorTools);
             log.info("Added {} interceptor tools to Groovy script bindings", interceptorTools.size());
         }
         // 插件工具并入（loader 已在 buildAgent 中以完整 PluginContext 触发；此处幂等并入已注册插件工具）
         List<ToolCallback> pluginTools = GroovyPluginRegistry.get().toolCallbacks();
         tools.addAll(pluginTools);
+        scriptTools.addAll(pluginTools);
         log.info("Loaded {} plugin tools", pluginTools.size());
         // Groovy 脚本工具：脚本内绑定 tools 对象，可调用以上全部工具实现 MCP 工具编排
-        tools.add(groovyScriptTool(tools));
+        tools.add(groovyScriptTool(scriptTools));
         return new StaticToolCallbackProvider(tools);
     }
 

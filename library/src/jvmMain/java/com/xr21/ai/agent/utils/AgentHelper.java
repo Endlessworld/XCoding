@@ -26,6 +26,7 @@ import com.alibaba.cloud.ai.graph.agent.hook.skills.SkillsAgentHook;
 import com.alibaba.cloud.ai.graph.agent.interceptor.Interceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolerror.ToolErrorInterceptor;
 import com.alibaba.cloud.ai.graph.agent.interceptor.toolretry.ToolRetryInterceptor;
+import com.alibaba.cloud.ai.graph.skills.registry.SkillRegistry;
 import com.alibaba.cloud.ai.graph.skills.registry.filesystem.FileSystemSkillRegistry;
 import com.xr21.ai.agent.interceptors.AcpTodoListInterceptor;
 import com.xr21.ai.agent.interceptors.CompactionPromptHook;
