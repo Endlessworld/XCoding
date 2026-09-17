@@ -153,7 +153,7 @@ public final class AgentHelper {
      * @param workspaceRoot  工作空间根目录
      * @return Hook 列表
      */
-    public static @NotNull List<Hook> createHooks(RunnableConfig runnableConfig, String workspaceRoot) {
+    public static @NotNull List<Hook> createHooks(RunnableConfig runnableConfig, String cwd) {
         List<Hook> hooks = new ArrayList<>(4);
         // 每轮模型请求结束后，把 context 中可持久化的条目合入 OverAllState（随 FileSystemSaver 快照持久化）
         hooks.add(new PersistedStateHook());
@@ -172,7 +172,7 @@ public final class AgentHelper {
         hooks.add(SkillsAgentHook.builder()
                 .skillRegistry(FileSystemSkillRegistry.builder()
                         .userSkillsDirectory(Path.of(System.getProperty("user.home"), ".agents", "skills").toAbsolutePath().toString())
-                        .projectSkillsDirectory(Path.of(workspaceRoot, ".agents", "skills").toAbsolutePath().toString())
+                        .projectSkillsDirectory(Path.of(cwd, ".agents", "skills").toAbsolutePath().toString())
                         .autoLoad(true)
                         .build())
                 .autoReload(true)

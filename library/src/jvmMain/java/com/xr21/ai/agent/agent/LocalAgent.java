@@ -116,7 +116,7 @@ public class LocalAgent {
         }
         WORKSPACE_ROOT = cwd;
         // 释放 classpath 内置 skills 到工作目录 .agents/skills，使其由 FileSystemSkillRegistry 统一加载
-        SkillResourceReleaser.release(Path.of(WORKSPACE_ROOT, ".agents", "skills"));
+        SkillResourceReleaser.release(Path.of(System.getProperty("user.home"), ".agents", "skills"));
         return buildAgent(cwd, mcpServers, runnableConfig, client);
     }
 
@@ -146,15 +146,15 @@ public class LocalAgent {
 
         ChatModel chatModel = AiModels.resolveChatModel(runnableConfig);
         AcpNotifyHelper.sendThoughtChunk(client, "Use model : " + chatModel.getOptions().getModel());
-        List<Interceptor> interceptors = new ArrayList<>(AgentHelper.createInterceptors(runnableConfig, chatModel, client, WORKSPACE_ROOT));
+        List<Interceptor> interceptors = new ArrayList<>(AgentHelper.createInterceptors(runnableConfig, chatModel, client, cwd));
         // 收集拦截器提供的文件系统工具与 write_todos 工具，供 Groovy 脚本绑定调用
         List<ToolCallback> interceptorTools = ToolsUtil.collectHostTools(interceptors);
-        List<Hook> hooks = AgentHelper.createHooks(runnableConfig, WORKSPACE_ROOT);
+        List<Hook> hooks = AgentHelper.createHooks(runnableConfig, cwd);
 //        for (Hook hook : hooks) {
 //            AcpNotifyHelper.sendThoughtChunk(client, "Use Hook : " + hook.getName());
 //        }
         // 使用 PromptTemplate 渲染指令
-        var instruction = getInstruction(WORKSPACE_ROOT);
+        var instruction = getInstruction(cwd);
         var chatOptions = ((OpenAiChatOptions) chatModel.getOptions()).mutate();
         // Groovy 插件加载（阶段二）：以完整 PluginContext（client/chatModel）触发，随后并入插件工具
         PluginContext pluginCtx = PluginContext.builder()
@@ -163,7 +163,7 @@ public class LocalAgent {
                 .chatModel(chatModel)
                 .hostTools(interceptorTools)
                 .build();
-        GroovyPluginLoader.loadAll(interceptorTools, WORKSPACE_ROOT, pluginCtx);
+        GroovyPluginLoader.loadAll(interceptorTools, cwd, pluginCtx);
         var staticToolCallbackProvider = ToolsUtil.staticToolCallbackProvider(mcpServers, interceptorTools);
         var tools = List.of(staticToolCallbackProvider.getToolCallbacks());
         // 插件 hooks / interceptors 并入（默认追加到内置之后）
