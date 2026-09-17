@@ -244,13 +244,13 @@ public class ShellTools {
         }
     }
 
-    /** 智能探测首选 shell：nu > (win) pwsh > powershell.exe / (unix) /bin/bash */
+    /** 智能探测首选 s (win) pwsh > powershell.exe / (unix) /bin/bash  >hell：nu */
     private static String detectShellExecutable() {
-        if (isCommandAvailable(SHELL_NU)) {
-            return SHELL_NU;
-        }
         if (isWindowsOs()) {
             return isCommandAvailable(SHELL_PWSH) ? SHELL_PWSH : SHELL_POWERSHELL;
+        }
+        if (isCommandAvailable(SHELL_NU)) {
+            return SHELL_NU;
         }
         return SHELL_BASH;
     }

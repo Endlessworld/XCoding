@@ -56,7 +56,7 @@ public final class DevEnvironmentDetector {
         sb.append("- 操作系统: ").append(System.getProperty("os.name")).append(' ')
                 .append(System.getProperty("os.version")).append(" (")
                 .append(System.getProperty("os.arch")).append(")\n");
-        sb.append("- Shell: ").append(ShellTools.getShellExecutable()).append(" (请严格遵循该shell的语法\n");
+        sb.append("- Shell: ").append(ShellTools.getShellExecutable()).append(" (如果是nu 即nushell 必须严格遵循nushell的语法\n");
         sb.append("- JVM: ").append(System.getProperty("java.version")).append('\n');
         sb.append("- user.home: ").append(System.getProperty("user.home")).append('\n');
         sb.append("- user.dir: ").append(System.getProperty("user.dir")).append("\n\n");

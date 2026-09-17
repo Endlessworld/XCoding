@@ -700,6 +700,8 @@ public final class Prompts {
 		在支持超时的持久 shell 会话中执行命令（如 git、npm、docker）。
 		支持一次性执行（once）与持久交互式会话（interactive，配套 ShellInput/BashOutput/KillShell/ShellSessions）。
 		详细用法、参数说明与运行环境（平台、shell、已安装开发工具）见系统提示。
+		- rg(ripgrep)命令 ： 如果环境中存在rg命令则优先使用rg命令进行搜索 尽量不使用grep、glob工具
+		- codegraph  ： 适用于任何代码库的代码知识图谱，获取项目结构化调用链 ，如果环境中存在codegraph则优先使用codegraph进行搜索
 		""";
 
     public static final String TOOL_SHELL_BASH_OUTPUT_DESCRIPTION = """
